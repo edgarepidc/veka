@@ -42,16 +42,12 @@ export async function createUnit(formData: FormData) {
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const unitKind = String(formData.get('unit_kind') ?? '') as UnitKind;
   const unitNumber = String(formData.get('unit_number') ?? '').trim();
-  const coefficient = Number(formData.get('coefficient') ?? 1);
 
   if (!clusterId) return { error: 'Cluster requerido.' };
   if (unitKind !== 'casa' && unitKind !== 'depto') {
     return { error: 'Selecciona Casa o Depto.' };
   }
   if (!unitNumber) return { error: 'Número de unidad requerido.' };
-  if (!Number.isFinite(coefficient) || coefficient <= 0) {
-    return { error: 'Coeficiente inválido.' };
-  }
 
   const { data: cluster } = await supabase
     .from('clusters')
@@ -70,7 +66,7 @@ export async function createUnit(formData: FormData) {
     identifier,
     unit_kind: unitKind,
     unit_number: unitNumber,
-    coefficient,
+    coefficient: 1,
   });
 
   if (error) return { error: error.message };

@@ -273,7 +273,7 @@ function ClusterSection({
         <div className="border-t border-white/10 px-4 pb-4">
           <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <h3 className="text-sm font-semibold text-[var(--text)]">Agregar unidad en {cluster.name}</h3>
-            <form action={onCreateUnit} className="mt-3 grid gap-3 sm:grid-cols-4">
+            <form action={onCreateUnit} className="mt-3 grid gap-3 sm:grid-cols-3">
               <input type="hidden" name="cluster_id" value={cluster.id} />
               <label className="block text-sm text-muted sm:col-span-1">
                 Tipo
@@ -289,17 +289,6 @@ function ClusterSection({
               <label className="block text-sm text-muted sm:col-span-1">
                 Número
                 <input name="unit_number" required placeholder="Ej. 284" className="glass-input mt-1" />
-              </label>
-              <label className="block text-sm text-muted sm:col-span-1">
-                Coeficiente
-                <input
-                  name="coefficient"
-                  type="number"
-                  step="0.000001"
-                  min="0.000001"
-                  defaultValue="1"
-                  className="glass-input mt-1"
-                />
               </label>
               <div className="flex items-end sm:col-span-1">
                 <button type="submit" disabled={pending} className="glass-btn-primary w-full">
@@ -425,12 +414,8 @@ function UnitCard({
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-[var(--text)]">{label}</p>
           {unit.unit_kind ? (
-            <p className="text-xs text-subtle">
-              {UNIT_KIND_LABELS[unit.unit_kind as UnitKind]} · Coef. {unit.coefficient}
-            </p>
-          ) : (
-            <p className="text-xs text-subtle">Coef. {unit.coefficient}</p>
-          )}
+            <p className="text-xs text-subtle">{UNIT_KIND_LABELS[unit.unit_kind as UnitKind]}</p>
+          ) : null}
 
           <div className="mt-3 space-y-1.5 text-sm">
             <OccupantLine label="Propietario" occupant={unit.owner ?? unit.resident} />
