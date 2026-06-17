@@ -70,8 +70,14 @@ export function AvatarUploader({
 
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ avatar_url: path, updated_at: new Date().toISOString() })
-        .eq('id', userId);
+        .upsert(
+          {
+            id: userId,
+            avatar_url: path,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' },
+        );
 
       if (profileError) throw profileError;
 

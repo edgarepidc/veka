@@ -18,18 +18,27 @@ export async function updateAdminProfile(formData: FormData) {
   const phone = String(formData.get('phone') ?? '').trim();
   const avatarUrl = String(formData.get('avatar_url') ?? '').trim();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .update({
-      full_name: fullName || null,
-      phone: phone || null,
-      avatar_url: avatarUrl || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', user.id);
+    .upsert(
+      {
+        id: user.id,
+        full_name: fullName || null,
+        phone: phone || null,
+        avatar_url: avatarUrl || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' },
+    )
+    .select('id')
+    .single();
 
   if (error) {
     return { error: error.message };
+  }
+
+  if (!data) {
+    return { error: 'No se pudo guardar el perfil.' };
   }
 
   revalidatePath('/configuracion/perfil');

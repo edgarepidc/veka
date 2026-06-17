@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { avatarStoragePath, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
@@ -24,6 +25,7 @@ function roleLabel(role: string): string {
 }
 
 export function ProfileForm({ session }: { session: AdminSession }) {
+  const router = useRouter();
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [profilePending, startProfile] = useTransition();
@@ -44,12 +46,18 @@ export function ProfileForm({ session }: { session: AdminSession }) {
         </p>
 
         <form
+          key={`${session.userId}-${session.profile.avatar_url ?? ''}-${session.profile.full_name ?? ''}`}
           className="mt-6 space-y-4"
           action={(formData) => {
             setProfileMessage(null);
             startProfile(async () => {
               const result = await updateAdminProfile(formData);
-              setProfileMessage(result.error ?? 'Perfil actualizado correctamente.');
+              if (result.error) {
+                setProfileMessage(result.error);
+                return;
+              }
+              setProfileMessage('Perfil actualizado correctamente.');
+              router.refresh();
             });
           }}
         >
