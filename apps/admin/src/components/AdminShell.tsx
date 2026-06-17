@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
-
+import { AdminNav } from '@/components/AdminNav';
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { CondominiumBranding } from '@/lib/condominium-settings';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
@@ -9,15 +9,6 @@ import type { AdminSession } from '@/lib/load-admin-session';
 import { SignOutButton } from '@/components/SignOutButton';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-
-const NAV = [
-  { href: '/', label: 'Inicio', icon: '🏠' },
-  { href: '/finanzas', label: 'Finanzas', icon: '💳' },
-  { href: '/comunidad', label: 'Comunidad', icon: '💬' },
-  { href: '/espacios', label: 'Espacios', icon: '🏊' },
-  { href: '/seguridad', label: 'Seguridad', icon: '🔒' },
-  { href: '/configuracion/perfil', label: 'Configuración', icon: '⚙️' },
-];
 
 function roleLabel(role: string): string {
   const map: Record<string, string> = {
@@ -85,18 +76,7 @@ export function AdminShell({
               </div>
             </div>
           </div>
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-white/10 hover:text-[var(--text)]"
-              >
-                <span>{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <AdminNav />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">

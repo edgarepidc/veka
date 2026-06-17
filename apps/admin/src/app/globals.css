@@ -92,6 +92,13 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.glass-sidebar-link-active {
+  background: rgba(52, 211, 153, 0.16);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 .glass-header {
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);

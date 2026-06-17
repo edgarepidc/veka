@@ -19,3 +19,9 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const FUND_TYPES = ['operating', 'reserve'] as const;
 export type FundType = (typeof FUND_TYPES)[number];
+
+export const EXPENSE_KINDS = ['general', 'supplier', 'payroll'] as const;
+export type ExpenseKind = (typeof EXPENSE_KINDS)[number];
+
+export const EXPENSE_STATUSES = ['pending', 'paid'] as const;
+export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];

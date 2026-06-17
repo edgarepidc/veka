@@ -1,4 +1,4 @@
-import type { ChargeStatus, PaymentStatus } from './constants';
+import type { ChargeStatus, ExpenseKind, ExpenseStatus, FundType, PaymentStatus } from './constants';
 
 export function formatCurrency(amount: number, currency = 'MXN'): string {
   return new Intl.NumberFormat('es-MX', {
@@ -34,4 +34,42 @@ export function paymentStatusLabel(status: PaymentStatus): string {
     rejected: 'Rechazado',
   };
   return labels[status];
+}
+
+export function fundTypeLabel(fund: FundType): string {
+  const labels: Record<FundType, string> = {
+    operating: 'Fondo de operación',
+    reserve: 'Fondo de reserva',
+  };
+  return labels[fund];
+}
+
+export function expenseKindLabel(kind: ExpenseKind): string {
+  const labels: Record<ExpenseKind, string> = {
+    general: 'General',
+    supplier: 'Proveedor',
+    payroll: 'Nómina',
+  };
+  return labels[kind];
+}
+
+export function expenseStatusLabel(status: ExpenseStatus): string {
+  const labels: Record<ExpenseStatus, string> = {
+    pending: 'Pendiente de pago',
+    paid: 'Pagado / comprobado',
+  };
+  return labels[status];
+}
+
+export function expenseCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    mantenimiento: 'Mantenimiento',
+    servicios: 'Servicios',
+    nomina: 'Nómina',
+    seguridad: 'Seguridad',
+    administracion: 'Administración',
+    suministros: 'Suministros',
+    otros: 'Otros',
+  };
+  return labels[category] ?? category;
 }

@@ -78,7 +78,7 @@ values
 on conflict (id) do nothing;
 
 insert into public.expenses (
-  condominium_id, concept, amount, fund_type, category, expense_date, vendor_name
+  condominium_id, concept, amount, fund_type, category, expense_date, vendor_name, expense_kind, status
 )
 values
   (
@@ -88,7 +88,9 @@ values
     'operating',
     'mantenimiento',
     (current_date - interval '5 days')::date,
-    'Elevadores del Norte SA'
+    'Elevadores del Norte SA',
+    'supplier',
+    'paid'
   ),
   (
     '22222222-2222-2222-2222-222222222222',
@@ -97,6 +99,59 @@ values
     'operating',
     'servicios',
     (current_date - interval '12 days')::date,
-    'Verde Total'
+    'Verde Total',
+    'supplier',
+    'paid'
+  ),
+  (
+    '22222222-2222-2222-2222-222222222222',
+    'Servicio de vigilancia — Junio',
+    28500.00,
+    'operating',
+    'nomina',
+    (current_date - interval '3 days')::date,
+    'Carlos Méndez',
+    'payroll',
+    'paid'
+  ),
+  (
+    '22222222-2222-2222-2222-222222222222',
+    'Reparación bomba de agua',
+    9800.00,
+    'operating',
+    'mantenimiento',
+    (current_date + interval '7 days')::date,
+    'Plomería Express',
+    'supplier',
+    'pending'
   )
 on conflict do nothing;
+
+-- Overdue charges for morosity demo
+insert into public.charges (
+  id, condominium_id, unit_id, concept, amount, fund_type, due_date, status, period_month
+)
+values
+  (
+    '55555555-5555-5555-5555-555555555503',
+    '22222222-2222-2222-2222-222222222222',
+    '44444444-4444-4444-4444-444444444402',
+    'Cuota de mantenimiento — Mayo 2025',
+    3500.00,
+    'operating',
+    (current_date - interval '25 days')::date,
+    'overdue',
+    (date_trunc('month', current_date) - interval '1 month')::date
+  ),
+  (
+    '55555555-5555-5555-5555-555555555504',
+    '22222222-2222-2222-2222-222222222222',
+    '44444444-4444-4444-4444-444444444403',
+    'Cuota de mantenimiento — Mayo 2025',
+    4200.00,
+    'operating',
+    (current_date - interval '18 days')::date,
+    'overdue',
+    (date_trunc('month', current_date) - interval '1 month')::date
+  )
+on conflict (id) do nothing;
