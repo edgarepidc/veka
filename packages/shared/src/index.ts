@@ -2,5 +2,6 @@ export * from './constants';
 export * from './finance';
 export * from './roles';
 export * from './storage';
+export * from './team';
 export * from './types';
 export * from './units';

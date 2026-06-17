@@ -8,7 +8,6 @@ const TABS = [
   { href: '/configuracion/condominio', label: 'Condominio' },
   { href: '/configuracion/unidades', label: 'Unidades' },
   { href: '/configuracion/equipo', label: 'Equipo' },
-  { href: '/configuracion/invitaciones', label: 'Invitaciones' },
 ];
 
 export function ConfigNav() {

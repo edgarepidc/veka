@@ -8,7 +8,6 @@ import { createClient } from '@/lib/supabase/server';
 
 function revalidateUnits() {
   revalidatePath('/configuracion/unidades');
-  revalidatePath('/configuracion/invitaciones');
 }
 
 export async function createCluster(formData: FormData) {

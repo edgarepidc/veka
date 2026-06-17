@@ -1,12 +1,12 @@
 import { ConfigNav } from '@/components/ConfigNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { loadAdminSession } from '@/lib/load-admin-session';
-import { loadTeamMembers } from '@/lib/load-team';
+import { loadStaffTeam } from '@/lib/load-team';
 
 import { TeamManager } from './TeamManager';
 
 export default async function EquipoConfigPage() {
-  const [session, members] = await Promise.all([loadAdminSession(), loadTeamMembers()]);
+  const [session, team] = await Promise.all([loadAdminSession(), loadStaffTeam()]);
 
   if (!session) return null;
 
@@ -15,10 +15,14 @@ export default async function EquipoConfigPage() {
       <PageHeader
         title="Configuración"
         highlight="del equipo"
-        subtitle="Roles y permisos de administradores, guardias y personal."
+        subtitle="Staff administrativo, seguridad y mantenimiento."
       />
       <ConfigNav />
-      <TeamManager members={members} currentUserId={session.userId} />
+      <TeamManager
+        members={team.members}
+        invitations={team.invitations}
+        currentUserId={session.userId}
+      />
     </div>
   );
 }

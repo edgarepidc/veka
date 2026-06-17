@@ -1,6 +1,6 @@
 import { DEMO_CONDO_ID } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/server';
-import type { MembershipRole } from '@veka/shared';
+import { isStaffRole, TEAM_STAFF_ROLES, type MembershipRole } from '@veka/shared';
 
 export interface TeamMember {
   id: string;
@@ -8,32 +8,55 @@ export interface TeamMember {
   role: MembershipRole;
   status: string;
   full_name: string | null;
-  unit_identifier: string | null;
 }
 
-export async function loadTeamMembers(): Promise<TeamMember[]> {
+export interface StaffInvitation {
+  id: string;
+  email: string;
+  role: MembershipRole;
+  status: string;
+  created_at: string;
+}
+
+export async function loadStaffTeam(): Promise<{
+  members: TeamMember[];
+  invitations: StaffInvitation[];
+}> {
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from('memberships')
-    .select('id, user_id, role, status, profile:profiles(full_name), unit:units(identifier)')
-    .eq('condominium_id', DEMO_CONDO_ID)
-    .eq('status', 'active')
-    .order('role');
+  const [membersRes, invitationsRes] = await Promise.all([
+    supabase
+      .from('memberships')
+      .select('id, user_id, role, status, profile:profiles(full_name)')
+      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('status', 'active')
+      .in('role', TEAM_STAFF_ROLES)
+      .order('role'),
+    supabase
+      .from('invitations')
+      .select('id, email, role, status, created_at')
+      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('status', 'pending')
+      .is('unit_id', null)
+      .in('role', TEAM_STAFF_ROLES)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  const rows = data ?? [];
+  const members = (membersRes.data ?? [])
+    .filter((row) => isStaffRole(row.role as MembershipRole))
+    .map((row) => {
+      const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        role: row.role as MembershipRole,
+        status: row.status,
+        full_name: profile?.full_name ?? null,
+      };
+    });
 
-  return rows.map((row) => {
-    const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
-    const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
-
-    return {
-      id: row.id,
-      user_id: row.user_id,
-      role: row.role as MembershipRole,
-      status: row.status,
-      full_name: profile?.full_name ?? null,
-      unit_identifier: unit?.identifier ?? null,
-    };
-  });
+  return {
+    members,
+    invitations: (invitationsRes.data ?? []) as StaffInvitation[],
+  };
 }

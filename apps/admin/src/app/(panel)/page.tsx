@@ -13,7 +13,7 @@ const modules = [
   { title: 'Seguridad', description: 'Visitas QR y paquetería.', href: '/seguridad', icon: '🔒' },
   {
     title: 'Configuración',
-    description: 'Perfil, condominio, unidades e invitaciones.',
+    description: 'Perfil, condominio, unidades y equipo.',
     href: '/configuracion/perfil',
     icon: '⚙️',
   },
