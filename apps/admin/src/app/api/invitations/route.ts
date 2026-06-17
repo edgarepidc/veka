@@ -13,11 +13,12 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { email, condominiumId, unitId, role = 'resident' } = body as {
+  const { email, condominiumId, unitId, role = 'resident', unitRelationship } = body as {
     email?: string;
     condominiumId?: string;
     unitId?: string;
     role?: string;
+    unitRelationship?: string;
   };
 
   if (!email || !condominiumId) {
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
       condominium_id: condominiumId,
       unit_id: unitId ?? null,
       role,
+      unit_relationship:
+        unitRelationship === 'owner' || unitRelationship === 'tenant' ? unitRelationship : null,
       invited_by: user.id,
     })
     .select('id, email, role, status, created_at')

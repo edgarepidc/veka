@@ -12,7 +12,7 @@ export default async function UnidadesConfigPage() {
       <PageHeader
         title="Unidades"
         highlight="y clusters"
-        subtitle="Organiza torres, clusters y departamentos del condominio."
+        subtitle="Torres, villas y casas. Invita propietarios e inquilinos desde cada unidad."
       />
       <ConfigNav />
       <UnitsManager clusters={clusters} units={units} />

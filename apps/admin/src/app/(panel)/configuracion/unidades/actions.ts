@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { buildUnitIdentifier, type UnitKind, type UnitRelationship } from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/server';
@@ -38,19 +39,37 @@ export async function deleteCluster(formData: FormData) {
 
 export async function createUnit(formData: FormData) {
   const supabase = await createClient();
-  const identifier = String(formData.get('identifier') ?? '').trim();
-  const clusterId = String(formData.get('cluster_id') ?? '') || null;
+  const clusterId = String(formData.get('cluster_id') ?? '').trim();
+  const unitKind = String(formData.get('unit_kind') ?? '') as UnitKind;
+  const unitNumber = String(formData.get('unit_number') ?? '').trim();
   const coefficient = Number(formData.get('coefficient') ?? 1);
 
-  if (!identifier) return { error: 'Identificador requerido.' };
+  if (!clusterId) return { error: 'Cluster requerido.' };
+  if (unitKind !== 'casa' && unitKind !== 'depto') {
+    return { error: 'Selecciona Casa o Depto.' };
+  }
+  if (!unitNumber) return { error: 'Número de unidad requerido.' };
   if (!Number.isFinite(coefficient) || coefficient <= 0) {
     return { error: 'Coeficiente inválido.' };
   }
+
+  const { data: cluster } = await supabase
+    .from('clusters')
+    .select('name')
+    .eq('id', clusterId)
+    .eq('condominium_id', DEMO_CONDO_ID)
+    .maybeSingle();
+
+  if (!cluster) return { error: 'Cluster no encontrado.' };
+
+  const identifier = buildUnitIdentifier(cluster.name, unitKind, unitNumber);
 
   const { error } = await supabase.from('units').insert({
     condominium_id: DEMO_CONDO_ID,
     cluster_id: clusterId,
     identifier,
+    unit_kind: unitKind,
+    unit_number: unitNumber,
     coefficient,
   });
 
@@ -66,6 +85,53 @@ export async function deleteUnit(formData: FormData) {
 
   const { error } = await supabase.from('units').delete().eq('id', id).eq('condominium_id', DEMO_CONDO_ID);
   if (error) return { error: error.message };
+  revalidateUnits();
+  return { success: true };
+}
+
+export async function inviteUnitOccupant(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const unitId = String(formData.get('unit_id') ?? '').trim();
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const relationship = String(formData.get('unit_relationship') ?? 'owner') as UnitRelationship;
+
+  if (!unitId || !email) {
+    return { error: 'Unidad y correo son obligatorios.' };
+  }
+
+  if (relationship !== 'owner' && relationship !== 'tenant') {
+    return { error: 'Rol de ocupación inválido.' };
+  }
+
+  const { data: membership } = await supabase
+    .from('memberships')
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!membership || !['admin', 'super_admin'].includes(membership.role as string)) {
+    return { error: 'Sin permisos de administrador' };
+  }
+
+  const { error } = await supabase.from('invitations').insert({
+    email,
+    condominium_id: DEMO_CONDO_ID,
+    unit_id: unitId,
+    role: 'resident',
+    unit_relationship: relationship,
+    invited_by: user.id,
+  });
+
+  if (error) return { error: error.message };
+
   revalidateUnits();
   return { success: true };
 }
