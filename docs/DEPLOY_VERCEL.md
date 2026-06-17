@@ -1,32 +1,31 @@
 # Desplegar Veka en GitHub + Vercel
 
-## 1. Subir a GitHub
+## Estado actual (producción)
 
-```bash
-cd "/Users/epgimeniodiaz/Library/CloudStorage/OneDrive-Personal/Documentos/03 Entrepreneur/Veka"
+| Recurso | URL |
+|---------|-----|
+| **GitHub** | https://github.com/edgarepidc/veka |
+| **Admin (Vercel)** | https://veka-admin.vercel.app |
+| **Supabase** | https://ubmtcwdgryfwldjfqwim.supabase.co |
 
-# Crear repo en github.com → New repository → nombre: veka (sin README)
-
-git remote add origin https://github.com/TU_USUARIO/veka.git
-git push -u origin main
-```
+Vercel ya está conectado al repo y redespliega con cada `git push` a `main`.
 
 > `.env` y secretos **no** se suben (están en `.gitignore`).
 
-## 2. Conectar Vercel
+## 1. GitHub
 
-1. [vercel.com/new](https://vercel.com/new) → **Import Git Repository**
-2. Selecciona el repo `veka`
-3. Configuración del proyecto:
+Repo: **edgarepidc/veka** — rama `main`.
 
-| Campo | Valor |
-|-------|--------|
-| **Framework** | Next.js |
-| **Root Directory** | `apps/admin` |
-| **Build Command** | (dejar el de `vercel.json`) |
-| **Install Command** | (dejar el de `vercel.json`) |
+```bash
+git remote add origin https://github.com/edgarepidc/veka.git
+git push -u origin main
+```
 
-4. **Environment Variables** (Production + Preview):
+## 2. Vercel
+
+Proyecto: **veka-admin** en el team `edgarepidcs-projects`.
+
+Variables de entorno ya configuradas (Production + Preview):
 
 | Variable | Valor |
 |----------|--------|
@@ -34,19 +33,32 @@ git push -u origin main
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key del dashboard Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role (solo servidor) |
 
-5. **Deploy**
+El monorepo usa `vercel.json` en la raíz del repo para instalar y construir `@veka/admin`.
 
-Tu panel quedará en una URL como `https://veka-xxx.vercel.app`
+## 3. Supabase — URLs de producción (pendiente manual)
 
-## 3. Supabase — URLs de producción
+Abre [URL Configuration](https://supabase.com/dashboard/project/ubmtcwdgryfwldjfqwim/auth/url-configuration) y pega:
 
-En **Authentication → URL Configuration**:
+- **Site URL:** `https://veka-admin.vercel.app`
+- **Redirect URLs** (una por línea):
 
-- **Site URL:** `https://TU-PROYECTO.vercel.app`
-- **Redirect URLs:** agrega:
-  - `https://TU-PROYECTO.vercel.app/**`
-  - `https://*.vercel.app/**` (previews)
-  - `http://localhost:3000/**` (desarrollo local)
+```
+https://veka-admin.vercel.app/**
+https://*.vercel.app/**
+http://localhost:3000/**
+http://localhost:8081/**
+veka://**
+exp://**
+```
+
+Recomendado: en **Authentication → Providers → Email**, desactiva **Confirm email** mientras desarrollas.
+
+O por CLI (con token en https://supabase.com/dashboard/account/tokens):
+
+```bash
+export SUPABASE_ACCESS_TOKEN=tu_token
+bash scripts/configure-supabase-auth.sh https://veka-admin.vercel.app
+```
 
 ## 4. App móvil (Expo)
 
