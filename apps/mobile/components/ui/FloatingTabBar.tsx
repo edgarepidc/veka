@@ -8,6 +8,7 @@ const TAB_ICONS: Record<string, string> = {
   community: '💬',
   spaces: '🏊',
   finance: '💳',
+  maintenance: '🔧',
   security: '🔒',
 };
 
@@ -102,11 +103,11 @@ const styles = StyleSheet.create({
   },
   item: {
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 10,
+    gap: 2,
+    paddingHorizontal: 6,
     paddingVertical: 8,
     borderRadius: 14,
-    minWidth: 56,
+    minWidth: 48,
   },
   icon: { fontSize: 18 },
 });

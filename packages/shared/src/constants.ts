@@ -5,6 +5,7 @@ export const MOBILE_TABS = [
   { key: 'community', label: 'Comunidad', route: '/community' },
   { key: 'spaces', label: 'Espacios', route: '/spaces' },
   { key: 'finance', label: 'Finanzas', route: '/finance' },
+  { key: 'maintenance', label: 'Mantenimiento', route: '/maintenance' },
   { key: 'security', label: 'Seguridad', route: '/security' },
 ] as const;
 
@@ -25,3 +26,27 @@ export type ExpenseKind = (typeof EXPENSE_KINDS)[number];
 
 export const EXPENSE_STATUSES = ['pending', 'paid'] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
+
+export const EXPENSE_CATEGORIES = [
+  'mantenimiento',
+  'servicios',
+  'nomina',
+  'seguridad',
+  'administracion',
+  'suministros',
+  'otros',
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const MAINTENANCE_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
+export type MaintenanceTicketStatus = (typeof MAINTENANCE_TICKET_STATUSES)[number];
+
+export const MAINTENANCE_TICKET_CATEGORIES = [
+  'unit',
+  'common_area',
+  'plumbing',
+  'electrical',
+  'equipment',
+  'other',
+] as const;
+export type MaintenanceTicketCategory = (typeof MAINTENANCE_TICKET_CATEGORIES)[number];

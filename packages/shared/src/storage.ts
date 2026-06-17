@@ -1,9 +1,12 @@
 export const STORAGE_BUCKETS = {
   AVATARS: 'avatars',
   BRANDING: 'branding',
+  EXPENSE_EVIDENCE: 'expense-evidence',
+  MAINTENANCE_FILES: 'maintenance-files',
 } as const;
 
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export function avatarStoragePath(userId: string, ext: string): string {
   return `${userId}/avatar.${ext}`;
@@ -11,6 +14,19 @@ export function avatarStoragePath(userId: string, ext: string): string {
 
 export function condominiumLogoPath(condominiumId: string, ext: string): string {
   return `${condominiumId}/logo.${ext}`;
+}
+
+export function expenseEvidencePath(condominiumId: string, fileId: string, ext: string): string {
+  return `${condominiumId}/expenses/${fileId}.${ext}`;
+}
+
+export function maintenanceFilePath(
+  condominiumId: string,
+  folder: 'schedules' | 'evidence' | 'tickets',
+  fileId: string,
+  ext: string,
+): string {
+  return `${condominiumId}/${folder}/${fileId}.${ext}`;
 }
 
 export function publicStorageUrl(supabaseUrl: string, bucket: string, path: string): string {
@@ -42,6 +58,7 @@ export function imageExtensionFromMime(mime: string): string {
     'image/png': 'png',
     'image/webp': 'webp',
     'image/gif': 'gif',
+    'application/pdf': 'pdf',
   };
-  return map[mime] ?? 'jpg';
+  return map[mime] ?? 'bin';
 }

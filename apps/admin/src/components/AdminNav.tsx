@@ -9,6 +9,7 @@ const NAV = [
   { href: '/comunidad', label: 'Comunidad', icon: '💬' },
   { href: '/espacios', label: 'Espacios', icon: '🏊' },
   { href: '/seguridad', label: 'Seguridad', icon: '🔒' },
+  { href: '/mantenimiento', label: 'Mantenimiento', icon: '🔧' },
   { href: '/configuracion/perfil', label: 'Configuración', icon: '⚙️' },
 ];
 

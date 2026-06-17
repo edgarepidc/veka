@@ -1,15 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, useTransition } from 'react';
 import type { ChargeStatus, ExpenseKind, ExpenseStatus, FundType, PaymentStatus } from '@veka/shared';
 import {
+  EXPENSE_CATEGORIES,
+  STORAGE_BUCKETS,
   chargeStatusLabel,
   expenseCategoryLabel,
+  expenseEvidencePath,
+  expenseKindLabel,
   expenseStatusLabel,
   formatCurrency,
   fundTypeLabel,
 } from '@veka/shared';
 
+import { createExpense } from '@/app/(panel)/finanzas/actions';
+import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
@@ -63,7 +69,7 @@ interface ExpenseRow {
   expense_kind: ExpenseKind;
   status: ExpenseStatus;
   fund_type: FundType;
-  attachments: { id: string }[];
+  attachments: { id: string; file_url: string; file_name: string | null }[];
 }
 
 const TABS: { id: FinanceTab; label: string }[] = [
@@ -89,9 +95,12 @@ function sumAmount(items: { amount: number }[]): number {
 
 export function FinanceDashboard() {
   const supabase = createClient();
+  const expenseFileId = useId().replace(/:/g, '');
   const [tab, setTab] = useState<FinanceTab>('estado');
   const [loading, setLoading] = useState(true);
   const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
+  const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
+  const [expensePending, startExpense] = useTransition();
 
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [clusters, setClusters] = useState<ClusterRow[]>([]);
@@ -140,7 +149,7 @@ export function FinanceDashboard() {
       supabase
         .from('expenses')
         .select(
-          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, attachments:expense_attachments(id)',
+          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, attachments:expense_attachments(id, file_url, file_name)',
         )
         .eq('condominium_id', DEMO_CONDO_ID)
         .order('expense_date', { ascending: false }),
@@ -273,6 +282,24 @@ export function FinanceDashboard() {
     }
 
     void load();
+  }
+
+  function runCreateExpense(formData: FormData) {
+    setExpenseMessage(null);
+    startExpense(async () => {
+      const result = await createExpense(formData);
+      if (result.error) {
+        setExpenseMessage(result.error);
+        return;
+      }
+      setExpenseMessage('Egreso registrado.');
+      void load();
+    });
+  }
+
+  async function openExpenseEvidence(path: string) {
+    const { data } = await supabase.storage.from(STORAGE_BUCKETS.EXPENSE_EVIDENCE).createSignedUrl(path, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
   if (loading) {
@@ -431,7 +458,98 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'movimientos' ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <GlassCard>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Registrar egreso</h2>
+            <p className="mt-1 text-sm text-muted">
+              Clasifica el gasto y adjunta el comprobante cuando esté pagado.
+            </p>
+            {expenseMessage ? (
+              <p
+                className={`mt-3 text-sm ${expenseMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
+              >
+                {expenseMessage}
+              </p>
+            ) : null}
+            <form action={runCreateExpense} className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input name="concept" required placeholder="Concepto del gasto" className="glass-input sm:col-span-2" />
+              <input
+                name="amount"
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Monto"
+                className="glass-input"
+              />
+              <input
+                name="expense_date"
+                required
+                type="date"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+                className="glass-input"
+              />
+              <select name="category" required className="glass-input">
+                {EXPENSE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat} className="bg-slate-900">
+                    {expenseCategoryLabel(cat)}
+                  </option>
+                ))}
+              </select>
+              <select name="fund_type" defaultValue="operating" className="glass-input">
+                <option value="operating" className="bg-slate-900">
+                  {fundTypeLabel('operating')}
+                </option>
+                <option value="reserve" className="bg-slate-900">
+                  {fundTypeLabel('reserve')}
+                </option>
+              </select>
+              <select name="expense_kind" defaultValue="general" className="glass-input">
+                <option value="general" className="bg-slate-900">
+                  {expenseKindLabel('general')}
+                </option>
+                <option value="supplier" className="bg-slate-900">
+                  {expenseKindLabel('supplier')}
+                </option>
+                <option value="payroll" className="bg-slate-900">
+                  {expenseKindLabel('payroll')}
+                </option>
+              </select>
+              <select name="status" defaultValue="paid" className="glass-input">
+                <option value="paid" className="bg-slate-900">
+                  {expenseStatusLabel('paid')}
+                </option>
+                <option value="pending" className="bg-slate-900">
+                  {expenseStatusLabel('pending')}
+                </option>
+              </select>
+              <input
+                name="vendor_name"
+                placeholder="Proveedor o empleado (si aplica)"
+                className="glass-input sm:col-span-2"
+              />
+              <textarea
+                name="notes"
+                rows={2}
+                placeholder="Notas (opcional)"
+                className="glass-input min-h-[72px] sm:col-span-2"
+              />
+              <div className="sm:col-span-2">
+                <FileUpload
+                  bucket={STORAGE_BUCKETS.EXPENSE_EVIDENCE}
+                  inputName="evidence_path"
+                  label="Comprobante de pago"
+                  hint="Imagen o PDF del gasto comprobado."
+                  buildPath={(ext) => expenseEvidencePath(DEMO_CONDO_ID, expenseFileId, ext)}
+                />
+              </div>
+              <button type="submit" disabled={expensePending} className="glass-btn-primary sm:col-span-2">
+                {expensePending ? 'Guardando…' : 'Registrar egreso'}
+              </button>
+            </form>
+          </GlassCard>
+
+          <div className="grid gap-6 lg:grid-cols-2">
           <GlassCard>
             <h2 className="text-lg font-semibold text-[var(--text)]">Ingresos</h2>
             <p className="mt-1 text-sm text-muted">Cuotas y pagos aprobados con comprobante.</p>
@@ -490,9 +608,15 @@ export function FinanceDashboard() {
                             <div className="text-right">
                               <p className="font-semibold">{formatCurrency(Number(expense.amount))}</p>
                               {expense.attachments.length > 0 ? (
-                                <span className="glass-tag-green mt-1">Comprobado</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void openExpenseEvidence(expense.attachments[0]!.file_url)}
+                                  className="glass-tag-green mt-1 hover:opacity-80"
+                                >
+                                  Ver comprobante
+                                </button>
                               ) : (
-                                <span className="mt-1 inline-block text-xs text-subtle">Pagado</span>
+                                <span className="mt-1 inline-block text-xs text-subtle">Sin comprobante</span>
                               )}
                             </div>
                           </div>
@@ -504,6 +628,7 @@ export function FinanceDashboard() {
               )}
             </div>
           </GlassCard>
+          </div>
         </div>
       ) : null}
 

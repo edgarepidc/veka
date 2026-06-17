@@ -155,3 +155,20 @@ values
     (date_trunc('month', current_date) - interval '1 month')::date
   )
 on conflict (id) do nothing;
+
+-- Demo maintenance ticket (resident A-102)
+insert into public.maintenance_tickets (
+  id, condominium_id, unit_id, created_by, title, description, category, status
+)
+select
+  '66666666-6666-6666-6666-666666666601',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  u.id,
+  'Fuga en lavabo del baño principal',
+  'Gotea el lavabo desde ayer por la tarde.',
+  'plumbing',
+  'open'
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;

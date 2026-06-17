@@ -12,6 +12,12 @@ const modules = [
   { title: 'Espacios', description: 'Amenidades y reservas.', href: '/espacios', icon: '🏊' },
   { title: 'Seguridad', description: 'Visitas QR y paquetería.', href: '/seguridad', icon: '🔒' },
   {
+    title: 'Mantenimiento',
+    description: 'Tickets, calendarios y evidencia de trabajos.',
+    href: '/mantenimiento',
+    icon: '🔧',
+  },
+  {
     title: 'Configuración',
     description: 'Perfil, condominio, unidades y equipo.',
     href: '/configuracion/perfil',
