@@ -2,12 +2,14 @@ import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AvatarUploader } from '@/components/AvatarUploader';
 import { AppearancePicker } from '@/components/ui/AppearancePicker';
-import { Avatar, SectionLabel } from '@/components/ui/Avatar';
+import { SectionLabel } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { useMembership } from '@/hooks/useMembership';
+import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -16,17 +18,28 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const { primary } = useMembership();
+  const { profile, refresh } = useProfile();
 
   const displayName =
+    profile?.full_name ??
     (user?.user_metadata?.full_name as string | undefined) ??
     user?.email?.split('@')[0] ??
     'Residente';
+
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
     <ScreenBackground>
       <View style={[styles.container, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.profile}>
-          <Avatar initials={displayName.slice(0, 2).toUpperCase()} color={theme.accent} size={64} />
+          {user ? (
+            <AvatarUploader
+              userId={user.id}
+              avatarPath={profile?.avatar_url ?? null}
+              initials={initials}
+              onUploaded={() => void refresh()}
+            />
+          ) : null}
           <Text style={[styles.name, { color: theme.text, fontFamily: theme.serifFamily }]}>{displayName}</Text>
           <Text style={{ color: theme.textMuted, fontSize: 13 }}>{user?.email}</Text>
         </View>

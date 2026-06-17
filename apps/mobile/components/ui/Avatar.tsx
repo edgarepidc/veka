@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/useTheme';
 
@@ -6,11 +6,26 @@ export function Avatar({
   initials,
   color,
   size = 34,
+  imageUri,
 }: {
   initials: string;
   color: string;
   size?: number;
+  imageUri?: string | null;
 }) {
+  if (imageUri) {
+    return (
+      <Image
+        source={{ uri: imageUri }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        }}
+      />
+    );
+  }
+
   return (
     <View
       style={[

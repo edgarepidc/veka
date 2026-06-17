@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
+import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { CondominiumBranding } from '@/lib/condominium-settings';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
 import type { AdminSession } from '@/lib/load-admin-session';
 import { SignOutButton } from '@/components/SignOutButton';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 const NAV = [
   { href: '/', label: 'Inicio', icon: '🏠' },
@@ -44,7 +47,16 @@ export function AdminShell({
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
 
-  const logoUrl = branding?.logo_url;
+  const logoUrl = resolveStorageImageUrl(
+    SUPABASE_URL,
+    branding?.logo_url,
+    STORAGE_BUCKETS.BRANDING,
+  );
+  const avatarUrl = resolveStorageImageUrl(
+    SUPABASE_URL,
+    session.profile.avatar_url,
+    STORAGE_BUCKETS.AVATARS,
+  );
   const accent = branding?.primary_color ?? DEFAULT_BRANDING.primary_color;
 
   return (
@@ -98,8 +110,13 @@ export function AdminShell({
                   href="/configuracion/perfil"
                   className="flex items-center gap-3 rounded-xl px-2 py-1 transition hover:bg-white/10"
                 >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(52,211,153,0.2)] text-sm font-bold text-accent">
-                    {initials || 'AD'}
+                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[rgba(52,211,153,0.2)] text-sm font-bold text-accent">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      initials || 'AD'
+                    )}
                   </div>
                   <div className="hidden text-left sm:block">
                     <p className="text-sm font-semibold text-[var(--text)]">{displayName}</p>

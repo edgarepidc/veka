@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { condominiumLogoPath, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
 import type { CondominiumSettings } from '@/lib/condominium-settings';
 
 import { updateCondominium } from './actions';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 const TIMEZONES = [
   'America/Mexico_City',
@@ -21,6 +25,7 @@ export function CondominiumForm({
   condo,
 }: {
   condo: {
+    id: string;
     name: string;
     slug: string;
     address: string | null;
@@ -32,12 +37,14 @@ export function CondominiumForm({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  const logoPreview = resolveStorageImageUrl(SUPABASE_URL, branding.logo_url, STORAGE_BUCKETS.BRANDING);
+
   return (
     <>
       <GlassCard className="mb-6">
         <h2 className="text-lg font-semibold text-[var(--text)]">Marca y apariencia</h2>
         <p className="mt-1 text-sm text-muted">
-          Logo y colores que verán residentes en la app y en este panel.
+          Sube el logo y define los colores que verán residentes en la app y en este panel.
         </p>
 
         <form
@@ -55,12 +62,16 @@ export function CondominiumForm({
           <input type="hidden" name="address" value={condo.address ?? ''} />
           <input type="hidden" name="timezone" value={condo.timezone} />
 
-          <Field
-            label="URL del logo"
-            name="logo_url"
-            defaultValue={branding.logo_url ?? ''}
-            placeholder="https://…/logo.png"
+          <ImageUpload
+            bucket={STORAGE_BUCKETS.BRANDING}
+            buildPath={(ext) => condominiumLogoPath(condo.id, ext)}
+            currentPath={branding.logo_url}
+            inputName="logo_url"
+            label="Logo del condominio"
+            hint="PNG o JPG con fondo transparente, máximo 2 MB."
+            previewClassName="max-h-16 max-w-[200px] object-contain"
           />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-medium text-muted">
               Color primario
@@ -92,16 +103,8 @@ export function CondominiumForm({
             </label>
           </div>
 
-          {branding.logo_url ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-              <p className="mb-2 text-xs text-subtle">Vista previa</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={branding.logo_url}
-                alt="Logo del condominio"
-                className="max-h-16 max-w-[200px] object-contain"
-              />
-            </div>
+          {logoPreview ? (
+            <p className="text-xs text-subtle">El logo guardado se muestra en el menú lateral del panel.</p>
           ) : null}
 
           <button type="submit" disabled={pending} className="glass-btn-primary">
@@ -126,11 +129,7 @@ export function CondominiumForm({
             });
           }}
         >
-          <input
-            type="hidden"
-            name="logo_url"
-            value={branding.logo_url ?? ''}
-          />
+          <input type="hidden" name="logo_url" value={branding.logo_url ?? ''} />
           <input
             type="hidden"
             name="primary_color"
@@ -176,13 +175,11 @@ function Field({
   name,
   defaultValue,
   required,
-  placeholder,
 }: {
   label: string;
   name: string;
   defaultValue?: string;
   required?: boolean;
-  placeholder?: string;
 }) {
   return (
     <label className="block text-sm font-medium text-muted">
@@ -191,7 +188,6 @@ function Field({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        placeholder={placeholder}
         className="glass-input mt-1"
       />
     </label>

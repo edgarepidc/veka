@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { avatarStoragePath, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { AdminSession } from '@/lib/load-admin-session';
 
 import { updateAdminPassword, updateAdminProfile } from './actions';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 function roleLabel(role: string): string {
   const map: Record<string, string> = {
@@ -25,6 +29,12 @@ export function ProfileForm({ session }: { session: AdminSession }) {
   const [profilePending, startProfile] = useTransition();
   const [passwordPending, startPassword] = useTransition();
 
+  const avatarPreview = resolveStorageImageUrl(
+    SUPABASE_URL,
+    session.profile.avatar_url,
+    STORAGE_BUCKETS.AVATARS,
+  );
+
   return (
     <div className="space-y-6">
       <GlassCard>
@@ -43,14 +53,22 @@ export function ProfileForm({ session }: { session: AdminSession }) {
             });
           }}
         >
+          <ImageUpload
+            bucket={STORAGE_BUCKETS.AVATARS}
+            buildPath={(ext) => avatarStoragePath(session.userId, ext)}
+            currentPath={session.profile.avatar_url}
+            inputName="avatar_url"
+            label="Foto de perfil"
+            hint="JPG o PNG, máximo 2 MB."
+            previewClassName="h-20 w-20 rounded-full object-cover"
+          />
+
+          {avatarPreview ? null : (
+            <p className="text-xs text-subtle">Si no subes foto, se muestran tus iniciales.</p>
+          )}
+
           <Field label="Nombre completo" name="full_name" defaultValue={session.profile.full_name ?? ''} />
           <Field label="Teléfono" name="phone" defaultValue={session.profile.phone ?? ''} />
-          <Field
-            label="URL de avatar (opcional)"
-            name="avatar_url"
-            defaultValue={session.profile.avatar_url ?? ''}
-            placeholder="https://..."
-          />
           <ReadOnly label="Correo electrónico" value={session.email} />
           <ReadOnly
             label="Rol en el condominio"
@@ -108,13 +126,11 @@ function Field({
   label,
   name,
   defaultValue,
-  placeholder,
   type = 'text',
 }: {
   label: string;
   name: string;
   defaultValue?: string;
-  placeholder?: string;
   type?: string;
 }) {
   return (
@@ -124,7 +140,6 @@ function Field({
         type={type}
         name={name}
         defaultValue={defaultValue}
-        placeholder={placeholder}
         className="glass-input mt-1"
       />
     </label>

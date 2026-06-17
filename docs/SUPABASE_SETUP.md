@@ -39,6 +39,14 @@ El `project-ref` está en la URL del dashboard: `https://supabase.com/dashboard/
 npx supabase db push
 ```
 
+### Buckets de imágenes (avatars y branding)
+
+Si ya aplicaste migraciones anteriores, ejecuta solo esta en el **SQL Editor**:
+
+`supabase/migrations/20250617200000_avatars_and_branding_storage.sql`
+
+Crea los buckets públicos `avatars` (fotos de perfil) y `branding` (logos de condominio).
+
 ## 6. Auth en Supabase Dashboard
 
 En **Authentication → Providers**:

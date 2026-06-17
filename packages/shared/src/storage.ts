@@ -1,0 +1,47 @@
+export const STORAGE_BUCKETS = {
+  AVATARS: 'avatars',
+  BRANDING: 'branding',
+} as const;
+
+export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+export function avatarStoragePath(userId: string, ext: string): string {
+  return `${userId}/avatar.${ext}`;
+}
+
+export function condominiumLogoPath(condominiumId: string, ext: string): string {
+  return `${condominiumId}/logo.${ext}`;
+}
+
+export function publicStorageUrl(supabaseUrl: string, bucket: string, path: string): string {
+  const base = supabaseUrl.replace(/\/$/, '');
+  const encoded = path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return `${base}/storage/v1/object/public/${bucket}/${encoded}`;
+}
+
+/** Resolves a storage path or legacy full URL to a displayable image URL. */
+export function resolveStorageImageUrl(
+  supabaseUrl: string,
+  pathOrUrl: string | null | undefined,
+  bucket: string,
+): string | null {
+  if (!pathOrUrl) return null;
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  return publicStorageUrl(supabaseUrl, bucket, pathOrUrl);
+}
+
+export function imageExtensionFromMime(mime: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+  };
+  return map[mime] ?? 'jpg';
+}
