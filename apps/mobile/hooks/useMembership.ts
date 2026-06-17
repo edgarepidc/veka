@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import type { UnitRelationship } from '@veka/shared';
+
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -8,6 +10,7 @@ export interface ActiveMembership {
   condominium_id: string;
   unit_id: string | null;
   role: string;
+  unit_relationship: UnitRelationship | null;
   condominium: { id: string; name: string; slug: string } | null;
   unit: { id: string; identifier: string } | null;
 }
@@ -33,6 +36,7 @@ export function useMembership() {
         condominium_id,
         unit_id,
         role,
+        unit_relationship,
         condominium:condominiums (id, name, slug),
         unit:units (id, identifier)
       `,

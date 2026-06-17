@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { formatUnitLabel, UNIT_KIND_LABELS, type UnitKind } from '@veka/shared';
+import { formatUnitLabel, UNIT_KIND_LABELS, UNIT_RELATIONSHIP_CHIP_LABELS, UNIT_RELATIONSHIP_LABELS, type UnitKind } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { ClusterRow, UnitOccupant, UnitRow as UnitData } from '@/lib/load-condominium';
@@ -329,8 +329,8 @@ function ClusterStatChips({ stats }: { stats: ClusterStats }) {
       {stats.deptos > 0 ? <StatChip tone="blue" label="Deptos" value={stats.deptos} /> : null}
       {stats.legacy > 0 ? <StatChip tone="muted" label="Unidades" value={stats.legacy} /> : null}
       {stats.total === 0 ? <StatChip tone="muted" label="Sin unidades" value={0} hideZero /> : null}
-      <StatChip tone="green" label="Dueños" value={stats.ownersRegistered} />
-      <StatChip tone="purple" label="Inquilinos" value={stats.tenantsRegistered} />
+      <StatChip tone="green" label={UNIT_RELATIONSHIP_CHIP_LABELS.owner} value={stats.ownersRegistered} />
+      <StatChip tone="purple" label={UNIT_RELATIONSHIP_CHIP_LABELS.tenant} value={stats.tenantsRegistered} />
       {stats.missing > 0 ? (
         <StatChip tone="amber" label="Por registrar" value={stats.missing} />
       ) : (
@@ -418,13 +418,16 @@ function UnitCard({
           ) : null}
 
           <div className="mt-3 space-y-1.5 text-sm">
-            <OccupantLine label="Propietario" occupant={unit.owner ?? unit.resident} />
-            <OccupantLine label="Inquilino" occupant={unit.tenant} optional />
+            <OccupantLine
+              label={UNIT_RELATIONSHIP_LABELS.owner}
+              occupant={unit.owner ?? unit.resident}
+            />
+            <OccupantLine label={UNIT_RELATIONSHIP_LABELS.tenant} occupant={unit.tenant} optional />
           </div>
 
           {vacant ? (
             <div className="mt-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-              Sin persona registrada en esta unidad. Invita al propietario o inquilino para que acceda a la app.
+              Sin persona registrada. Invita al residente propietario o inquilino para que acceda a la app.
             </div>
           ) : null}
         </div>
@@ -437,21 +440,27 @@ function UnitCard({
         </form>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row">
-        <InviteForm
-          unitId={unit.id}
-          relationship="owner"
-          label="Invitar propietario"
-          disabled={pending || Boolean(unit.owner && !unit.owner.pending)}
-          onInvite={onInvite}
-        />
-        <InviteForm
-          unitId={unit.id}
-          relationship="tenant"
-          label="Invitar inquilino"
-          disabled={pending || Boolean(unit.tenant && !unit.tenant.pending)}
-          onInvite={onInvite}
-        />
+      <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+        <p className="text-xs text-subtle">
+          Ambos perfiles tienen permisos de residente. Solo las votaciones formales en Comunidad están
+          reservadas al residente propietario.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <InviteForm
+            unitId={unit.id}
+            relationship="owner"
+            label={`Invitar ${UNIT_RELATIONSHIP_LABELS.owner.toLowerCase()}`}
+            disabled={pending || Boolean(unit.owner && !unit.owner.pending)}
+            onInvite={onInvite}
+          />
+          <InviteForm
+            unitId={unit.id}
+            relationship="tenant"
+            label={`Invitar ${UNIT_RELATIONSHIP_LABELS.tenant.toLowerCase()}`}
+            disabled={pending || Boolean(unit.tenant && !unit.tenant.pending)}
+            onInvite={onInvite}
+          />
+        </div>
       </div>
     </li>
   );

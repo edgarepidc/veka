@@ -9,9 +9,15 @@ export const UNIT_KIND_LABELS: Record<UnitKind, string> = {
   depto: 'Depto',
 };
 
+/** Perfil de ocupación dentro de la unidad (ambos son rol resident en el condominio). */
 export const UNIT_RELATIONSHIP_LABELS: Record<UnitRelationship, string> = {
-  owner: 'Propietario',
-  tenant: 'Inquilino',
+  owner: 'Residente propietario',
+  tenant: 'Residente inquilino',
+};
+
+export const UNIT_RELATIONSHIP_CHIP_LABELS: Record<UnitRelationship, string> = {
+  owner: 'Propietarios',
+  tenant: 'Inquilinos',
 };
 
 export function formatUnitLabel(
@@ -30,4 +36,25 @@ export function buildUnitIdentifier(
   number: string,
 ): string {
   return `${clusterName} / ${UNIT_KIND_LABELS[kind]} / ${number.trim()}`;
+}
+
+/** Propietarios e inquilinos comparten permisos operativos; solo difieren en votaciones formales. */
+export function canVoteInFormalPoll(unitRelationship: UnitRelationship | null | undefined): boolean {
+  return unitRelationship !== 'tenant';
+}
+
+export function canVoteInPoll(
+  unitRelationship: UnitRelationship | null | undefined,
+  isFormal: boolean,
+): boolean {
+  if (!isFormal) return true;
+  return canVoteInFormalPoll(unitRelationship);
+}
+
+export function formatResidentProfileLabel(
+  unitRelationship: UnitRelationship | null | undefined,
+): string | null {
+  if (unitRelationship === 'owner') return UNIT_RELATIONSHIP_LABELS.owner;
+  if (unitRelationship === 'tenant') return UNIT_RELATIONSHIP_LABELS.tenant;
+  return null;
 }

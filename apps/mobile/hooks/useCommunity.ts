@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { canVoteInPoll } from '@veka/shared';
+
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
@@ -10,6 +12,7 @@ export interface CommunityPost {
   body: string | null;
   post_type: 'announcement' | 'poll' | 'photo';
   is_pinned: boolean;
+  is_formal: boolean;
   created_at: string;
   author_id: string;
   author_name: string;
@@ -64,7 +67,7 @@ export function useCommunity(primary: ActiveMembership | null) {
     const [postsRes, docsRes] = await Promise.all([
       supabase
         .from('posts')
-        .select('id, title, body, post_type, is_pinned, created_at, author_id')
+        .select('id, title, body, post_type, is_pinned, is_formal, created_at, author_id')
         .eq('condominium_id', primary.condominium_id)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
@@ -136,6 +139,7 @@ export function useCommunity(primary: ActiveMembership | null) {
         body: post.body,
         post_type: post.post_type,
         is_pinned: post.is_pinned,
+        is_formal: post.is_formal ?? true,
         created_at: post.created_at,
         author_id: post.author_id,
         author_name: name,
@@ -183,11 +187,23 @@ export function useCommunity(primary: ActiveMembership | null) {
       if (!user) return;
       const post = posts.find((p) => p.id === postId);
       if (!post?.pollOptions || post.myVote) return;
+      if (!canVoteInPoll(primary?.unit_relationship ?? null, post.is_formal)) return;
       await supabase.from('poll_votes').insert({ poll_option_id: optionId, user_id: user.id });
       await refresh();
     },
-    [posts, refresh, user],
+    [posts, primary?.unit_relationship, refresh, user],
   );
 
-  return { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll };
+  const canVoteFormalPolls = canVoteInPoll(primary?.unit_relationship ?? null, true);
+
+  return {
+    posts,
+    documents,
+    loading,
+    refreshing,
+    refresh,
+    toggleReaction,
+    votePoll,
+    canVoteFormalPolls,
+  };
 }

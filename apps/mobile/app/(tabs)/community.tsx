@@ -43,7 +43,8 @@ export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll } = useCommunity(primary);
+  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, canVoteFormalPolls } =
+    useCommunity(primary);
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
@@ -129,13 +130,19 @@ export default function CommunityScreen() {
 
                       {post.post_type === 'poll' && post.pollOptions ? (
                         <View style={styles.poll}>
+                          {post.is_formal ? (
+                            <Text style={{ color: theme.textSubtle, fontSize: 10, marginBottom: 6 }}>
+                              Votación formal · solo residente propietario
+                            </Text>
+                          ) : null}
                           {post.pollOptions.map((opt) => {
                             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
                             const voted = post.myVote === opt.id;
+                            const pollLocked = post.is_formal && !canVoteFormalPolls;
                             return (
                               <Pressable
                                 key={opt.id}
-                                disabled={!!post.myVote}
+                                disabled={!!post.myVote || pollLocked}
                                 onPress={() => void votePoll(post.id, opt.id)}
                                 style={[
                                   styles.pollOption,
@@ -155,6 +162,11 @@ export default function CommunityScreen() {
                               </Pressable>
                             );
                           })}
+                          {post.is_formal && !canVoteFormalPolls && !post.myVote ? (
+                            <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
+                              Como residente inquilino puedes ver resultados, pero no votar en encuestas formales.
+                            </Text>
+                          ) : null}
                           <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 4 }}>
                             {totalVotes} voto{totalVotes === 1 ? '' : 's'}
                           </Text>

@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { formatResidentProfileLabel } from '@veka/shared';
+
 import { AvatarUploader } from '@/components/AvatarUploader';
 import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { SectionLabel } from '@/components/ui/Avatar';
@@ -27,6 +29,7 @@ export default function AccountScreen() {
     'Residente';
 
   const initials = displayName.slice(0, 2).toUpperCase();
+  const occupancyLabel = formatResidentProfileLabel(primary?.unit_relationship ?? null);
 
   return (
     <ScreenBackground>
@@ -48,7 +51,8 @@ export default function AccountScreen() {
         <GlassCard>
           <Row label="Condominio" value={primary?.condominium?.name ?? 'Sin asignar'} theme={theme} />
           <Row label="Unidad" value={primary?.unit?.identifier ?? 'Sin asignar'} theme={theme} />
-          <Row label="Rol" value={primary?.role ?? '—'} theme={theme} last />
+          <Row label="Perfil" value={occupancyLabel ?? 'Residente'} theme={theme} />
+          <Row label="Rol en el condominio" value={primary?.role ?? '—'} theme={theme} last />
         </GlassCard>
 
         <SectionLabel title="Apariencia" />
