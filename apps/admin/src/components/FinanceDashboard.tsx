@@ -1,12 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { formatCurrency, paymentStatusLabel } from '@veka/shared';
 
 import { createClient } from '@/lib/supabase/client';
 
-const DEMO_CONDO_ID = '22222222-2222-2222-2222-222222222222';
+import { DEMO_CONDO_ID } from '@/lib/constants';
 
 interface UnitOption {
   id: string;
@@ -134,32 +133,19 @@ export function FinanceDashboard() {
   }
 
   if (loading) {
-    return <p className="p-8 text-slate-600">Cargando finanzas…</p>;
+    return <p className="p-8 text-muted">Cargando finanzas…</p>;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <div>
-            <p className="text-sm text-teal-700">Finanzas</p>
-            <h1 className="text-2xl font-bold">Gestión financiera</h1>
-          </div>
-          <Link href="/" className="text-sm font-medium text-teal-700 hover:underline">
-            ← Panel
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto grid max-w-6xl gap-8 px-6 py-8 lg:grid-cols-2">
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">Nueva cuota</h2>
+    <div className="grid gap-8 lg:grid-cols-2">
+        <section className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Nueva cuota</h2>
           <form onSubmit={createCharge} className="mt-4 space-y-3">
             <select
               required
               value={newCharge.unitId}
               onChange={(e) => setNewCharge((p) => ({ ...p, unitId: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              className="glass-input"
             >
               <option value="">Selecciona unidad</option>
               {units.map((unit) => (
@@ -172,7 +158,7 @@ export function FinanceDashboard() {
               required
               value={newCharge.concept}
               onChange={(e) => setNewCharge((p) => ({ ...p, concept: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              className="glass-input"
               placeholder="Concepto"
             />
             <input
@@ -182,7 +168,7 @@ export function FinanceDashboard() {
               step="0.01"
               value={newCharge.amount}
               onChange={(e) => setNewCharge((p) => ({ ...p, amount: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              className="glass-input"
               placeholder="Monto"
             />
             <input
@@ -190,31 +176,28 @@ export function FinanceDashboard() {
               type="date"
               value={newCharge.dueDate}
               onChange={(e) => setNewCharge((p) => ({ ...p, dueDate: e.target.value }))}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2"
+              className="glass-input"
             />
-            <button
-              type="submit"
-              className="rounded-xl bg-teal-700 px-4 py-2 font-semibold text-white hover:bg-teal-800"
-            >
+            <button type="submit" className="glass-btn-primary">
               Crear cuota
             </button>
           </form>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">Pagos por revisar</h2>
+        <section className="glass-card p-6">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
           <div className="mt-4 space-y-3">
             {payments.filter((p) => p.status === 'pending_review').length === 0 ? (
-              <p className="text-sm text-slate-500">No hay comprobantes pendientes.</p>
+              <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
             ) : (
               payments
                 .filter((p) => p.status === 'pending_review')
                 .map((payment) => (
-                  <div key={payment.id} className="rounded-xl border border-slate-200 p-4">
-                    <p className="font-medium">
+                  <div key={payment.id} className="glass-card-deep p-4">
+                    <p className="font-medium text-[var(--text)]">
                       {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
                     </p>
-                    <p className="text-sm text-slate-600">{payment.charge?.concept}</p>
+                    <p className="text-sm text-muted">{payment.charge?.concept}</p>
                     {payment.proof_url ? (
                       <button
                         type="button"
@@ -224,7 +207,7 @@ export function FinanceDashboard() {
                             .createSignedUrl(payment.proof_url!, 3600);
                           if (data?.signedUrl) window.open(data.signedUrl, '_blank');
                         }}
-                        className="mt-2 inline-block text-sm text-teal-700 hover:underline"
+                        className="mt-2 inline-block text-sm text-accent-2 hover:underline"
                       >
                         Ver comprobante
                       </button>
@@ -249,12 +232,12 @@ export function FinanceDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="text-lg font-semibold">Cargos activos</h2>
+        <section className="glass-card p-6 lg:col-span-2">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Cargos activos</h2>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b text-slate-500">
+                <tr className="border-b border-white/10 text-subtle">
                   <th className="py-2">Unidad</th>
                   <th className="py-2">Concepto</th>
                   <th className="py-2">Monto</th>
@@ -264,7 +247,7 @@ export function FinanceDashboard() {
               </thead>
               <tbody>
                 {charges.map((charge) => (
-                  <tr key={charge.id} className="border-b border-slate-100">
+                  <tr key={charge.id} className="border-b border-white/5 text-[var(--text)]">
                     <td className="py-2">{charge.unit?.identifier}</td>
                     <td className="py-2">{charge.concept}</td>
                     <td className="py-2">{formatCurrency(Number(charge.amount))}</td>
@@ -277,17 +260,17 @@ export function FinanceDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="text-lg font-semibold">Egresos del condominio</h2>
+        <section className="glass-card p-6 lg:col-span-2">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Egresos del condominio</h2>
           <ul className="mt-4 space-y-2">
             {expenses.map((expense) => (
               <li
                 key={expense.id}
-                className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3"
+                className="glass-card-deep flex items-center justify-between px-4 py-3"
               >
                 <div>
-                  <p className="font-medium">{expense.concept}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="font-medium text-[var(--text)]">{expense.concept}</p>
+                  <p className="text-sm text-subtle">
                     {expense.category} · {expense.expense_date}
                   </p>
                 </div>
@@ -297,13 +280,13 @@ export function FinanceDashboard() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="text-lg font-semibold">Historial de pagos</h2>
+        <section className="glass-card p-6 lg:col-span-2">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Historial de pagos</h2>
           <ul className="mt-4 space-y-2">
             {payments.map((payment) => (
               <li
                 key={payment.id}
-                className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3 text-sm"
+                className="glass-card-deep flex items-center justify-between px-4 py-3 text-sm text-[var(--text)]"
               >
                 <span>
                   {payment.unit?.identifier} · {payment.charge?.concept}
@@ -316,7 +299,6 @@ export function FinanceDashboard() {
             ))}
           </ul>
         </section>
-      </main>
     </div>
   );
 }

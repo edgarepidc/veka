@@ -1,11 +1,18 @@
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+} from '@expo-google-fonts/dm-sans';
+import { DMSerifDisplay_400Regular } from '@expo-google-fonts/dm-serif-display';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
+import { ThemeProvider } from '@/providers/ThemeProvider';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -13,7 +20,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+    DMSerifDisplay_400Regular,
   });
 
   useEffect(() => {
@@ -31,14 +42,15 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RootLayoutNav />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -59,13 +71,21 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: {
-          backgroundColor: colorScheme === 'dark' ? '#0F172A' : '#F8FAFB',
-        },
+        contentStyle: { backgroundColor: 'transparent' },
       }}
     >
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="account"
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: 'Configuración',
+          headerTransparent: true,
+          headerBlurEffect: 'regular',
+        }}
+      />
       <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Info' }} />
     </Stack>
   );

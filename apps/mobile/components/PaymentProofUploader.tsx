@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { supabase } from '@/lib/supabase';
 
 interface PaymentProofUploaderProps {
@@ -21,8 +20,6 @@ export function PaymentProofUploader({
   amount,
   onUploaded,
 }: PaymentProofUploaderProps) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
   const [uploading, setUploading] = useState(false);
 
   const uploadProof = useCallback(async () => {
@@ -70,26 +67,6 @@ export function PaymentProofUploader({
   }, [amount, chargeId, condominiumId, onUploaded, unitId]);
 
   return (
-    <Pressable
-      style={[styles.button, { backgroundColor: colors.primary }]}
-      onPress={uploadProof}
-      disabled={uploading}
-    >
-      {uploading ? (
-        <ActivityIndicator color="#fff" />
-      ) : (
-        <Text style={styles.buttonText}>Subir comprobante</Text>
-      )}
-    </Pressable>
+    <PrimaryButton label="Subir comprobante" loading={uploading} onPress={() => void uploadProof()} />
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    alignSelf: 'flex-start',
-  },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-});

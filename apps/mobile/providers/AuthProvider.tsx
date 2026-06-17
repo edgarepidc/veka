@@ -15,6 +15,8 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  /** Increments after invitations are accepted — refresh membership when this changes. */
+  authSyncVersion: number;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -29,33 +31,39 @@ async function acceptInvitations() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authSyncVersion, setAuthSyncVersion] = useState(0);
+
+  const syncInvitations = useCallback(async () => {
+    await acceptInvitations();
+    setAuthSyncVersion((version) => version + 1);
+  }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
-      setLoading(false);
       if (data.session) {
-        void acceptInvitations();
+        await syncInvitations();
       }
+      setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (nextSession) {
-        void acceptInvitations();
+        void syncInvitations();
       }
     });
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [syncInvitations]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error) {
-      await acceptInvitations();
+      await syncInvitations();
     }
     return { error: error?.message ?? null };
-  }, []);
+  }, [syncInvitations]);
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
@@ -64,10 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { data: { full_name: fullName } },
     });
     if (!error) {
-      await acceptInvitations();
+      await syncInvitations();
     }
     return { error: error?.message ?? null };
-  }, []);
+  }, [syncInvitations]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -78,11 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       loading,
+      authSyncVersion,
       signIn,
       signUp,
       signOut,
     }),
-    [session, loading, signIn, signUp, signOut],
+    [session, loading, authSyncVersion, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

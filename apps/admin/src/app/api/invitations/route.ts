@@ -57,6 +57,14 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const condominiumId = searchParams.get('condominiumId');
 

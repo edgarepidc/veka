@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   chargeStatusLabel,
   chargeStatusTone,
@@ -15,10 +16,14 @@ import {
 } from '@veka/shared';
 
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
-import { SectionCard } from '@/components/SectionCard';
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
+import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { StatPill } from '@/components/ui/StatPill';
+import { Tag } from '@/components/ui/Tag';
 import { useMembership } from '@/hooks/useMembership';
+import { useTheme } from '@/hooks/useTheme';
+import { mapChargeTone } from '@/lib/tagTone';
 import { supabase } from '@/lib/supabase';
 
 interface ChargeRow {
@@ -52,8 +57,8 @@ interface ExpenseRow {
 }
 
 export default function FinanceScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
 
   const [charges, setCharges] = useState<ChargeRow[]>([]);
@@ -112,120 +117,174 @@ export default function FinanceScreen() {
 
   if (membershipLoading || loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.tint} />
-      </View>
+      <ScreenBackground style={styles.centered}>
+        <ActivityIndicator size="large" color={theme.accent} />
+      </ScreenBackground>
     );
   }
 
   if (!primary?.unit_id) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background, padding: 24 }]}>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin unidad asignada</Text>
-        <Text style={[styles.emptyText, { color: colors.muted }]}>
-          Pide a la administración que te invite con tu correo electrónico.
-        </Text>
-      </View>
+      <ScreenBackground style={[styles.centered, { padding: 24 }]}>
+        <GlassCard>
+          <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin unidad asignada</Text>
+          <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+            Pide a la administración que te invite con tu correo electrónico.
+          </Text>
+        </GlassCard>
+      </ScreenBackground>
     );
   }
 
   const nextCharge = charges.find((c) => c.status === 'pending' || c.status === 'overdue');
+  const pendingPayments = payments.filter((p) => p.status === 'pending_review').length;
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      <Text style={[styles.heading, { color: colors.text }]}>Finanzas</Text>
-      <Text style={[styles.subheading, { color: colors.muted }]}>
-        {primary.condominium?.name} · Unidad {primary.unit?.identifier}
-      </Text>
-
-      {nextCharge ? (
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Próximo pago</Text>
-          <Text style={[styles.amount, { color: colors.primary }]}>
-            {formatCurrency(Number(nextCharge.amount))}
-          </Text>
-          <Text style={{ color: colors.muted }}>
-            {nextCharge.concept} · Vence {nextCharge.due_date}
-          </Text>
-          <View style={{ marginTop: 12 }}>
-            <PaymentProofUploader
-              chargeId={nextCharge.id}
-              condominiumId={primary.condominium_id}
-              unitId={primary.unit_id}
-              amount={Number(nextCharge.amount)}
-              onUploaded={loadData}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Mis cargos</Text>
-      {charges.map((charge) => (
-        <SectionCard
-          key={charge.id}
-          title={charge.concept}
-          description={`Vence ${charge.due_date} · ${formatCurrency(Number(charge.amount))}`}
-          badge={chargeStatusLabel(charge.status)}
-          badgeTone={chargeStatusTone(charge.status)}
+    <ScreenBackground>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader
+          title="Finanzas"
+          highlight="personales"
+          subtitle={`${primary.condominium?.name} · Unidad ${primary.unit?.identifier}`}
         />
-      ))}
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Mis pagos</Text>
-      {payments.length === 0 ? (
-        <Text style={{ color: colors.muted }}>Aún no hay pagos registrados.</Text>
-      ) : (
-        payments.map((payment) => (
-          <SectionCard
-            key={payment.id}
-            title={formatCurrency(Number(payment.amount))}
-            description={new Date(payment.created_at).toLocaleDateString('es-MX')}
-            badge={paymentStatusLabel(payment.status)}
-            badgeTone={
-              payment.status === 'approved'
-                ? 'success'
-                : payment.status === 'rejected'
-                  ? 'danger'
-                  : 'warning'
-            }
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          <StatPill
+            label="Próximo pago"
+            value={nextCharge ? formatCurrency(Number(nextCharge.amount)) : '—'}
+            sub={nextCharge ? `Vence ${nextCharge.due_date}` : 'Al día'}
+            valueColor={nextCharge?.status === 'overdue' ? theme.danger : theme.accent}
           />
-        ))
-      )}
+          <StatPill
+            label="Cargos"
+            value={String(charges.length)}
+            sub="registrados"
+            valueColor={theme.accent2}
+          />
+          <StatPill
+            label="Pagos"
+            value={String(pendingPayments)}
+            sub="en revisión"
+            valueColor={theme.accent3}
+          />
+        </ScrollView>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Estado del condominio</Text>
-      {funds.map((fund) => (
-        <SectionCard
-          key={fund.fund_type}
-          title={fund.fund_type === 'operating' ? 'Fondo operativo' : 'Fondo de reserva'}
-          description={formatCurrency(Number(fund.balance))}
-        />
-      ))}
+        {nextCharge ? (
+          <View style={styles.section}>
+            <GlassCard>
+              <View style={styles.cardTop}>
+                <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>PRÓXIMO PAGO</Text>
+                <Tag label={chargeStatusLabel(nextCharge.status)} tone={mapChargeTone(chargeStatusTone(nextCharge.status))} />
+              </View>
+              <Text style={[styles.amount, { color: theme.accent, fontFamily: theme.serifFamily }]}>
+                {formatCurrency(Number(nextCharge.amount))}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>
+                {nextCharge.concept} · Vence {nextCharge.due_date}
+              </Text>
+              <PaymentProofUploader
+                chargeId={nextCharge.id}
+                condominiumId={primary.condominium_id}
+                unitId={primary.unit_id}
+                amount={Number(nextCharge.amount)}
+                onUploaded={loadData}
+              />
+            </GlassCard>
+          </View>
+        ) : null}
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Últimos egresos</Text>
-      {expenses.map((expense) => (
-        <SectionCard
-          key={expense.id}
-          title={expense.concept}
-          description={`${expense.category} · ${expense.expense_date} · ${formatCurrency(Number(expense.amount))}`}
-        />
-      ))}
-    </ScrollView>
+        <SectionLabel title="Mis cargos" />
+        <View style={styles.section}>
+          {charges.map((charge) => (
+            <GlassCard key={charge.id} style={styles.cardGap}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>{charge.concept}</Text>
+                <Tag label={chargeStatusLabel(charge.status)} tone={mapChargeTone(chargeStatusTone(charge.status))} />
+              </View>
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                Vence {charge.due_date} · {formatCurrency(Number(charge.amount))}
+              </Text>
+            </GlassCard>
+          ))}
+        </View>
+
+        <SectionLabel title="Mis pagos" />
+        <View style={styles.section}>
+          {payments.length === 0 ? (
+            <GlassCard>
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>Aún no hay pagos registrados.</Text>
+            </GlassCard>
+          ) : (
+            payments.map((payment) => (
+              <GlassCard key={payment.id} style={styles.cardGap}>
+                <View style={styles.cardTop}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>
+                    {formatCurrency(Number(payment.amount))}
+                  </Text>
+                  <Tag
+                    label={paymentStatusLabel(payment.status)}
+                    tone={
+                      payment.status === 'approved'
+                        ? 'green'
+                        : payment.status === 'rejected'
+                          ? 'red'
+                          : 'orange'
+                    }
+                  />
+                </View>
+                <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                  {new Date(payment.created_at).toLocaleDateString('es-MX')}
+                </Text>
+              </GlassCard>
+            ))
+          )}
+        </View>
+
+        <SectionLabel title="Estado del condominio" />
+        <View style={styles.section}>
+          {funds.map((fund) => (
+            <GlassCard key={fund.fund_type} style={styles.cardGap}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>
+                {fund.fund_type === 'operating' ? 'Fondo operativo' : 'Fondo de reserva'}
+              </Text>
+              <Text style={[styles.fundAmount, { color: theme.accent2 }]}>
+                {formatCurrency(Number(fund.balance))}
+              </Text>
+            </GlassCard>
+          ))}
+        </View>
+
+        <SectionLabel title="Últimos egresos" />
+        <View style={styles.section}>
+          {expenses.map((expense) => (
+            <GlassCard key={expense.id} style={styles.cardGap}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>{expense.concept}</Text>
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                {expense.category} · {expense.expense_date} · {formatCurrency(Number(expense.amount))}
+              </Text>
+            </GlassCard>
+          ))}
+        </View>
+      </ScrollView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, gap: 12, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  heading: { fontSize: 24, fontWeight: '700' },
-  subheading: { fontSize: 14, marginBottom: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', marginTop: 12 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 6 },
-  cardTitle: { fontSize: 14, fontWeight: '600' },
-  amount: { fontSize: 28, fontWeight: '700' },
-  emptyTitle: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
-  emptyText: { fontSize: 14, textAlign: 'center', marginTop: 8 },
+  content: {},
+  statsRow: { gap: 10, paddingHorizontal: 20, paddingBottom: 16 },
+  section: { paddingHorizontal: 20, marginBottom: 8 },
+  cardGap: { marginBottom: 12 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
+  cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
+  cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  amount: { fontSize: 32, fontWeight: '700', marginVertical: 8 },
+  fundAmount: { fontSize: 22, fontWeight: '700', marginTop: 6 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  emptyText: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 6 },
 });

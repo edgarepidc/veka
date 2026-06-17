@@ -6,17 +6,20 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { GlassInput } from '@/components/ui/GlassInput';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/providers/AuthProvider';
 
 export default function LoginScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { signIn, signUp } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -50,95 +53,80 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.content}>
-        <Text style={[styles.brand, { color: colors.primary }]}>Veka</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>
-          Gestión condominal para residentes
-        </Text>
-
-        {mode === 'signup' ? (
-          <TextInput
-            style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-            placeholder="Nombre completo"
-            placeholderTextColor={colors.muted}
-            value={fullName}
-            onChangeText={setFullName}
-            autoCapitalize="words"
-          />
-        ) : null}
-
-        <TextInput
-          style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-          placeholder="Correo electrónico"
-          placeholderTextColor={colors.muted}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <TextInput
-          style={[styles.input, { borderColor: colors.border, color: colors.text }]}
-          placeholder="Contraseña"
-          placeholderTextColor={colors.muted}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-        {message ? <Text style={[styles.message, { color: colors.success }]}>{message}</Text> : null}
-
-        <Pressable
-          style={[styles.button, { backgroundColor: colors.tint }]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+    <ScreenBackground>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
+          <Text style={[styles.brand, { color: theme.text, fontFamily: theme.serifFamily }]}>Veka</Text>
+          <Text style={[styles.tagline, { color: theme.textMuted }]}>
+            Gestión condominal para{' '}
+            <Text style={{ color: theme.accent, fontStyle: 'italic', fontFamily: theme.serifFamily }}>
+              residentes
             </Text>
-          )}
-        </Pressable>
-
-        <Pressable onPress={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          <Text style={[styles.switch, { color: colors.tint }]}>
-            {mode === 'login'
-              ? '¿No tienes cuenta? Regístrate'
-              : '¿Ya tienes cuenta? Inicia sesión'}
           </Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+
+          <GlassCard style={styles.formCard}>
+            <Text style={[styles.formTitle, { color: theme.text, fontFamily: theme.serifFamily }]}>
+              {mode === 'login' ? 'Bienvenido' : 'Crear cuenta'}
+            </Text>
+
+            {mode === 'signup' ? (
+              <GlassInput
+                placeholder="Nombre completo"
+                value={fullName}
+                onChangeText={setFullName}
+                autoCapitalize="words"
+              />
+            ) : null}
+
+            <GlassInput
+              placeholder="Correo electrónico"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+
+            <GlassInput
+              placeholder="Contraseña"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            {error ? <Text style={[styles.feedback, { color: theme.danger }]}>{error}</Text> : null}
+            {message ? <Text style={[styles.feedback, { color: theme.accent }]}>{message}</Text> : null}
+
+            <PrimaryButton
+              label={mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+              loading={loading}
+              onPress={() => void handleSubmit()}
+            />
+          </GlassCard>
+
+          <Pressable onPress={() => setMode(mode === 'login' ? 'signup' : 'login')} style={styles.switchWrap}>
+            <Text style={[styles.switch, { color: theme.accent2 }]}>
+              {mode === 'login'
+                ? '¿No tienes cuenta? Regístrate'
+                : '¿Ya tienes cuenta? Inicia sesión'}
+            </Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  brand: { fontSize: 36, fontWeight: '700' },
-  subtitle: { fontSize: 15, marginBottom: 12 },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  button: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  switch: { textAlign: 'center', marginTop: 16, fontSize: 14 },
-  error: { fontSize: 14 },
-  message: { fontSize: 14 },
+  flex: { flex: 1 },
+  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 16 },
+  brand: { fontSize: 42, lineHeight: 48 },
+  tagline: { fontSize: 15, marginBottom: 8 },
+  formCard: { marginTop: 8 },
+  formTitle: { fontSize: 22, marginBottom: 14 },
+  feedback: { fontSize: 13, marginBottom: 8 },
+  switchWrap: { alignItems: 'center', marginTop: 8 },
+  switch: { fontSize: 14, fontWeight: '500' },
 });

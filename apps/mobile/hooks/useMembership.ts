@@ -13,7 +13,7 @@ export interface ActiveMembership {
 }
 
 export function useMembership() {
-  const { user } = useAuth();
+  const { user, authSyncVersion } = useAuth();
   const [memberships, setMemberships] = useState<ActiveMembership[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -55,7 +55,7 @@ export function useMembership() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, authSyncVersion]);
 
   const primary = memberships[0] ?? null;
 
