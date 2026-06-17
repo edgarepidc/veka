@@ -81,14 +81,17 @@ El esquema incluye:
 
 ## Despliegue
 
-- **Admin**: conectar repo a Vercel, root directory `apps/admin`
-- **Mobile**: `eas build` (Expo Application Services)
-- **Supabase**: `npx supabase link` + `npx supabase db push`
+Guía paso a paso: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)
+
+- **GitHub** → push del repo
+- **Vercel** → importar repo, root directory `apps/admin`, variables Supabase
+- **Supabase** → agregar URL de Vercel en Auth redirects
+- **Mobile** → Expo local o EAS Build (no va en Vercel)
 
 ## Próximos pasos
 
-1. Conectar Supabase cloud y auth (email/OTP)
-2. Implementar módulo de finanzas (cuotas + comprobantes)
-3. Visitas QR + rol guardia
+1. Conectar Supabase Cloud — ver [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
+2. Crear admin en SQL Editor y enviar invitaciones desde `/configuracion`
+3. Residentes se registran en la app móvil y ven finanzas en `/finance`
 4. Push notifications (Expo + cron)
-5. Pagos Stripe
+5. Pagos Stripe en línea

@@ -47,3 +47,56 @@ values
   ('22222222-2222-2222-2222-222222222222', 'charge_overdue', null, 1, true),
   ('22222222-2222-2222-2222-222222222222', 'charge_overdue_reminder', null, 7, true)
 on conflict (condominium_id, rule_key) do nothing;
+
+-- Demo charges (unit A-101)
+insert into public.charges (
+  id, condominium_id, unit_id, concept, amount, fund_type, due_date, status, period_month
+)
+values
+  (
+    '55555555-5555-5555-5555-555555555501',
+    '22222222-2222-2222-2222-222222222222',
+    '44444444-4444-4444-4444-444444444401',
+    'Cuota de mantenimiento — Junio 2025',
+    3500.00,
+    'operating',
+    (current_date + interval '14 days')::date,
+    'pending',
+    date_trunc('month', current_date)::date
+  ),
+  (
+    '55555555-5555-5555-5555-555555555502',
+    '22222222-2222-2222-2222-222222222222',
+    '44444444-4444-4444-4444-444444444401',
+    'Cuota de mantenimiento — Mayo 2025',
+    3500.00,
+    'operating',
+    (current_date - interval '10 days')::date,
+    'paid',
+    (date_trunc('month', current_date) - interval '1 month')::date
+  )
+on conflict (id) do nothing;
+
+insert into public.expenses (
+  condominium_id, concept, amount, fund_type, category, expense_date, vendor_name
+)
+values
+  (
+    '22222222-2222-2222-2222-222222222222',
+    'Mantenimiento elevadores',
+    18200.00,
+    'operating',
+    'mantenimiento',
+    (current_date - interval '5 days')::date,
+    'Elevadores del Norte SA'
+  ),
+  (
+    '22222222-2222-2222-2222-222222222222',
+    'Jardinería áreas comunes',
+    4500.00,
+    'operating',
+    'servicios',
+    (current_date - interval '12 days')::date,
+    'Verde Total'
+  )
+on conflict do nothing;

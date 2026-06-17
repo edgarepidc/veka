@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
     "@veka/shared": "*",
     "@veka/supabase": "*",
     "next": "16.2.9",

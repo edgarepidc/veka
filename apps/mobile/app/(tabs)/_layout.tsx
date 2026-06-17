@@ -1,27 +1,10 @@
 import { SymbolView } from 'expo-symbols';
 import { Tabs } from 'expo-router';
+import type { ColorValue } from 'react-native';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
-function TabIcon({
-  color,
-  ios,
-  android,
-}: {
-  color: string;
-  ios: string;
-  android: string;
-}) {
-  return (
-    <SymbolView
-      name={{ ios, android, web: android }}
-      tintColor={color}
-      size={24}
-    />
-  );
-}
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -43,7 +26,11 @@ export default function TabLayout() {
         options={{
           title: 'Inicio',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} ios="house.fill" android="home" />
+            <SymbolView
+              name={{ ios: 'house.fill', android: 'home', web: 'home' }}
+              tintColor={color as ColorValue}
+              size={24}
+            />
           ),
         }}
       />
@@ -52,7 +39,11 @@ export default function TabLayout() {
         options={{
           title: 'Comunidad',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} ios="person.3.fill" android="groups" />
+            <SymbolView
+              name={{ ios: 'person.3.fill', android: 'groups', web: 'groups' }}
+              tintColor={color as ColorValue}
+              size={24}
+            />
           ),
         }}
       />
@@ -61,7 +52,11 @@ export default function TabLayout() {
         options={{
           title: 'Espacios',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} ios="calendar" android="event" />
+            <SymbolView
+              name={{ ios: 'calendar', android: 'event', web: 'event' }}
+              tintColor={color as ColorValue}
+              size={24}
+            />
           ),
         }}
       />
@@ -70,7 +65,11 @@ export default function TabLayout() {
         options={{
           title: 'Finanzas',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} ios="dollarsign.circle.fill" android="payments" />
+            <SymbolView
+              name={{ ios: 'dollarsign.circle.fill', android: 'payments', web: 'payments' }}
+              tintColor={color as ColorValue}
+              size={24}
+            />
           ),
         }}
       />
@@ -79,11 +78,14 @@ export default function TabLayout() {
         options={{
           title: 'Seguridad',
           tabBarIcon: ({ color }) => (
-            <TabIcon color={color} ios="shield.fill" android="security" />
+            <SymbolView
+              name={{ ios: 'shield.fill', android: 'security', web: 'security' }}
+              tintColor={color as ColorValue}
+              size={24}
+            />
           ),
         }}
       />
-      <Tabs.Screen name="two" options={{ href: null }} />
     </Tabs>
   );
 }
