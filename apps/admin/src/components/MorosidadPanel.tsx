@@ -40,6 +40,8 @@ interface ChargeRow {
 interface NotificationRuleRow {
   days_after: number | null;
   is_enabled: boolean;
+  notify_push: boolean;
+  notify_email: boolean;
 }
 
 interface ReminderLogRow {
@@ -90,6 +92,8 @@ export function MorosidadPanel({
   const [notes, setNotes] = useState(lateFeeSettings.notes ?? '');
   const [reminderEnabled, setReminderEnabled] = useState(overdueReminderRule?.is_enabled ?? false);
   const [daysAfter, setDaysAfter] = useState(String(overdueReminderRule?.days_after ?? 7));
+  const [notifyPush, setNotifyPush] = useState(overdueReminderRule?.notify_push ?? true);
+  const [notifyEmail, setNotifyEmail] = useState(overdueReminderRule?.notify_email ?? true);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [reminderMessage, setReminderMessage] = useState<string | null>(null);
   const [chargeMessage, setChargeMessage] = useState<Record<string, string>>({});
@@ -146,6 +150,8 @@ export function MorosidadPanel({
     setReminderMessage(null);
     const formData = new FormData();
     if (reminderEnabled) formData.set('reminder_enabled', 'true');
+    if (notifyPush) formData.set('notify_push', 'true');
+    if (notifyEmail) formData.set('notify_email', 'true');
     formData.set('condominium_id', condominiumId);
     formData.set('days_after', daysAfter);
 
@@ -302,8 +308,8 @@ export function MorosidadPanel({
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Recordatorios de cobro</h2>
           <p className="mt-1 text-sm text-muted">
-            Envía recordatorios manuales por unidad o configura la regla automática (push pendiente de
-            integración).
+            Envía recordatorios manuales por unidad o configura la regla automática diaria (push y
+            correo).
           </p>
 
           <label className="mt-4 flex items-center gap-3 text-sm">
@@ -328,6 +334,29 @@ export function MorosidadPanel({
               className="glass-input w-40"
             />
           </label>
+
+          <div className={`mt-3 space-y-2 ${reminderEnabled ? '' : 'opacity-50'}`}>
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={notifyPush}
+                onChange={(event) => setNotifyPush(event.target.checked)}
+                disabled={!reminderEnabled}
+                className="h-4 w-4 rounded border-white/20 bg-white/10"
+              />
+              <span className="text-[var(--text)]">Notificación push (app móvil)</span>
+            </label>
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={notifyEmail}
+                onChange={(event) => setNotifyEmail(event.target.checked)}
+                disabled={!reminderEnabled}
+                className="h-4 w-4 rounded border-white/20 bg-white/10"
+              />
+              <span className="text-[var(--text)]">Correo electrónico</span>
+            </label>
+          </div>
 
           {reminderMessage ? (
             <p

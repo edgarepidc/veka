@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
 import { createClient } from '@/lib/supabase/server';
 
 export async function PATCH(
@@ -54,6 +55,8 @@ export async function PATCH(
       .from('charges')
       .update({ status: 'paid' })
       .eq('id', payment.charge_id);
+
+    await reconcileCondominiumFundBalances(supabase, payment.condominium_id);
 
     return NextResponse.json({ ok: true });
   }

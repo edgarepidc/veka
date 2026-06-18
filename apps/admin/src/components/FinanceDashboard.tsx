@@ -245,6 +245,8 @@ export function FinanceDashboard() {
   const [overdueReminderRule, setOverdueReminderRule] = useState<{
     days_after: number | null;
     is_enabled: boolean;
+    notify_push: boolean;
+    notify_email: boolean;
   } | null>(null);
   const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
   const [statementUnitId, setStatementUnitId] = useState('');
@@ -351,7 +353,7 @@ export function FinanceDashboard() {
         .maybeSingle(),
       supabase
         .from('notification_rules')
-        .select('days_after, is_enabled')
+        .select('days_after, is_enabled, notify_push, notify_email')
         .eq('condominium_id', condoId)
         .eq('rule_key', 'charge_overdue_reminder')
         .maybeSingle(),
@@ -390,6 +392,8 @@ export function FinanceDashboard() {
         ? {
             days_after: reminderRuleRes.data.days_after,
             is_enabled: Boolean(reminderRuleRes.data.is_enabled),
+            notify_push: reminderRuleRes.data.notify_push ?? true,
+            notify_email: reminderRuleRes.data.notify_email ?? true,
           }
         : null,
     );

@@ -17,7 +17,9 @@ import {
 } from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
 import { ensureLateFeesForCondo } from '@/lib/late-fees';
+import { deliverChargeReminder } from '@/lib/notifications';
 import {
   ensureRecurringChargesForCondo,
   recurringFeeHasChargesForPeriod,
@@ -43,6 +45,7 @@ export async function ensureMonthlyRecurringCharges(condominiumId?: string) {
     await supabase.rpc('refresh_charge_statuses');
     const generated = await ensureRecurringChargesForCondo(supabase, condoId, user.id);
     const lateFees = await ensureLateFeesForCondo(supabase, condoId, user.id);
+    await reconcileCondominiumFundBalances(supabase, condoId);
     revalidatePath('/finanzas');
     return { success: true, generated, lateFees };
   } catch (error) {
@@ -342,6 +345,8 @@ export async function createIncome(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  await reconcileCondominiumFundBalances(supabase, condominiumId);
+
   revalidatePath('/finanzas');
   return { success: true };
 }
@@ -411,6 +416,8 @@ export async function createExpense(formData: FormData) {
 
     if (attachError) return { error: attachError.message };
   }
+
+  await reconcileCondominiumFundBalances(supabase, condominiumId);
 
   revalidatePath('/finanzas');
   return { success: true };
@@ -561,9 +568,16 @@ export async function saveOverdueReminderRule(formData: FormData) {
 
   const enabled = formData.get('reminder_enabled') === 'on' || formData.get('reminder_enabled') === 'true';
   const daysAfter = Number(formData.get('days_after'));
+  const notifyPush =
+    formData.get('notify_push') === 'on' || formData.get('notify_push') === 'true';
+  const notifyEmail =
+    formData.get('notify_email') === 'on' || formData.get('notify_email') === 'true';
 
   if (!Number.isInteger(daysAfter) || daysAfter < 1 || daysAfter > 365) {
     return { error: 'Los días después del vencimiento deben estar entre 1 y 365.' };
+  }
+  if (enabled && !notifyPush && !notifyEmail) {
+    return { error: 'Activa al menos un canal: push o correo.' };
   }
 
   const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
@@ -575,6 +589,8 @@ export async function saveOverdueReminderRule(formData: FormData) {
       days_before: null,
       days_after: daysAfter,
       is_enabled: enabled,
+      notify_push: notifyPush,
+      notify_email: notifyEmail,
     },
     { onConflict: 'condominium_id,rule_key' },
   );
@@ -604,13 +620,40 @@ export async function sendPaymentReminder(chargeId: string) {
     return { error: 'Este cargo ya no está pendiente de cobro.' };
   }
 
+  const { data: rule } = await supabase
+    .from('notification_rules')
+    .select('notify_push, notify_email')
+    .eq('condominium_id', charge.condominium_id)
+    .eq('rule_key', 'charge_overdue_reminder')
+    .maybeSingle();
+
+  const delivery = await deliverChargeReminder({
+    condominiumId: charge.condominium_id,
+    unitId: charge.unit_id,
+    chargeId: charge.id,
+    concept: charge.concept,
+    amount: Number(charge.amount),
+    dueDate: charge.due_date,
+    notifyPush: rule?.notify_push ?? true,
+    notifyEmail: rule?.notify_email ?? true,
+    source: 'manual',
+  });
+
   const message = `Recordatorio de pago: ${charge.concept} por $${Number(charge.amount).toFixed(2)} (vence ${charge.due_date}).`;
+  const channel =
+    delivery.pushSent > 0 && delivery.emailSent > 0
+      ? 'manual'
+      : delivery.pushSent > 0
+        ? 'push'
+        : delivery.emailSent > 0
+          ? 'email'
+          : 'manual';
 
   const { error } = await supabase.from('payment_reminder_log').insert({
     condominium_id: charge.condominium_id,
     unit_id: charge.unit_id,
     charge_id: charge.id,
-    channel: 'manual',
+    channel,
     message,
     sent_by: user.id,
   });
@@ -618,8 +661,22 @@ export async function sendPaymentReminder(chargeId: string) {
   if (error) return { error: error.message };
 
   revalidatePath('/finanzas');
+
+  if (delivery.pushSent === 0 && delivery.emailSent === 0) {
+    return {
+      success: true,
+      message:
+        delivery.skipped > 0
+          ? 'Recordatorio registrado. Sin dispositivo push ni correo disponible para esta unidad.'
+          : 'Recordatorio registrado, pero no se pudo entregar por ningún canal.',
+    };
+  }
+
+  const parts: string[] = [];
+  if (delivery.pushSent > 0) parts.push(`${delivery.pushSent} push`);
+  if (delivery.emailSent > 0) parts.push(`${delivery.emailSent} correo`);
   return {
     success: true,
-    message: 'Recordatorio registrado. La notificación push se enviará cuando esté configurada.',
+    message: `Recordatorio enviado (${parts.join(', ')}).`,
   };
 }
