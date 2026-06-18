@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
+import { approvePayment } from '@/lib/payment-approval';
 import { createClient } from '@/lib/supabase/server';
 
 export async function PATCH(
@@ -29,7 +29,7 @@ export async function PATCH(
 
   const { data: payment, error: fetchError } = await supabase
     .from('payments')
-    .select('id, charge_id, condominium_id, status')
+    .select('id, status')
     .eq('id', id)
     .single();
 
@@ -38,27 +38,11 @@ export async function PATCH(
   }
 
   if (action === 'approve') {
-    const { error: updateError } = await supabase
-      .from('payments')
-      .update({
-        status: 'approved',
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    const result = await approvePayment(supabase, id, user.id);
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
-
-    await supabase
-      .from('charges')
-      .update({ status: 'paid' })
-      .eq('id', payment.charge_id);
-
-    await reconcileCondominiumFundBalances(supabase, payment.condominium_id);
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, settledChargeIds: result.settledChargeIds });
   }
 
   const { error: rejectError } = await supabase

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  buildNextPaymentGroup,
   buildUnitStatementWithBalance,
   chargeDisplaySubtitle,
   chargeDisplayTitle,
@@ -21,6 +22,7 @@ import {
 } from '@veka/shared';
 import type { FeeSourceRef } from '@veka/shared';
 
+import { OnlinePaymentButton } from '@/components/OnlinePaymentButton';
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -40,6 +42,7 @@ interface ChargeRow {
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   fund_type: string;
   charge_kind?: string;
+  parent_charge_id?: string | null;
   fee_campaign: FeeSourceRef | null;
   recurring_fee: FeeSourceRef | null;
 }
@@ -95,7 +98,7 @@ export default function FinanceScreen() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fund_type, charge_kind, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
+          'id, concept, amount, due_date, status, fund_type, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
         .order('due_date', { ascending: true }),
@@ -181,6 +184,10 @@ export default function FinanceScreen() {
     [charges],
   );
 
+  const paymentGroup = useMemo(() => buildNextPaymentGroup(charges), [charges]);
+  const nextCharge = paymentGroup?.primaryCharge ?? null;
+  const paymentTotal = paymentGroup?.totalAmount ?? 0;
+
   if (membershipLoading || loading) {
     return (
       <ScreenBackground style={styles.centered}>
@@ -202,7 +209,6 @@ export default function FinanceScreen() {
     );
   }
 
-  const nextCharge = charges.find((c) => c.status === 'pending' || c.status === 'overdue');
   const pendingPayments = payments.filter((p) => p.status === 'pending_review').length;
 
   return (
@@ -221,7 +227,7 @@ export default function FinanceScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
           <StatPill
             label="Próximo pago"
-            value={nextCharge ? formatCurrency(Number(nextCharge.amount)) : '—'}
+            value={nextCharge ? formatCurrency(paymentTotal) : '—'}
             sub={nextCharge ? `Vence ${nextCharge.due_date}` : 'Al día'}
             valueColor={nextCharge?.status === 'overdue' ? theme.danger : theme.accent}
           />
@@ -253,8 +259,13 @@ export default function FinanceScreen() {
                 <Tag label={chargeStatusLabel(nextCharge.status)} tone={mapChargeTone(chargeStatusTone(nextCharge.status))} />
               </View>
               <Text style={[styles.amount, { color: theme.accent, fontFamily: theme.serifFamily }]}>
-                {formatCurrency(Number(nextCharge.amount))}
+                {formatCurrency(paymentTotal)}
               </Text>
+              {paymentGroup && paymentGroup.relatedCharges.length > 0 ? (
+                <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 8 }}>
+                  Incluye {paymentGroup.relatedCharges.length} recargo(s) por mora
+                </Text>
+              ) : null}
               <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>
                 {chargeDisplayTitle(nextCharge)}
                 {chargeDisplaySubtitle(nextCharge) ? ` · ${chargeDisplaySubtitle(nextCharge)}` : ''}
@@ -264,9 +275,11 @@ export default function FinanceScreen() {
                 chargeId={nextCharge.id}
                 condominiumId={primary.condominium_id}
                 unitId={primary.unit_id}
-                amount={Number(nextCharge.amount)}
+                amount={paymentTotal}
                 onUploaded={loadData}
               />
+              <View style={{ height: 10 }} />
+              <OnlinePaymentButton chargeId={nextCharge.id} onStarted={loadData} />
             </GlassCard>
           </View>
         ) : null}

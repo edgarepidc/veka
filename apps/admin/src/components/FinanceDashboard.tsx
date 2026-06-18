@@ -33,6 +33,7 @@ import {
 import type { RecurringFeeStatus } from '@veka/shared';
 
 import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
+import { BankReconciliationPanel } from '@/components/BankReconciliationPanel';
 import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { ExportMenu } from '@/components/ExportMenu';
@@ -117,6 +118,7 @@ interface ChargeRow {
 interface RecurringFeeRow {
   id: string;
   scope: 'general' | 'cluster';
+  cluster_id: string | null;
   concept: string;
   due_day: number;
   fund_type: FundType;
@@ -128,6 +130,7 @@ interface RecurringFeeRow {
 interface FeeCampaignRow {
   id: string;
   scope: FeeScope;
+  cluster_id: string | null;
   concept: string;
   amount: number;
   due_date: string;
@@ -136,6 +139,23 @@ interface FeeCampaignRow {
   status: FeeCampaignStatus;
   created_at: string;
   cluster: { name: string } | null;
+}
+
+interface BankAccountRow {
+  id: string;
+  name: string;
+  bank_name: string | null;
+  account_last4: string | null;
+}
+
+interface BankTransactionRow {
+  id: string;
+  bank_account_id: string;
+  transaction_date: string;
+  amount: number;
+  description: string | null;
+  reference: string | null;
+  status: string;
 }
 
 interface ExpenseRow {
@@ -249,6 +269,8 @@ export function FinanceDashboard() {
     notify_email: boolean;
   } | null>(null);
   const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([]);
+  const [bankTransactions, setBankTransactions] = useState<BankTransactionRow[]>([]);
   const [statementUnitId, setStatementUnitId] = useState('');
 
   const loadCondominiums = useCallback(async () => {
@@ -285,7 +307,7 @@ export function FinanceDashboard() {
 
     const condoId = selectedCondoId || DEMO_CONDO_ID;
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -311,14 +333,14 @@ export function FinanceDashboard() {
       supabase
         .from('fee_campaigns')
         .select(
-          'id, scope, concept, amount, due_date, fund_type, period_month, status, created_at, cluster:clusters(name)',
+          'id, scope, cluster_id, concept, amount, due_date, fund_type, period_month, status, created_at, cluster:clusters(name)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
       supabase
         .from('recurring_fees')
         .select(
-          'id, scope, concept, due_day, fund_type, status, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
+          'id, scope, cluster_id, concept, due_day, fund_type, status, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -363,6 +385,19 @@ export function FinanceDashboard() {
         .eq('condominium_id', condoId)
         .order('sent_at', { ascending: false })
         .limit(200),
+      supabase
+        .from('bank_accounts')
+        .select('id, name, bank_name, account_last4')
+        .eq('condominium_id', condoId)
+        .order('name'),
+      supabase
+        .from('bank_transactions')
+        .select(
+          'id, bank_account_id, transaction_date, amount, description, reference, status, bank_account:bank_accounts!inner(condominium_id)',
+        )
+        .eq('bank_account.condominium_id', condoId)
+        .order('transaction_date', { ascending: false })
+        .limit(500),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -398,6 +433,8 @@ export function FinanceDashboard() {
         : null,
     );
     setReminderLog((reminderLogRes.data as { charge_id: string | null; sent_at: string }[]) ?? []);
+    setBankAccounts((bankAccountsRes.data as BankAccountRow[]) ?? []);
+    setBankTransactions((bankTransactionsRes.data as BankTransactionRow[]) ?? []);
     setLoading(false);
   }, [selectedCondoId, supabase]);
 
@@ -735,7 +772,18 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'presupuesto' ? (
-        <BudgetPanel condominiumId={selectedCondoId} budgets={budgets} onReload={() => void load()} />
+        <BudgetPanel
+          condominiumId={selectedCondoId}
+          budgets={budgets}
+          clusterFilterId={selectedClusterId}
+          clusterUnitCount={clusterUnitCount}
+          totalUnitCount={totalUnitCount}
+          scopeLabel={scopeLabel}
+          expenses={expenses}
+          incomeEntries={incomeEntries}
+          payments={payments}
+          onReload={() => void load()}
+        />
       ) : null}
 
       {tab === 'cuotas' ? (
@@ -745,6 +793,8 @@ export function FinanceDashboard() {
           recurringFees={recurringFees}
           extraordinaryCampaigns={extraordinaryCampaigns}
           charges={charges}
+          clusterFilterId={selectedClusterId}
+          scopeLabel={scopeLabel}
           onReload={() => void load()}
         />
       ) : null}
@@ -1020,6 +1070,36 @@ export function FinanceDashboard() {
             </div>
           </GlassCard>
           </div>
+
+          <BankReconciliationPanel
+            condominiumId={selectedCondoId}
+            bankAccounts={bankAccounts}
+            bankTransactions={bankTransactions}
+            payments={scopedPayments
+              .filter((payment) => payment.status === 'approved')
+              .map((payment) => ({
+                id: payment.id,
+                amount: payment.amount,
+                paid_at: payment.paid_at,
+                created_at: payment.created_at,
+                charge: payment.charge,
+              }))}
+            incomeEntries={scopedIncomeEntries.map((row) => ({
+              id: row.id,
+              amount: row.amount,
+              concept: row.concept,
+              income_date: row.income_date,
+            }))}
+            expenses={scopedExpenses
+              .filter((row) => row.status === 'paid')
+              .map((row) => ({
+                id: row.id,
+                amount: row.amount,
+                concept: row.concept,
+                expense_date: row.expense_date,
+              }))}
+            onReload={() => void load()}
+          />
         </div>
       ) : null}
 

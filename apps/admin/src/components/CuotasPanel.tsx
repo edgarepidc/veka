@@ -9,6 +9,8 @@ import {
   feeScopeLabel,
   formatCurrency,
   fundTypeLabel,
+  matchesFeeClusterFilter,
+  matchesFinanceClusterFilter,
   nextPeriodMonth,
   periodLabel,
   recurringFeeStatusLabel,
@@ -38,11 +40,13 @@ interface ChargeRow {
   status: ChargeStatus;
   fee_campaign_id: string | null;
   recurring_fee_id: string | null;
+  unit?: { cluster_id: string | null } | null;
 }
 
 interface RecurringFeeRow {
   id: string;
   scope: 'general' | 'cluster';
+  cluster_id: string | null;
   concept: string;
   due_day: number;
   fund_type: FundType;
@@ -53,6 +57,7 @@ interface RecurringFeeRow {
 
 interface ExtraordinaryCampaignRow {
   id: string;
+  cluster_id: string | null;
   concept: string;
   amount: number;
   due_date: string;
@@ -93,6 +98,8 @@ export function CuotasPanel({
   recurringFees,
   extraordinaryCampaigns,
   charges,
+  clusterFilterId,
+  scopeLabel,
   onReload,
 }: {
   clusters: ClusterRow[];
@@ -100,6 +107,8 @@ export function CuotasPanel({
   recurringFees: RecurringFeeRow[];
   extraordinaryCampaigns: ExtraordinaryCampaignRow[];
   charges: ChargeRow[];
+  clusterFilterId: string;
+  scopeLabel: string;
   onReload: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -107,6 +116,35 @@ export function CuotasPanel({
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
 
   const currentPeriod = currentPeriodMonth();
+
+  const scopedUnits = useMemo(() => {
+    if (!clusterFilterId) return units;
+    return units.filter((unit) => unit.cluster_id === clusterFilterId);
+  }, [clusterFilterId, units]);
+
+  const scopedCharges = useMemo(
+    () =>
+      charges.filter((charge) =>
+        matchesFinanceClusterFilter(charge.unit?.cluster_id, clusterFilterId, { condoWideApplies: false }),
+      ),
+    [charges, clusterFilterId],
+  );
+
+  const scopedRecurringFees = useMemo(
+    () =>
+      recurringFees.filter((fee) =>
+        matchesFeeClusterFilter(fee.scope, fee.cluster_id, clusterFilterId),
+      ),
+    [clusterFilterId, recurringFees],
+  );
+
+  const scopedExtraordinary = useMemo(
+    () =>
+      extraordinaryCampaigns.filter((campaign) =>
+        matchesFinanceClusterFilter(campaign.cluster_id, clusterFilterId, { condoWideApplies: true }),
+      ),
+    [clusterFilterId, extraordinaryCampaigns],
+  );
 
   const [periodicForm, setPeriodicForm] = useState({
     scope: 'general' as 'general' | 'cluster',
@@ -134,7 +172,7 @@ export function CuotasPanel({
 
   const recurringStats = useMemo(() => {
     const map = new Map<string, { paid: number; pending: number; overdue: number; total: number }>();
-    for (const charge of charges) {
+    for (const charge of scopedCharges) {
       if (!charge.recurring_fee_id) continue;
       const stats = map.get(charge.recurring_fee_id) ?? { paid: 0, pending: 0, overdue: 0, total: 0 };
       stats.total += 1;
@@ -144,11 +182,11 @@ export function CuotasPanel({
       map.set(charge.recurring_fee_id, stats);
     }
     return map;
-  }, [charges]);
+  }, [scopedCharges]);
 
   const extraordinaryStats = useMemo(() => {
     const map = new Map<string, { paid: number; pending: number; overdue: number; total: number }>();
-    for (const charge of charges) {
+    for (const charge of scopedCharges) {
       if (!charge.fee_campaign_id) continue;
       const stats = map.get(charge.fee_campaign_id) ?? { paid: 0, pending: 0, overdue: 0, total: 0 };
       stats.total += 1;
@@ -158,23 +196,23 @@ export function CuotasPanel({
       map.set(charge.fee_campaign_id, stats);
     }
     return map;
-  }, [charges]);
+  }, [scopedCharges]);
 
   const periodicUnitsCount = useMemo(() => {
     if (periodicForm.scope === 'cluster') {
       if (!periodicForm.clusterId) return 0;
-      return units.filter((unit) => unit.cluster_id === periodicForm.clusterId).length;
+      return scopedUnits.filter((unit) => unit.cluster_id === periodicForm.clusterId).length;
     }
-    return units.length;
-  }, [periodicForm.clusterId, periodicForm.scope, units]);
+    return scopedUnits.length;
+  }, [periodicForm.clusterId, periodicForm.scope, scopedUnits]);
 
   const extraordinaryUnitsCount = useMemo(() => {
-    if (!extraForm.clusterId) return units.length;
-    return units.filter((unit) => unit.cluster_id === extraForm.clusterId).length;
-  }, [extraForm.clusterId, units]);
+    if (!extraForm.clusterId) return scopedUnits.length;
+    return scopedUnits.filter((unit) => unit.cluster_id === extraForm.clusterId).length;
+  }, [extraForm.clusterId, scopedUnits]);
 
-  const activeRecurring = recurringFees.filter((fee) => fee.status === 'active');
-  const activeExtraordinary = extraordinaryCampaigns.filter((campaign) => campaign.status === 'active');
+  const activeRecurring = scopedRecurringFees.filter((fee) => fee.status === 'active');
+  const activeExtraordinary = scopedExtraordinary.filter((campaign) => campaign.status === 'active');
 
   function openEdit(fee: RecurringFeeRow) {
     const baseAmount = resolveBaseAmount(fee.revisions, currentPeriod);
@@ -262,6 +300,11 @@ export function CuotasPanel({
 
   return (
     <div className="space-y-8">
+      {clusterFilterId ? (
+        <p className="text-sm text-muted">
+          Mostrando cuotas del alcance: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>
+        </p>
+      ) : null}
       {message ? (
         <p
           className={`text-sm ${message.includes('registrada') || message.includes('actualizada') || message.includes('emitida') || message.includes('cancelada') || message.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
@@ -537,11 +580,11 @@ export function CuotasPanel({
             )}
           </div>
 
-          {recurringFees.some((fee) => fee.status !== 'active') ? (
+          {scopedRecurringFees.some((fee) => fee.status !== 'active') ? (
             <div className="mt-6 border-t border-white/10 pt-4">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Historial</p>
               <ul className="space-y-2">
-                {recurringFees
+                {scopedRecurringFees
                   .filter((fee) => fee.status !== 'active')
                   .map((fee) => (
                     <li key={fee.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-subtle">

@@ -6,6 +6,8 @@ import {
   EXPENSE_CATEGORIES,
   FUND_TYPES,
   INCOME_CATEGORIES,
+  budgetProrateRatio,
+  buildBudgetSummary,
   expenseCategoryLabel,
   formatCurrency,
   fundTypeLabel,
@@ -38,13 +40,51 @@ function emptyAmounts(categories: readonly string[]): Record<string, string> {
   return Object.fromEntries(categories.map((category) => [category, '']));
 }
 
+interface ExpenseForBudgetPanel {
+  amount: number;
+  category: string;
+  expense_date: string;
+  status: string;
+  fund_type: FundType;
+  cluster_id: string | null;
+}
+
+interface IncomeForBudgetPanel {
+  amount: number;
+  category: string;
+  income_date: string;
+  cluster_id: string | null;
+}
+
+interface PaymentForBudgetPanel {
+  amount: number;
+  status: string;
+  paid_at?: string | null;
+  created_at?: string;
+  unit?: { cluster_id: string | null } | null;
+}
+
 export function BudgetPanel({
   condominiumId,
   budgets,
+  clusterFilterId,
+  clusterUnitCount,
+  totalUnitCount,
+  scopeLabel,
+  expenses,
+  incomeEntries,
+  payments,
   onReload,
 }: {
   condominiumId: string;
   budgets: AnnualBudgetRow[];
+  clusterFilterId: string;
+  clusterUnitCount: number;
+  totalUnitCount: number;
+  scopeLabel: string;
+  expenses: ExpenseForBudgetPanel[];
+  incomeEntries: IncomeForBudgetPanel[];
+  payments: PaymentForBudgetPanel[];
   onReload: () => void;
 }) {
   const [fiscalYear, setFiscalYear] = useState(String(currentYear()));
@@ -103,6 +143,42 @@ export function BudgetPanel({
     [incomeAmounts],
   );
 
+  const scoped = Boolean(clusterFilterId);
+  const prorate = budgetProrateRatio(clusterUnitCount, totalUnitCount, scoped);
+  const budgetSummary = useMemo(() => {
+    const scopedExpenses = expenses.filter((row) =>
+      !clusterFilterId || row.cluster_id === clusterFilterId || row.cluster_id == null,
+    );
+    const scopedIncome = incomeEntries.filter((row) =>
+      !clusterFilterId || row.cluster_id === clusterFilterId || row.cluster_id == null,
+    );
+    const scopedPayments = payments.filter((row) =>
+      !clusterFilterId || row.unit?.cluster_id === clusterFilterId,
+    );
+    return buildBudgetSummary({
+      fiscalYear: Number(fiscalYear),
+      periodMode: 'year',
+      month: new Date().getMonth() + 1,
+      fundType,
+      budgetLines: existing?.lines ?? [],
+      expenses: scopedExpenses,
+      incomeEntries: scopedIncome,
+      payments: scopedPayments,
+      prorateRatio: prorate,
+      scoped,
+    });
+  }, [
+    clusterFilterId,
+    existing?.lines,
+    expenses,
+    fiscalYear,
+    fundType,
+    incomeEntries,
+    payments,
+    prorate,
+    scoped,
+  ]);
+
   function handleSave() {
     setMessage(null);
     const formData = new FormData();
@@ -130,6 +206,31 @@ export function BudgetPanel({
 
   return (
     <div className="space-y-6">
+      {clusterFilterId ? (
+        <p className="text-sm text-muted">
+          Presupuesto prorrateado para: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>
+          {budgetSummary.proratedNote ? ` · ${budgetSummary.proratedNote}` : ''}
+        </p>
+      ) : null}
+
+      <GlassCard>
+        <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (año en curso)</h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl bg-white/5 px-4 py-3">
+            <p className="text-xs text-subtle">Egresos</p>
+            <p className="text-lg font-semibold text-[var(--text)]">
+              {formatCurrency(budgetSummary.totalExpenseActual)} / {formatCurrency(budgetSummary.totalExpenseBudget)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/5 px-4 py-3">
+            <p className="text-xs text-subtle">Ingresos</p>
+            <p className="text-lg font-semibold text-[var(--text)]">
+              {formatCurrency(budgetSummary.totalIncomeActual)} / {formatCurrency(budgetSummary.totalIncomeBudget)}
+            </p>
+          </div>
+        </div>
+      </GlassCard>
+
       <GlassCard>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
