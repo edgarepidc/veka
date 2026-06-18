@@ -12,6 +12,7 @@ import {
   buildUnitStatementWithBalance,
   chargeDisplaySubtitle,
   chargeDisplayTitle,
+  chargeKindLabel,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
@@ -38,6 +39,7 @@ interface ChargeRow {
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   fund_type: string;
+  charge_kind?: string;
   fee_campaign: FeeSourceRef | null;
   recurring_fee: FeeSourceRef | null;
 }
@@ -93,7 +95,7 @@ export default function FinanceScreen() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fund_type, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
+          'id, concept, amount, due_date, status, fund_type, charge_kind, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
         .order('due_date', { ascending: false }),
@@ -310,7 +312,11 @@ export default function FinanceScreen() {
               <View style={styles.cardTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>{chargeDisplayTitle(charge)}</Text>
-                  {chargeDisplaySubtitle(charge) ? (
+                  {charge.charge_kind === 'late_fee' ? (
+                    <Text style={{ color: theme.danger, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                      {chargeKindLabel(charge.charge_kind)}
+                    </Text>
+                  ) : chargeDisplaySubtitle(charge) ? (
                     <Text style={{ color: theme.accent2, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
                       {chargeDisplaySubtitle(charge)}
                     </Text>

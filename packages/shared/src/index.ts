@@ -6,6 +6,7 @@ export * from './finance-analytics';
 export * from './finance-export';
 export * from './finance-dashboard';
 export * from './finance-scope';
+export * from './late-fees';
 export * from './maintenance';
 export * from './recurring-fees';
 export * from './roles';

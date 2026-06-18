@@ -8,6 +8,8 @@ import {
   EXPENSE_STATUSES,
   FUND_TYPES,
   INCOME_CATEGORIES,
+  LATE_FEE_APPLY_MODES,
+  LATE_FEE_TYPES,
   applyCoefficient,
   currentPeriodMonth,
   nextPeriodMonth,
@@ -15,6 +17,7 @@ import {
 } from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import {
   ensureRecurringChargesForCondo,
   recurringFeeHasChargesForPeriod,
@@ -31,8 +34,9 @@ export async function ensureMonthlyRecurringCharges() {
 
   try {
     const generated = await ensureRecurringChargesForCondo(supabase, DEMO_CONDO_ID, user.id);
+    const lateFees = await ensureLateFeesForCondo(supabase, DEMO_CONDO_ID, user.id);
     revalidatePath('/finanzas');
-    return { success: true, generated };
+    return { success: true, generated, lateFees };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'No se pudieron generar cargos.' };
   }
@@ -474,4 +478,136 @@ export async function saveAnnualBudget(formData: FormData) {
 
   revalidatePath('/finanzas');
   return { success: true };
+}
+
+export async function saveLateFeeSettings(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const enabled = formData.get('enabled') === 'on' || formData.get('enabled') === 'true';
+  const graceDays = Number(formData.get('grace_days'));
+  const feeType = String(formData.get('fee_type') ?? 'fixed');
+  const feeValue = Number(formData.get('fee_value'));
+  const applyMode = String(formData.get('apply_mode') ?? 'once');
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!Number.isInteger(graceDays) || graceDays < 0) {
+    return { error: 'Los días de gracia deben ser un número entero mayor o igual a 0.' };
+  }
+  if (!LATE_FEE_TYPES.includes(feeType as (typeof LATE_FEE_TYPES)[number])) {
+    return { error: 'Tipo de recargo inválido.' };
+  }
+  if (!LATE_FEE_APPLY_MODES.includes(applyMode as (typeof LATE_FEE_APPLY_MODES)[number])) {
+    return { error: 'Modo de aplicación inválido.' };
+  }
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (enabled) {
+    if (!Number.isFinite(feeValue) || feeValue <= 0) {
+      return { error: 'Indica un monto o porcentaje mayor a 0 para activar recargos.' };
+    }
+    if (feeType === 'percent' && feeValue > 100) {
+      return { error: 'El porcentaje no puede ser mayor a 100.' };
+    }
+  }
+
+  const { error } = await supabase.from('late_fee_settings').upsert(
+    {
+      condominium_id: DEMO_CONDO_ID,
+      enabled,
+      grace_days: graceDays,
+      fee_type: feeType,
+      fee_value: enabled ? feeValue : 0,
+      apply_mode: applyMode,
+      fund_type: fundType,
+      notes: notes || null,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'condominium_id' },
+  );
+
+  if (error) return { error: error.message };
+
+  if (enabled) {
+    await ensureLateFeesForCondo(supabase, DEMO_CONDO_ID, user.id);
+  }
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function saveOverdueReminderRule(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const enabled = formData.get('reminder_enabled') === 'on' || formData.get('reminder_enabled') === 'true';
+  const daysAfter = Number(formData.get('days_after'));
+
+  if (!Number.isInteger(daysAfter) || daysAfter < 1 || daysAfter > 365) {
+    return { error: 'Los días después del vencimiento deben estar entre 1 y 365.' };
+  }
+
+  const { error } = await supabase.from('notification_rules').upsert(
+    {
+      condominium_id: DEMO_CONDO_ID,
+      rule_key: 'charge_overdue_reminder',
+      days_before: null,
+      days_after: daysAfter,
+      is_enabled: enabled,
+    },
+    { onConflict: 'condominium_id,rule_key' },
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function sendPaymentReminder(chargeId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const { data: charge, error: chargeError } = await supabase
+    .from('charges')
+    .select('id, unit_id, concept, amount, due_date, status, condominium_id')
+    .eq('id', chargeId)
+    .single();
+
+  if (chargeError || !charge) return { error: 'Cargo no encontrado.' };
+  if (charge.status === 'paid' || charge.status === 'cancelled') {
+    return { error: 'Este cargo ya no está pendiente de cobro.' };
+  }
+
+  const message = `Recordatorio de pago: ${charge.concept} por $${Number(charge.amount).toFixed(2)} (vence ${charge.due_date}).`;
+
+  const { error } = await supabase.from('payment_reminder_log').insert({
+    condominium_id: charge.condominium_id,
+    unit_id: charge.unit_id,
+    charge_id: charge.id,
+    channel: 'manual',
+    message,
+    sent_by: user.id,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/finanzas');
+  return {
+    success: true,
+    message: 'Recordatorio registrado. La notificación push se enviará cuando esté configurada.',
+  };
 }

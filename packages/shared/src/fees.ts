@@ -50,9 +50,11 @@ export function chargeFeeSource(charge: {
 
 export function chargeDisplayTitle(charge: {
   concept: string;
+  charge_kind?: string;
   fee_campaign?: FeeSourceRef | null;
   recurring_fee?: FeeSourceRef | null;
 }): string {
+  if (charge.charge_kind === 'late_fee') return charge.concept;
   const source = chargeFeeSource(charge);
   return source?.concept ?? charge.concept;
 }

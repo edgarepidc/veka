@@ -14,7 +14,6 @@ import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   STORAGE_BUCKETS,
-  chargeStatusLabel,
   expenseCategoryLabel,
   expenseEvidencePath,
   expenseKindLabel,
@@ -26,6 +25,7 @@ import {
   matchesFinanceClusterFilter,
   paymentPeriodDate,
   paymentStatusLabel,
+  type LateFeeSettings,
   type MovementExportRow,
 } from '@veka/shared';
 import type { RecurringFeeStatus } from '@veka/shared';
@@ -34,6 +34,7 @@ import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/ap
 import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { ExportMenu } from '@/components/ExportMenu';
+import { MorosidadPanel } from '@/components/MorosidadPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
@@ -104,6 +105,8 @@ interface ChargeRow {
   amount: number;
   due_date: string;
   status: ChargeStatus;
+  charge_kind: string;
+  parent_charge_id: string | null;
   fee_campaign_id: string | null;
   recurring_fee_id: string | null;
   unit: { identifier: string; cluster_id: string | null } | null;
@@ -229,6 +232,19 @@ export function FinanceDashboard() {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntryRow[]>([]);
   const [budgets, setBudgets] = useState<AnnualBudgetRow[]>([]);
+  const [lateFeeSettings, setLateFeeSettings] = useState<LateFeeSettings>({
+    enabled: false,
+    grace_days: 0,
+    fee_type: 'fixed',
+    fee_value: 0,
+    apply_mode: 'once',
+    fund_type: 'operating',
+  });
+  const [overdueReminderRule, setOverdueReminderRule] = useState<{
+    days_after: number | null;
+    is_enabled: boolean;
+  } | null>(null);
+  const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
 
   const loadCondominiums = useCallback(async () => {
     const {
@@ -264,7 +280,7 @@ export function FinanceDashboard() {
 
     const condoId = selectedCondoId || DEMO_CONDO_ID;
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -283,7 +299,7 @@ export function FinanceDashboard() {
       supabase
         .from('charges')
         .select(
-          'id, unit_id, concept, amount, due_date, status, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
+          'id, unit_id, concept, amount, due_date, status, charge_kind, parent_charge_id, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
         )
         .eq('condominium_id', condoId)
         .order('due_date', { ascending: false }),
@@ -325,6 +341,23 @@ export function FinanceDashboard() {
         .select('id, fiscal_year, fund_type, notes, lines:budget_lines(id, line_kind, category, annual_amount)')
         .eq('condominium_id', condoId)
         .order('fiscal_year', { ascending: false }),
+      supabase
+        .from('late_fee_settings')
+        .select('enabled, grace_days, fee_type, fee_value, apply_mode, fund_type, notes')
+        .eq('condominium_id', condoId)
+        .maybeSingle(),
+      supabase
+        .from('notification_rules')
+        .select('days_after, is_enabled')
+        .eq('condominium_id', condoId)
+        .eq('rule_key', 'charge_overdue_reminder')
+        .maybeSingle(),
+      supabase
+        .from('payment_reminder_log')
+        .select('charge_id, sent_at')
+        .eq('condominium_id', condoId)
+        .order('sent_at', { ascending: false })
+        .limit(200),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -337,6 +370,27 @@ export function FinanceDashboard() {
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
     setIncomeEntries((incomesRes.data as unknown as IncomeEntryRow[]) ?? []);
     setBudgets((budgetsRes.data as unknown as AnnualBudgetRow[]) ?? []);
+    if (lateFeeRes.data) {
+      const row = lateFeeRes.data;
+      setLateFeeSettings({
+        enabled: Boolean(row.enabled),
+        grace_days: Number(row.grace_days),
+        fee_type: row.fee_type as LateFeeSettings['fee_type'],
+        fee_value: Number(row.fee_value),
+        apply_mode: row.apply_mode as LateFeeSettings['apply_mode'],
+        fund_type: row.fund_type as LateFeeSettings['fund_type'],
+        notes: row.notes,
+      });
+    }
+    setOverdueReminderRule(
+      reminderRuleRes.data
+        ? {
+            days_after: reminderRuleRes.data.days_after,
+            is_enabled: Boolean(reminderRuleRes.data.is_enabled),
+          }
+        : null,
+    );
+    setReminderLog((reminderLogRes.data as { charge_id: string | null; sent_at: string }[]) ?? []);
     setLoading(false);
   }, [selectedCondoId, supabase]);
 
@@ -1058,70 +1112,18 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'morosidad' ? (
-        <div className="space-y-4">
-          <GlassCard className="!p-4">
-            <p className="text-sm text-muted">
-              Unidades con cuotas vencidas, agrupadas por torre o cluster. Los recordatorios de cobro se
-              envían por notificación push según las reglas del condominio.
-            </p>
-            <p className="mt-2 text-lg font-bold text-amber-200">
-              Total morosidad: {formatCurrency(totalReceivable)}
-            </p>
-          </GlassCard>
-
-          {morosityByCluster.length === 0 ? (
-            <GlassCard>
-              <p className="text-sm text-subtle">No hay unidades morosas registradas.</p>
-            </GlassCard>
-          ) : (
-            morosityByCluster.map(([clusterId, group]) => {
-              const open = expandedClusters[clusterId] ?? true;
-              return (
-                <GlassCard key={clusterId} className="overflow-hidden !p-0">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedClusters((prev) => ({ ...prev, [clusterId]: !open }))}
-                    className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-white/5"
-                  >
-                    <Chevron open={open} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-[var(--text)]">{group.clusterName}</p>
-                      <p className="mt-1 text-xs text-subtle">
-                        {group.items.length} unidad{group.items.length === 1 ? '' : 'es'} morosa
-                        {group.items.length === 1 ? '' : 's'} · {formatCurrency(group.total)}
-                      </p>
-                    </div>
-                  </button>
-                  {open ? (
-                    <ul className="space-y-2 border-t border-white/10 px-4 pb-4 pt-3">
-                      {group.items.map((charge) => (
-                        <li
-                          key={charge.id}
-                          className="glass-card-deep flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
-                        >
-                          <div>
-                            <p className="font-medium text-[var(--text)]">{charge.unit?.identifier}</p>
-                            <p className="text-xs text-subtle">
-                              {charge.concept} · vence {charge.due_date}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-amber-200">
-                              {formatCurrency(Number(charge.amount))}
-                            </span>
-                            <span className="rounded-full border border-red-400/30 bg-red-400/15 px-2 py-0.5 text-xs font-bold text-red-100">
-                              {chargeStatusLabel(charge.status)}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </GlassCard>
-              );
-            })
-          )}
-        </div>
+        <MorosidadPanel
+          lateFeeSettings={lateFeeSettings}
+          overdueReminderRule={overdueReminderRule}
+          reminderLog={reminderLog}
+          morosityByCluster={morosityByCluster}
+          totalReceivable={totalReceivable}
+          expandedClusters={expandedClusters}
+          onToggleCluster={(clusterId) =>
+            setExpandedClusters((prev) => ({ ...prev, [clusterId]: !(prev[clusterId] ?? true) }))
+          }
+          onReload={() => void load()}
+        />
       ) : null}
     </div>
   );
@@ -1157,17 +1159,6 @@ function StatusBadge({ status }: { status: ExpenseStatus }) {
   return (
     <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-0.5 text-xs font-bold text-amber-100">
       {expenseStatusLabel(status)}
-    </span>
-  );
-}
-
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <span
-      className={`mt-0.5 shrink-0 text-subtle transition-transform ${open ? 'rotate-90' : ''}`}
-      aria-hidden
-    >
-      ▸
     </span>
   );
 }
