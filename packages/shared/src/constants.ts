@@ -56,3 +56,6 @@ export type FeeScope = (typeof FEE_SCOPES)[number];
 
 export const FEE_CAMPAIGN_STATUSES = ['active', 'cancelled'] as const;
 export type FeeCampaignStatus = (typeof FEE_CAMPAIGN_STATUSES)[number];
+
+export const RECURRING_FEE_STATUSES = ['active', 'paused', 'cancelled'] as const;
+export type RecurringFeeStatus = (typeof RECURRING_FEE_STATUSES)[number];

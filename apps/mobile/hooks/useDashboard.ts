@@ -6,7 +6,7 @@ import {
   chargeStatusTone,
   formatCurrency,
 } from '@veka/shared';
-import type { FeeCampaignRef } from '@veka/shared';
+import type { FeeSourceRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -17,12 +17,13 @@ export interface DashboardCharge {
   amount: number;
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
-  fee_campaign: FeeCampaignRef | null;
+  fee_campaign: FeeSourceRef | null;
+  recurring_fee: FeeSourceRef | null;
 }
 
-function normalizeFeeCampaign(raw: unknown): FeeCampaignRef | null {
+function normalizeFeeSource(raw: unknown): FeeSourceRef | null {
   if (!raw || typeof raw !== 'object') return null;
-  const row = raw as FeeCampaignRef & { cluster?: { name: string } | { name: string }[] | null };
+  const row = raw as FeeSourceRef & { cluster?: { name: string } | { name: string }[] | null };
   const cluster = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
   return { ...row, cluster: cluster ?? null };
 }
@@ -101,7 +102,7 @@ export function useDashboard(primary: ActiveMembership | null) {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name))',
+          'id, concept, amount, due_date, status, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
         .in('status', ['pending', 'overdue'])
@@ -143,14 +144,18 @@ export function useDashboard(primary: ActiveMembership | null) {
     const amenityName = Array.isArray(amenity) ? amenity[0]?.name : amenity?.name;
 
     const chargeRow = chargesRes.data?.[0] as
-      | (Omit<DashboardCharge, 'fee_campaign'> & { fee_campaign?: unknown })
+      | (Omit<DashboardCharge, 'fee_campaign' | 'recurring_fee'> & {
+          fee_campaign?: unknown;
+          recurring_fee?: unknown;
+        })
       | undefined;
 
     setData({
       nextCharge: chargeRow
         ? {
             ...chargeRow,
-            fee_campaign: normalizeFeeCampaign(chargeRow.fee_campaign),
+            fee_campaign: normalizeFeeSource(chargeRow.fee_campaign),
+            recurring_fee: normalizeFeeSource(chargeRow.recurring_fee),
           }
         : null,
       latestPost: (postsRes.data?.[0] as DashboardPost | undefined) ?? null,

@@ -16,7 +16,7 @@ import {
   formatCurrency,
   paymentStatusLabel,
 } from '@veka/shared';
-import type { FeeCampaignRef } from '@veka/shared';
+import type { FeeSourceRef } from '@veka/shared';
 
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
@@ -36,12 +36,13 @@ interface ChargeRow {
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   fund_type: string;
-  fee_campaign: FeeCampaignRef | null;
+  fee_campaign: FeeSourceRef | null;
+  recurring_fee: FeeSourceRef | null;
 }
 
-function normalizeFeeCampaign(raw: unknown): FeeCampaignRef | null {
+function normalizeFeeSource(raw: unknown): FeeSourceRef | null {
   if (!raw || typeof raw !== 'object') return null;
-  const row = raw as FeeCampaignRef & { cluster?: { name: string } | { name: string }[] | null };
+  const row = raw as FeeSourceRef & { cluster?: { name: string } | { name: string }[] | null };
   const cluster = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
   return { ...row, cluster: cluster ?? null };
 }
@@ -89,7 +90,7 @@ export default function FinanceScreen() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fund_type, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name))',
+          'id, concept, amount, due_date, status, fund_type, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
         .order('due_date', { ascending: false }),
@@ -112,12 +113,17 @@ export default function FinanceScreen() {
     ]);
 
     setCharges(
-      ((chargesRes.data as Omit<ChargeRow, 'fee_campaign'>[] | null) ?? []).map((charge) => ({
-        ...charge,
-        fee_campaign: normalizeFeeCampaign(
-          (charge as { fee_campaign?: unknown }).fee_campaign,
-        ),
-      })),
+      ((chargesRes.data as Omit<ChargeRow, 'fee_campaign' | 'recurring_fee'>[] | null) ?? []).map(
+        (charge) => ({
+          ...charge,
+          fee_campaign: normalizeFeeSource(
+            (charge as { fee_campaign?: unknown }).fee_campaign,
+          ),
+          recurring_fee: normalizeFeeSource(
+            (charge as { recurring_fee?: unknown }).recurring_fee,
+          ),
+        }),
+      ),
     );
     setPayments((paymentsRes.data as PaymentRow[]) ?? []);
     setFunds((fundsRes.data as FundBalance[]) ?? []);

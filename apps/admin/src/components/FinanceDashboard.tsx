@@ -12,21 +12,19 @@ import type {
 } from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
-  FEE_SCOPES,
   STORAGE_BUCKETS,
   chargeStatusLabel,
-  defaultFeeConcept,
   expenseCategoryLabel,
   expenseEvidencePath,
   expenseKindLabel,
   expenseStatusLabel,
-  feeCampaignStatusLabel,
-  feeScopeLabel,
   formatCurrency,
   fundTypeLabel,
 } from '@veka/shared';
+import type { RecurringFeeStatus } from '@veka/shared';
 
-import { cancelFeeCampaign, createExpense, createFeeCampaign } from '@/app/(panel)/finanzas/actions';
+import { createExpense, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
+import { CuotasPanel } from '@/components/CuotasPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -70,7 +68,19 @@ interface ChargeRow {
   due_date: string;
   status: ChargeStatus;
   fee_campaign_id: string | null;
+  recurring_fee_id: string | null;
   unit: { identifier: string; cluster_id: string | null } | null;
+}
+
+interface RecurringFeeRow {
+  id: string;
+  scope: 'general' | 'cluster';
+  concept: string;
+  due_day: number;
+  fund_type: FundType;
+  status: RecurringFeeStatus;
+  cluster: { name: string } | null;
+  revisions: { base_amount: number; effective_from: string }[];
 }
 
 interface FeeCampaignRow {
@@ -129,31 +139,20 @@ export function FinanceDashboard() {
   const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
   const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
   const [expensePending, startExpense] = useTransition();
-  const [campaignMessage, setCampaignMessage] = useState<string | null>(null);
-  const [campaignPending, startCampaign] = useTransition();
 
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [clusters, setClusters] = useState<ClusterRow[]>([]);
   const [funds, setFunds] = useState<FundBalanceRow[]>([]);
   const [charges, setCharges] = useState<ChargeRow[]>([]);
   const [feeCampaigns, setFeeCampaigns] = useState<FeeCampaignRow[]>([]);
+  const [recurringFees, setRecurringFees] = useState<RecurringFeeRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
-
-  const [feeForm, setFeeForm] = useState({
-    scope: 'general' as FeeScope,
-    clusterId: '',
-    concept: defaultFeeConcept('general'),
-    amount: '3500',
-    dueDate: '',
-    fundType: 'operating' as FundType,
-    periodMonth: new Date().toISOString().slice(0, 7) + '-01',
-  });
 
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, paymentsRes, expensesRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -172,7 +171,7 @@ export function FinanceDashboard() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fee_campaign_id, unit:units(identifier, cluster_id)',
+          'id, concept, amount, due_date, status, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
         )
         .eq('condominium_id', DEMO_CONDO_ID)
         .order('due_date', { ascending: false }),
@@ -180,6 +179,13 @@ export function FinanceDashboard() {
         .from('fee_campaigns')
         .select(
           'id, scope, concept, amount, due_date, fund_type, period_month, status, created_at, cluster:clusters(name)',
+        )
+        .eq('condominium_id', DEMO_CONDO_ID)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('recurring_fees')
+        .select(
+          'id, scope, concept, due_day, fund_type, status, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
         )
         .eq('condominium_id', DEMO_CONDO_ID)
         .order('created_at', { ascending: false }),
@@ -204,13 +210,14 @@ export function FinanceDashboard() {
     setFunds((fundsRes.data as FundBalanceRow[]) ?? []);
     setCharges((chargesRes.data as unknown as ChargeRow[]) ?? []);
     setFeeCampaigns((campaignsRes.data as unknown as FeeCampaignRow[]) ?? []);
+    setRecurringFees((recurringRes.data as unknown as RecurringFeeRow[]) ?? []);
     setPayments((paymentsRes.data as unknown as PaymentRow[]) ?? []);
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
     setLoading(false);
   }, [supabase]);
 
   useEffect(() => {
-    void load();
+    void ensureMonthlyRecurringCharges().then(() => load());
   }, [load]);
 
   const approvedPayments = useMemo(
@@ -290,83 +297,10 @@ export function FinanceDashboard() {
   const totalReceivable = sumAmount(delinquentCharges.filter((c) => c.status === 'overdue'));
   const totalPayables = sumAmount(supplierExpenses.filter((e) => e.status === 'pending'));
 
-  const campaignStats = useMemo(() => {
-    const map = new Map<string, { paid: number; pending: number; overdue: number; total: number }>();
-    for (const charge of charges) {
-      if (!charge.fee_campaign_id) continue;
-      const stats = map.get(charge.fee_campaign_id) ?? { paid: 0, pending: 0, overdue: 0, total: 0 };
-      stats.total += 1;
-      if (charge.status === 'paid') stats.paid += 1;
-      else if (charge.status === 'overdue') stats.overdue += 1;
-      else if (charge.status === 'pending') stats.pending += 1;
-      map.set(charge.fee_campaign_id, stats);
-    }
-    return map;
-  }, [charges]);
-
-  const affectedUnitsCount = useMemo(() => {
-    if (feeForm.scope === 'cluster') {
-      if (!feeForm.clusterId) return 0;
-      return units.filter((u) => u.cluster_id === feeForm.clusterId).length;
-    }
-    if (feeForm.scope === 'extraordinary' && feeForm.clusterId) {
-      return units.filter((u) => u.cluster_id === feeForm.clusterId).length;
-    }
-    return units.length;
-  }, [feeForm.clusterId, feeForm.scope, units]);
-
-  const activeCampaigns = useMemo(
-    () => feeCampaigns.filter((c) => c.status === 'active'),
+  const extraordinaryCampaigns = useMemo(
+    () => feeCampaigns.filter((campaign) => campaign.scope === 'extraordinary'),
     [feeCampaigns],
   );
-
-  function updateFeeScope(scope: FeeScope) {
-    const clusterName = clusters.find((c) => c.id === feeForm.clusterId)?.name;
-    setFeeForm((prev) => ({
-      ...prev,
-      scope,
-      clusterId: scope === 'general' ? '' : prev.clusterId,
-      concept: defaultFeeConcept(scope, clusterName),
-    }));
-  }
-
-  function updateFeeCluster(clusterId: string) {
-    const clusterName = clusters.find((c) => c.id === clusterId)?.name;
-    setFeeForm((prev) => ({
-      ...prev,
-      clusterId,
-      concept: defaultFeeConcept(prev.scope, clusterName),
-    }));
-  }
-
-  function runCreateFeeCampaign(formData: FormData) {
-    setCampaignMessage(null);
-    startCampaign(async () => {
-      const result = await createFeeCampaign(formData);
-      if (result.error) {
-        setCampaignMessage(result.error);
-        return;
-      }
-      const count = 'unitCount' in result ? result.unitCount : 0;
-      setCampaignMessage(`Cuota creada para ${count} unidad${count === 1 ? '' : 'es'}.`);
-      setFeeForm((prev) => ({
-        ...prev,
-        concept: defaultFeeConcept(prev.scope, clusters.find((c) => c.id === prev.clusterId)?.name),
-        dueDate: '',
-      }));
-      void load();
-    });
-  }
-
-  function handleCancelCampaign(campaignId: string) {
-    if (!confirm('¿Cancelar esta cuota? Se cancelarán los cargos pendientes de las unidades.')) return;
-    setCampaignMessage(null);
-    startCampaign(async () => {
-      const result = await cancelFeeCampaign(campaignId);
-      setCampaignMessage(result.error ?? 'Cuota cancelada.');
-      void load();
-    });
-  }
 
   async function reviewPayment(id: string, action: 'approve' | 'reject') {
     const res = await fetch(`/api/payments/${id}`, {
@@ -438,203 +372,14 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'cuotas' ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Nueva cuota</h2>
-            <p className="mt-1 text-sm text-muted">
-              Emite cuotas de mantenimiento general, por torre o extraordinarias a todas las unidades del
-              alcance.
-            </p>
-            {campaignMessage ? (
-              <p
-                className={`mt-3 text-sm ${campaignMessage.includes('creada') || campaignMessage.includes('cancelada') ? 'text-accent' : 'text-red-300'}`}
-              >
-                {campaignMessage}
-              </p>
-            ) : null}
-            <form action={runCreateFeeCampaign} className="mt-4 space-y-3">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Tipo de cuota</p>
-                <div className="flex flex-wrap gap-2">
-                  {FEE_SCOPES.map((scope) => (
-                    <button
-                      key={scope}
-                      type="button"
-                      onClick={() => updateFeeScope(scope)}
-                      className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                        feeForm.scope === scope
-                          ? 'bg-emerald-500/20 text-accent ring-1 ring-emerald-400/40'
-                          : 'bg-white/5 text-muted hover:bg-white/10'
-                      }`}
-                    >
-                      {feeScopeLabel(scope)}
-                    </button>
-                  ))}
-                </div>
-                <input type="hidden" name="scope" value={feeForm.scope} />
-              </div>
-
-              {feeForm.scope === 'cluster' ? (
-                <select
-                  name="cluster_id"
-                  required
-                  value={feeForm.clusterId}
-                  onChange={(e) => updateFeeCluster(e.target.value)}
-                  className="glass-input"
-                >
-                  <option value="">Selecciona torre / cluster</option>
-                  {clusters.map((cluster) => (
-                    <option key={cluster.id} value={cluster.id} className="bg-slate-900">
-                      {cluster.name}
-                    </option>
-                  ))}
-                </select>
-              ) : feeForm.scope === 'extraordinary' ? (
-                <select
-                  name="cluster_id"
-                  value={feeForm.clusterId}
-                  onChange={(e) => updateFeeCluster(e.target.value)}
-                  className="glass-input"
-                >
-                  <option value="" className="bg-slate-900">
-                    Todo el condominio
-                  </option>
-                  {clusters.map((cluster) => (
-                    <option key={cluster.id} value={cluster.id} className="bg-slate-900">
-                      Solo {cluster.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input type="hidden" name="cluster_id" value="" />
-              )}
-
-              <input
-                name="concept"
-                required
-                value={feeForm.concept}
-                onChange={(e) => setFeeForm((p) => ({ ...p, concept: e.target.value }))}
-                className="glass-input"
-                placeholder="Concepto"
-              />
-              <input
-                name="amount"
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                value={feeForm.amount}
-                onChange={(e) => setFeeForm((p) => ({ ...p, amount: e.target.value }))}
-                className="glass-input"
-                placeholder="Monto base por unidad (× coeficiente)"
-              />
-              <input
-                name="due_date"
-                required
-                type="date"
-                value={feeForm.dueDate}
-                onChange={(e) => setFeeForm((p) => ({ ...p, dueDate: e.target.value }))}
-                className="glass-input"
-              />
-              <input
-                name="period_month"
-                type="date"
-                value={feeForm.periodMonth}
-                onChange={(e) => setFeeForm((p) => ({ ...p, periodMonth: e.target.value }))}
-                className="glass-input"
-              />
-              <select
-                name="fund_type"
-                value={feeForm.fundType}
-                onChange={(e) => setFeeForm((p) => ({ ...p, fundType: e.target.value as FundType }))}
-                className="glass-input"
-              >
-                <option value="operating" className="bg-slate-900">
-                  {fundTypeLabel('operating')}
-                </option>
-                <option value="reserve" className="bg-slate-900">
-                  {fundTypeLabel('reserve')}
-                </option>
-              </select>
-              <p className="text-xs text-subtle">
-                Se generarán cargos para{' '}
-                <span className="font-semibold text-[var(--text)]">{affectedUnitsCount}</span> unidad
-                {affectedUnitsCount === 1 ? '' : 'es'}, cada una según su coeficiente.
-              </p>
-              <button type="submit" disabled={campaignPending || affectedUnitsCount === 0} className="glass-btn-primary">
-                {campaignPending ? 'Emitiendo…' : 'Emitir cuota'}
-              </button>
-            </form>
-          </GlassCard>
-
-          <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Cuotas activas</h2>
-            <p className="mt-1 text-sm text-muted">Registro de cuotas emitidas y cobranza por unidad.</p>
-            <div className="mt-4 space-y-3">
-              {activeCampaigns.length === 0 ? (
-                <p className="text-sm text-subtle">No hay cuotas activas.</p>
-              ) : (
-                activeCampaigns.map((campaign) => {
-                  const stats = campaignStats.get(campaign.id) ?? {
-                    paid: 0,
-                    pending: 0,
-                    overdue: 0,
-                    total: 0,
-                  };
-                  return (
-                    <div key={campaign.id} className="glass-card-deep p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-[var(--text)]">{campaign.concept}</p>
-                          <p className="mt-1 text-xs text-subtle">
-                            {feeScopeLabel(campaign.scope)}
-                            {campaign.cluster?.name ? ` · ${campaign.cluster.name}` : ''}
-                            {' · '}
-                            {formatCurrency(Number(campaign.amount))} base / unidad
-                            {' · '}
-                            Vence {campaign.due_date}
-                          </p>
-                        </div>
-                        <span className="glass-tag-green">{feeCampaignStatusLabel(campaign.status)}</span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                        <StatChip label="Unidades" value={stats.total} tone="neutral" />
-                        <StatChip label="Pagadas" value={stats.paid} tone="green" />
-                        <StatChip label="Pendientes" value={stats.pending} tone="amber" />
-                        {stats.overdue > 0 ? (
-                          <StatChip label="Vencidas" value={stats.overdue} tone="red" />
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        disabled={campaignPending}
-                        onClick={() => handleCancelCampaign(campaign.id)}
-                        className="mt-3 text-xs text-red-300 hover:underline"
-                      >
-                        Cancelar cuota
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {feeCampaigns.some((c) => c.status === 'cancelled') ? (
-              <div className="mt-6 border-t border-white/10 pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Historial</p>
-                <ul className="space-y-2">
-                  {feeCampaigns
-                    .filter((c) => c.status === 'cancelled')
-                    .map((campaign) => (
-                      <li key={campaign.id} className="text-sm text-subtle">
-                        {campaign.concept} · {feeCampaignStatusLabel(campaign.status)}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ) : null}
-          </GlassCard>
-        </div>
+        <CuotasPanel
+          clusters={clusters}
+          units={units}
+          recurringFees={recurringFees}
+          extraordinaryCampaigns={extraordinaryCampaigns}
+          charges={charges}
+          onReload={() => void load()}
+        />
       ) : null}
 
       {tab === 'movimientos' ? (

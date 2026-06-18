@@ -11,12 +11,15 @@ export const FEE_CAMPAIGN_STATUS_LABELS: Record<FeeCampaignStatus, string> = {
   cancelled: 'Cancelada',
 };
 
-export interface FeeCampaignRef {
+export interface FeeSourceRef {
   scope: FeeScope;
   concept: string;
   amount?: number;
   cluster?: { name: string } | null;
 }
+
+/** @deprecated use FeeSourceRef */
+export type FeeCampaignRef = FeeSourceRef;
 
 export function feeScopeLabel(scope: FeeScope): string {
   return FEE_SCOPE_LABELS[scope];
@@ -29,8 +32,8 @@ export function feeCampaignStatusLabel(status: FeeCampaignStatus): string {
 export function defaultFeeConcept(scope: FeeScope, clusterName?: string): string {
   const month = new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
   if (scope === 'extraordinary') return 'Cuota extraordinaria';
-  if (scope === 'cluster' && clusterName) return `Cuota de mantenimiento — ${clusterName} — ${month}`;
-  return `Cuota de mantenimiento — ${month}`;
+  if (scope === 'cluster' && clusterName) return `Cuota de mantenimiento — ${clusterName}`;
+  return 'Cuota de mantenimiento';
 }
 
 export function feeCampaignBadge(scope: FeeScope, clusterName?: string | null): string {
@@ -38,17 +41,28 @@ export function feeCampaignBadge(scope: FeeScope, clusterName?: string | null): 
   return feeScopeLabel(scope);
 }
 
+export function chargeFeeSource(charge: {
+  fee_campaign?: FeeSourceRef | null;
+  recurring_fee?: FeeSourceRef | null;
+}): FeeSourceRef | null {
+  return charge.recurring_fee ?? charge.fee_campaign ?? null;
+}
+
 export function chargeDisplayTitle(charge: {
   concept: string;
-  fee_campaign?: FeeCampaignRef | null;
+  fee_campaign?: FeeSourceRef | null;
+  recurring_fee?: FeeSourceRef | null;
 }): string {
-  return charge.fee_campaign?.concept ?? charge.concept;
+  const source = chargeFeeSource(charge);
+  return source?.concept ?? charge.concept;
 }
 
 export function chargeDisplaySubtitle(charge: {
   concept: string;
-  fee_campaign?: FeeCampaignRef | null;
+  fee_campaign?: FeeSourceRef | null;
+  recurring_fee?: FeeSourceRef | null;
 }): string | null {
-  if (!charge.fee_campaign) return null;
-  return feeCampaignBadge(charge.fee_campaign.scope, charge.fee_campaign.cluster?.name ?? null);
+  const source = chargeFeeSource(charge);
+  if (!source) return null;
+  return feeCampaignBadge(source.scope, source.cluster?.name ?? null);
 }

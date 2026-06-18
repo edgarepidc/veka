@@ -3,6 +3,7 @@ export * from './fees';
 export * from './finance';
 export * from './finance-analytics';
 export * from './maintenance';
+export * from './recurring-fees';
 export * from './roles';
 export * from './storage';
 export * from './team';
