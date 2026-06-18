@@ -16,7 +16,6 @@ import {
 } from '@veka/shared';
 
 import { ComparisonBarChart, ExpensePieChart, TrendBarChart } from '@/components/FinanceCharts';
-import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface FundBalanceRow {
@@ -69,12 +68,9 @@ interface CondominiumOption {
 }
 
 export function FinanceEstadoPanel({
-  condominiums,
   clusters,
-  condominiumId,
   clusterId,
-  onCondominiumChange,
-  onClusterChange,
+  pendingReviewCount,
   funds,
   payments,
   expenses,
@@ -82,15 +78,10 @@ export function FinanceEstadoPanel({
   charges,
   totalReceivable,
   totalPayables,
-  onReviewPayment,
-  onViewProof,
 }: {
-  condominiums: CondominiumOption[];
   clusters: ClusterOption[];
-  condominiumId: string;
   clusterId: string;
-  onCondominiumChange: (id: string) => void;
-  onClusterChange: (id: string) => void;
+  pendingReviewCount: number;
   funds: FundBalanceRow[];
   payments: PaymentRow[];
   expenses: ExpenseRow[];
@@ -98,8 +89,6 @@ export function FinanceEstadoPanel({
   charges: ChargeRow[];
   totalReceivable: number;
   totalPayables: number;
-  onReviewPayment: (id: string, action: 'approve' | 'reject') => void;
-  onViewProof: (path: string) => void;
 }) {
   const now = new Date();
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
@@ -199,8 +188,6 @@ export function FinanceEstadoPanel({
       };
     });
 
-    const pendingReview = scopePayments.filter((p) => p.status === 'pending_review');
-
     const clusterLabel = clusterId
       ? (clusters.find((cluster) => cluster.id === clusterId)?.name ?? 'Cluster')
       : 'Todo el condominio';
@@ -214,7 +201,6 @@ export function FinanceEstadoPanel({
       collectedCount: collected.length,
       pieSlices,
       paymentTrend,
-      pendingReview,
       periodLabel:
         periodMode === 'year' ? String(year) : monthLabel(year, month),
       scopeLabel: clusterLabel,
@@ -236,16 +222,7 @@ export function FinanceEstadoPanel({
               <span className="font-semibold text-[var(--text)]">{analytics.scopeLabel}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <FinanceScopeFilter
-              condominiums={condominiums}
-              clusters={clusters}
-              condominiumId={condominiumId}
-              clusterId={clusterId}
-              onCondominiumChange={onCondominiumChange}
-              onClusterChange={onClusterChange}
-              compact
-            />
+          <div className="flex flex-wrap items-end gap-2">
             <div className="glass-tab-strip !inline-flex">
               <button
                 type="button"
@@ -310,6 +287,17 @@ export function FinanceEstadoPanel({
         </p>
       ) : null}
 
+      {pendingReviewCount > 0 ? (
+        <GlassCard className="!border-amber-400/25 !bg-amber-500/5">
+          <p className="text-sm text-amber-100">
+            <span className="font-semibold">{pendingReviewCount}</span> comprobante
+            {pendingReviewCount === 1 ? '' : 's'} de residentes pendiente
+            {pendingReviewCount === 1 ? '' : 's'} de validación. Revísalo en{' '}
+            <span className="font-semibold">Ingresos y egresos</span>.
+          </p>
+        </GlassCard>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <SummaryCard label="Por cobrar (morosos)" value={formatCurrency(totalReceivable)} tone="amber" />
         <SummaryCard label="Adeudos a proveedores" value={formatCurrency(totalPayables)} tone="red" />
@@ -357,49 +345,6 @@ export function FinanceEstadoPanel({
                 </p>
                 <p className="mt-1 text-2xl font-bold text-accent">{formatCurrency(Number(fund.balance))}</p>
                 <p className="mt-1 text-xs text-subtle">Al {fund.as_of_date}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </GlassCard>
-
-      <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
-        <div className="mt-4 space-y-3">
-          {analytics.pendingReview.length === 0 ? (
-            <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
-          ) : (
-            analytics.pendingReview.map((payment) => (
-              <div key={payment.id} className="glass-card-deep p-4">
-                <p className="font-medium text-[var(--text)]">
-                  {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
-                </p>
-                <p className="text-sm text-muted">{payment.charge?.concept}</p>
-                {payment.proof_url ? (
-                  <button
-                    type="button"
-                    onClick={() => onViewProof(payment.proof_url!)}
-                    className="mt-2 inline-block text-sm text-accent-2 hover:underline"
-                  >
-                    Ver comprobante
-                  </button>
-                ) : null}
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onReviewPayment(payment.id, 'approve')}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-                  >
-                    Aprobar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onReviewPayment(payment.id, 'reject')}
-                    className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
-                  >
-                    Rechazar
-                  </button>
-                </div>
               </div>
             ))
           )}

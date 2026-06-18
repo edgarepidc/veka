@@ -30,6 +30,7 @@ import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/ap
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
+import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
@@ -64,10 +65,15 @@ interface PaymentRow {
   amount: number;
   status: PaymentStatus;
   proof_url: string | null;
+  payment_method: string | null;
   created_at: string;
   paid_at: string | null;
-  unit: { identifier: string; cluster_id: string | null } | null;
-  charge: { concept: string } | null;
+  unit: {
+    identifier: string;
+    cluster_id: string | null;
+    cluster: { name: string } | null;
+  } | null;
+  charge: { concept: string; due_date: string } | null;
 }
 
 interface ChargeRow {
@@ -150,6 +156,13 @@ function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]>
 
 function sumAmount(items: { amount: number }[]): number {
   return items.reduce((sum, item) => sum + Number(item.amount), 0);
+}
+
+function normalizePaymentRow(row: PaymentRow): PaymentRow {
+  if (!row.unit) return row;
+  const cluster = row.unit.cluster as { name: string } | { name: string }[] | null | undefined;
+  const normalizedCluster = Array.isArray(cluster) ? (cluster[0] ?? null) : (cluster ?? null);
+  return { ...row, unit: { ...row.unit, cluster: normalizedCluster } };
 }
 
 export function FinanceDashboard() {
@@ -251,7 +264,7 @@ export function FinanceDashboard() {
       supabase
         .from('payments')
         .select(
-          'id, amount, status, proof_url, created_at, paid_at, unit:units(identifier, cluster_id), charge:charges(concept)',
+          'id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -275,7 +288,7 @@ export function FinanceDashboard() {
     setCharges((chargesRes.data as unknown as ChargeRow[]) ?? []);
     setFeeCampaigns((campaignsRes.data as unknown as FeeCampaignRow[]) ?? []);
     setRecurringFees((recurringRes.data as unknown as RecurringFeeRow[]) ?? []);
-    setPayments((paymentsRes.data as unknown as PaymentRow[]) ?? []);
+    setPayments(((paymentsRes.data as unknown as PaymentRow[]) ?? []).map(normalizePaymentRow));
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
     setIncomeEntries((incomesRes.data as unknown as IncomeEntryRow[]) ?? []);
     setLoading(false);
@@ -418,11 +431,25 @@ export function FinanceDashboard() {
     [feeCampaigns],
   );
 
-  async function reviewPayment(id: string, action: 'approve' | 'reject') {
+  const pendingReviewCount = useMemo(
+    () => scopedPayments.filter((payment) => payment.status === 'pending_review').length,
+    [scopedPayments],
+  );
+
+  const scopeLabel = useMemo(() => {
+    if (!selectedClusterId) return 'Todo el condominio';
+    return clusters.find((cluster) => cluster.id === selectedClusterId)?.name ?? 'Torre';
+  }, [clusters, selectedClusterId]);
+
+  async function reviewPayment(
+    id: string,
+    action: 'approve' | 'reject',
+    rejectionReason?: string,
+  ) {
     const res = await fetch(`/api/payments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, rejectionReason }),
     });
 
     if (!res.ok) {
@@ -471,6 +498,27 @@ export function FinanceDashboard() {
 
   return (
     <div className="space-y-6">
+      <GlassCard className="!p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
+            <p className="mt-1 text-sm text-muted">
+              Filtra todas las pestañas por condominio o torre. Vista actual:{' '}
+              <span className="font-semibold text-[var(--text)]">{scopeLabel}</span>
+            </p>
+          </div>
+          <FinanceScopeFilter
+            condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
+            clusters={clusters}
+            condominiumId={selectedCondoId}
+            clusterId={selectedClusterId}
+            onCondominiumChange={setSelectedCondoId}
+            onClusterChange={setSelectedClusterId}
+            compact
+          />
+        </div>
+      </GlassCard>
+
       <div className="glass-tab-strip">
         {TABS.map((item) => (
           <button
@@ -480,18 +528,20 @@ export function FinanceDashboard() {
             className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
           >
             {item.label}
+            {item.id === 'movimientos' && pendingReviewCount > 0 ? (
+              <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-slate-900">
+                {pendingReviewCount}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
 
       {tab === 'estado' ? (
         <FinanceEstadoPanel
-          condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
           clusters={clusters}
-          condominiumId={selectedCondoId}
           clusterId={selectedClusterId}
-          onCondominiumChange={setSelectedCondoId}
-          onClusterChange={setSelectedClusterId}
+          pendingReviewCount={pendingReviewCount}
           funds={funds}
           payments={payments}
           expenses={expenses}
@@ -499,11 +549,6 @@ export function FinanceDashboard() {
           charges={charges}
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
-          onReviewPayment={reviewPayment}
-          onViewProof={async (path) => {
-            const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 3600);
-            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-          }}
         />
       ) : null}
 
@@ -520,28 +565,20 @@ export function FinanceDashboard() {
 
       {tab === 'movimientos' ? (
         <div className="space-y-6">
-          <GlassCard>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--text)]">Alcance de movimientos</h2>
-                <p className="mt-1 text-sm text-muted">Filtra ingresos y egresos por condominio o torre.</p>
-              </div>
-              <FinanceScopeFilter
-                condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
-                clusters={clusters}
-                condominiumId={selectedCondoId}
-                clusterId={selectedClusterId}
-                onCondominiumChange={setSelectedCondoId}
-                onClusterChange={setSelectedClusterId}
-              />
-            </div>
-          </GlassCard>
+          <ResidentPaymentsReview
+            payments={scopedPayments}
+            onReview={reviewPayment}
+            onViewProof={async (path) => {
+              const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 3600);
+              if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+            }}
+          />
 
           <div className="grid gap-6 lg:grid-cols-2">
             <GlassCard>
-              <h2 className="text-lg font-semibold text-[var(--text)]">Registrar ingreso</h2>
+              <h2 className="text-lg font-semibold text-[var(--text)]">Registrar ingreso manual</h2>
               <p className="mt-1 text-sm text-muted">
-                Ingresos manuales fuera del flujo de pagos de residentes (donaciones, servicios, etc.).
+                Ingresos que no vienen de pagos de residentes (donaciones, servicios, etc.).
               </p>
               {incomeMessage ? (
                 <p
@@ -696,8 +733,10 @@ export function FinanceDashboard() {
 
           <div className="grid gap-6 lg:grid-cols-2">
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Ingresos</h2>
-            <p className="mt-1 text-sm text-muted">Cuotas y pagos aprobados con comprobante.</p>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Ingresos registrados</h2>
+            <p className="mt-1 text-sm text-muted">
+              Pagos de residentes aprobados e ingresos manuales · {scopeLabel}.
+            </p>
             <div className="mt-4 space-y-4">
               {incomeByCategory.length === 0 ? (
                 <p className="text-sm text-subtle">Sin ingresos registrados.</p>
@@ -733,7 +772,7 @@ export function FinanceDashboard() {
 
           <GlassCard>
             <h2 className="text-lg font-semibold text-[var(--text)]">Egresos comprobados</h2>
-            <p className="mt-1 text-sm text-muted">Gastos pagados, clasificados por categoría.</p>
+            <p className="mt-1 text-sm text-muted">Gastos pagados por categoría · {scopeLabel}.</p>
             <div className="mt-4 space-y-4">
               {expensesByCategory.length === 0 ? (
                 <p className="text-sm text-subtle">Sin egresos registrados.</p>
@@ -788,7 +827,7 @@ export function FinanceDashboard() {
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Pagos y adeudos a proveedores</h2>
           <p className="mt-1 text-sm text-muted">
-            Estado de cuenta por proveedor: pagos realizados y saldos pendientes.
+            Estado de cuenta por proveedor · {scopeLabel}.
           </p>
           <div className="mt-4 space-y-4">
             {suppliersByVendor.length === 0 ? (
@@ -835,7 +874,7 @@ export function FinanceDashboard() {
       {tab === 'nomina' ? (
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Pago a empleados</h2>
-          <p className="mt-1 text-sm text-muted">Nómina y compensaciones al personal del condominio.</p>
+          <p className="mt-1 text-sm text-muted">Nómina y compensaciones · {scopeLabel}.</p>
           <div className="mt-4 space-y-3">
             {payrollExpenses.length === 0 ? (
               <p className="text-sm text-subtle">Sin registros de nómina.</p>
