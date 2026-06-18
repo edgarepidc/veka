@@ -1,12 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ExpenseKind, ExpenseStatus, FeeScope, FundType } from '@veka/shared';
+import type { ExpenseKind, ExpenseStatus, FeeScope, FundType, IncomeCategory } from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_KINDS,
   EXPENSE_STATUSES,
   FUND_TYPES,
+  INCOME_CATEGORIES,
   applyCoefficient,
   currentPeriodMonth,
   nextPeriodMonth,
@@ -291,6 +292,47 @@ export async function cancelFeeCampaign(campaignId: string) {
   return { success: true };
 }
 
+export async function createIncome(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const condominiumId = String(formData.get('condominium_id') ?? DEMO_CONDO_ID);
+  const clusterId = String(formData.get('cluster_id') ?? '').trim();
+  const concept = String(formData.get('concept') ?? '').trim();
+  const amount = Number(formData.get('amount'));
+  const category = String(formData.get('category') ?? 'otros');
+  const incomeDate = String(formData.get('income_date') ?? '');
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!concept) return { error: 'Concepto obligatorio.' };
+  if (!amount || amount <= 0) return { error: 'Monto inválido.' };
+  if (!INCOME_CATEGORIES.includes(category as IncomeCategory)) return { error: 'Categoría inválida.' };
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (!incomeDate) return { error: 'Fecha obligatoria.' };
+
+  const { error } = await supabase.from('income_entries').insert({
+    condominium_id: condominiumId,
+    cluster_id: clusterId || null,
+    concept,
+    amount,
+    category,
+    income_date: incomeDate,
+    fund_type: fundType,
+    notes: notes || null,
+    created_by: user.id,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
 export async function createExpense(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -299,6 +341,8 @@ export async function createExpense(formData: FormData) {
 
   if (!user) return { error: 'No autorizado' };
 
+  const condominiumId = String(formData.get('condominium_id') ?? DEMO_CONDO_ID);
+  const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
   const amount = Number(formData.get('amount'));
   const category = String(formData.get('category') ?? '');
@@ -326,7 +370,8 @@ export async function createExpense(formData: FormData) {
   const { data: expense, error } = await supabase
     .from('expenses')
     .insert({
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condominiumId,
+      cluster_id: clusterId || null,
       concept,
       amount,
       category,

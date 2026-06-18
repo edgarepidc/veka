@@ -9,12 +9,14 @@ import {
   expenseCategoryLabel,
   formatCurrency,
   fundTypeLabel,
+  matchesFinanceClusterFilter,
   monthLabel,
   parseYearMonth,
   paymentPeriodDate,
 } from '@veka/shared';
 
 import { ComparisonBarChart, ExpensePieChart, TrendBarChart } from '@/components/FinanceCharts';
+import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface FundBalanceRow {
@@ -30,7 +32,7 @@ interface PaymentRow {
   proof_url: string | null;
   created_at: string;
   paid_at: string | null;
-  unit: { identifier: string } | null;
+  unit: { identifier: string; cluster_id: string | null } | null;
   charge: { concept: string } | null;
 }
 
@@ -39,27 +41,60 @@ interface ExpenseRow {
   category: string;
   expense_date: string;
   status: ExpenseStatus;
+  cluster_id: string | null;
+}
+
+interface IncomeRow {
+  amount: number;
+  category: string;
+  income_date: string;
+  cluster_id: string | null;
 }
 
 interface ChargeRow {
   amount: number;
   due_date: string;
   status: ChargeStatus;
+  unit: { cluster_id: string | null } | null;
+}
+
+interface ClusterOption {
+  id: string;
+  name: string;
+}
+
+interface CondominiumOption {
+  id: string;
+  name: string;
 }
 
 export function FinanceEstadoPanel({
+  condominiums,
+  clusters,
+  condominiumId,
+  clusterId,
+  onCondominiumChange,
+  onClusterChange,
   funds,
   payments,
   expenses,
+  incomeEntries,
   charges,
   totalReceivable,
   totalPayables,
   onReviewPayment,
   onViewProof,
 }: {
+  condominiums: CondominiumOption[];
+  clusters: ClusterOption[];
+  condominiumId: string;
+  clusterId: string;
+  onCondominiumChange: (id: string) => void;
+  onClusterChange: (id: string) => void;
   funds: FundBalanceRow[];
   payments: PaymentRow[];
   expenses: ExpenseRow[];
+  incomeEntries: IncomeRow[];
   charges: ChargeRow[];
   totalReceivable: number;
   totalPayables: number;
@@ -75,9 +110,39 @@ export function FinanceEstadoPanel({
   const year = periodMode === 'year' ? Number(selectedYear) : (parsedMonth?.year ?? now.getFullYear());
   const month = parsedMonth?.month ?? now.getMonth() + 1;
 
+  const scopePayments = useMemo(
+    () =>
+      payments.filter((payment) =>
+        matchesFinanceClusterFilter(payment.unit?.cluster_id, clusterId),
+      ),
+    [clusterId, payments],
+  );
+
+  const scopeExpenses = useMemo(
+    () =>
+      expenses.filter((expense) =>
+        matchesFinanceClusterFilter(expense.cluster_id, clusterId, { condoWideApplies: true }),
+      ),
+    [clusterId, expenses],
+  );
+
+  const scopeIncomeEntries = useMemo(
+    () =>
+      incomeEntries.filter((income) =>
+        matchesFinanceClusterFilter(income.cluster_id, clusterId, { condoWideApplies: true }),
+      ),
+    [clusterId, incomeEntries],
+  );
+
+  const scopeCharges = useMemo(
+    () =>
+      charges.filter((charge) => matchesFinanceClusterFilter(charge.unit?.cluster_id, clusterId)),
+    [charges, clusterId],
+  );
+
   const analytics = useMemo(() => {
-    const approved = payments.filter((p) => p.status === 'approved');
-    const paidExpenses = expenses.filter((e) => e.status === 'paid');
+    const approved = scopePayments.filter((p) => p.status === 'approved');
+    const paidExpenses = scopeExpenses.filter((e) => e.status === 'paid');
 
     const inPeriod = (iso: string) =>
       periodMode === 'year' ? dateInYear(iso, year) : dateInMonth(iso, year, month);
@@ -85,12 +150,15 @@ export function FinanceEstadoPanel({
     const periodPayments = approved.filter((p) =>
       inPeriod(paymentPeriodDate(p.paid_at, p.created_at)),
     );
+    const periodManualIncome = scopeIncomeEntries.filter((income) => inPeriod(income.income_date));
     const periodExpenses = paidExpenses.filter((e) => inPeriod(e.expense_date));
 
-    const periodIncome = periodPayments.reduce((s, p) => s + Number(p.amount), 0);
+    const paymentIncome = periodPayments.reduce((s, p) => s + Number(p.amount), 0);
+    const manualIncome = periodManualIncome.reduce((s, income) => s + Number(income.amount), 0);
+    const periodIncome = paymentIncome + manualIncome;
     const periodExpenseTotal = periodExpenses.reduce((s, e) => s + Number(e.amount), 0);
 
-    const periodCharges = charges.filter((c) => inPeriod(c.due_date) && c.status !== 'cancelled');
+    const periodCharges = scopeCharges.filter((c) => inPeriod(c.due_date) && c.status !== 'cancelled');
     const collected = periodCharges.filter((c) => c.status === 'paid');
     const collectionRate =
       periodCharges.length > 0
@@ -118,14 +186,24 @@ export function FinanceEstadoPanel({
             return { year: d.getFullYear(), month: d.getMonth() + 1 };
           });
 
-    const paymentTrend = trendMonths.map(({ year: y, month: m }) => ({
-      label: monthLabel(y, m),
-      value: approved
+    const paymentTrend = trendMonths.map(({ year: y, month: m }) => {
+      const paymentsTotal = approved
         .filter((p) => dateInMonth(paymentPeriodDate(p.paid_at, p.created_at), y, m))
-        .reduce((s, p) => s + Number(p.amount), 0),
-    }));
+        .reduce((s, p) => s + Number(p.amount), 0);
+      const manualTotal = scopeIncomeEntries
+        .filter((income) => dateInMonth(income.income_date, y, m))
+        .reduce((s, income) => s + Number(income.amount), 0);
+      return {
+        label: monthLabel(y, m),
+        value: paymentsTotal + manualTotal,
+      };
+    });
 
-    const pendingReview = payments.filter((p) => p.status === 'pending_review');
+    const pendingReview = scopePayments.filter((p) => p.status === 'pending_review');
+
+    const clusterLabel = clusterId
+      ? (clusters.find((cluster) => cluster.id === clusterId)?.name ?? 'Cluster')
+      : 'Todo el condominio';
 
     return {
       periodIncome,
@@ -139,8 +217,11 @@ export function FinanceEstadoPanel({
       pendingReview,
       periodLabel:
         periodMode === 'year' ? String(year) : monthLabel(year, month),
+      scopeLabel: clusterLabel,
+      manualIncome,
+      paymentIncome,
     };
-  }, [charges, expenses, month, payments, periodMode, year]);
+  }, [clusterId, clusters, month, periodMode, scopeCharges, scopeExpenses, scopeIncomeEntries, scopePayments, year]);
 
   return (
     <div className="space-y-6">
@@ -149,10 +230,22 @@ export function FinanceEstadoPanel({
           <div>
             <h2 className="text-lg font-semibold text-[var(--text)]">Dashboard financiero</h2>
             <p className="mt-1 text-sm text-muted">
-              Vista del periodo: <span className="font-semibold text-[var(--text)]">{analytics.periodLabel}</span>
+              Vista del periodo:{' '}
+              <span className="font-semibold text-[var(--text)]">{analytics.periodLabel}</span>
+              {' · '}
+              <span className="font-semibold text-[var(--text)]">{analytics.scopeLabel}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <FinanceScopeFilter
+              condominiums={condominiums}
+              clusters={clusters}
+              condominiumId={condominiumId}
+              clusterId={clusterId}
+              onCondominiumChange={onCondominiumChange}
+              onClusterChange={onClusterChange}
+              compact
+            />
             <div className="glass-tab-strip !inline-flex">
               <button
                 type="button"
@@ -210,6 +303,13 @@ export function FinanceEstadoPanel({
         />
       </div>
 
+      {analytics.manualIncome > 0 ? (
+        <p className="text-xs text-subtle">
+          Incluye {formatCurrency(analytics.paymentIncome)} en pagos aprobados y{' '}
+          {formatCurrency(analytics.manualIncome)} en ingresos registrados manualmente.
+        </p>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <SummaryCard label="Por cobrar (morosos)" value={formatCurrency(totalReceivable)} tone="amber" />
         <SummaryCard label="Adeudos a proveedores" value={formatCurrency(totalPayables)} tone="red" />
@@ -225,9 +325,9 @@ export function FinanceEstadoPanel({
         </GlassCard>
 
         <GlassCard>
-          <h3 className="text-base font-semibold text-[var(--text)]">Tendencia de pagos</h3>
+          <h3 className="text-base font-semibold text-[var(--text)]">Tendencia de ingresos</h3>
           <p className="mt-1 text-sm text-muted">
-            Ingresos por pagos aprobados {periodMode === 'year' ? `en ${year}` : '(últimos 6 meses)'}.
+            Pagos aprobados e ingresos manuales {periodMode === 'year' ? `en ${year}` : '(últimos 6 meses)'}.
           </p>
           <div className="mt-4">
             <TrendBarChart bars={analytics.paymentTrend} />
@@ -237,7 +337,7 @@ export function FinanceEstadoPanel({
 
       <GlassCard>
         <h3 className="text-base font-semibold text-[var(--text)]">Ingresos vs egresos</h3>
-        <p className="mt-1 text-sm text-muted">Comparativo del periodo seleccionado.</p>
+        <p className="mt-1 text-sm text-muted">Comparativo del periodo y alcance seleccionados.</p>
         <div className="mt-4">
           <ComparisonBarChart income={analytics.periodIncome} expenses={analytics.periodExpenseTotal} />
         </div>
@@ -245,7 +345,7 @@ export function FinanceEstadoPanel({
 
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Saldos por fondo</h2>
-        <p className="mt-1 text-sm text-muted">Posición actual de caja (no filtrada por periodo).</p>
+        <p className="mt-1 text-sm text-muted">Posición actual de caja (no filtrada por periodo ni torre).</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {funds.length === 0 ? (
             <p className="text-sm text-subtle">Sin saldos registrados.</p>

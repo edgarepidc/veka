@@ -2,6 +2,7 @@ export * from './constants';
 export * from './fees';
 export * from './finance';
 export * from './finance-analytics';
+export * from './finance-scope';
 export * from './maintenance';
 export * from './recurring-fees';
 export * from './roles';

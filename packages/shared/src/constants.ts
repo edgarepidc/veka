@@ -38,6 +38,15 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
+export const INCOME_CATEGORIES = [
+  'cuotas',
+  'extraordinario',
+  'servicios',
+  'multas',
+  'otros',
+] as const;
+export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+
 export const MAINTENANCE_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export type MaintenanceTicketStatus = (typeof MAINTENANCE_TICKET_STATUSES)[number];
 

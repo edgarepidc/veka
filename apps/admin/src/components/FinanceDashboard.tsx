@@ -12,6 +12,7 @@ import type {
 } from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
   STORAGE_BUCKETS,
   chargeStatusLabel,
   expenseCategoryLabel,
@@ -20,12 +21,15 @@ import {
   expenseStatusLabel,
   formatCurrency,
   fundTypeLabel,
+  incomeCategoryLabel,
+  matchesFinanceClusterFilter,
 } from '@veka/shared';
 import type { RecurringFeeStatus } from '@veka/shared';
 
-import { createExpense, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
+import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
+import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
@@ -44,6 +48,11 @@ interface ClusterRow {
   name: string;
 }
 
+interface CondominiumRow {
+  id: string;
+  name: string;
+}
+
 interface FundBalanceRow {
   fund_type: FundType;
   balance: number;
@@ -57,7 +66,7 @@ interface PaymentRow {
   proof_url: string | null;
   created_at: string;
   paid_at: string | null;
-  unit: { identifier: string } | null;
+  unit: { identifier: string; cluster_id: string | null } | null;
   charge: { concept: string } | null;
 }
 
@@ -106,7 +115,19 @@ interface ExpenseRow {
   expense_kind: ExpenseKind;
   status: ExpenseStatus;
   fund_type: FundType;
+  cluster_id: string | null;
   attachments: { id: string; file_url: string; file_name: string | null }[];
+}
+
+interface IncomeEntryRow {
+  id: string;
+  concept: string;
+  amount: number;
+  category: string;
+  income_date: string;
+  fund_type: FundType;
+  cluster_id: string | null;
+  notes: string | null;
 }
 
 const TABS: { id: FinanceTab; label: string }[] = [
@@ -138,7 +159,13 @@ export function FinanceDashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
   const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
+  const [incomeMessage, setIncomeMessage] = useState<string | null>(null);
   const [expensePending, startExpense] = useTransition();
+  const [incomePending, startIncome] = useTransition();
+
+  const [condominiums, setCondominiums] = useState<CondominiumRow[]>([]);
+  const [selectedCondoId, setSelectedCondoId] = useState(DEMO_CONDO_ID);
+  const [selectedClusterId, setSelectedClusterId] = useState('');
 
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [clusters, setClusters] = useState<ClusterRow[]>([]);
@@ -148,61 +175,98 @@ export function FinanceDashboard() {
   const [recurringFees, setRecurringFees] = useState<RecurringFeeRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
+  const [incomeEntries, setIncomeEntries] = useState<IncomeEntryRow[]>([]);
+
+  const loadCondominiums = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('memberships')
+      .select('condominium_id, condominium:condominiums(id, name)')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    const rows =
+      (data as { condominium_id: string; condominium: { id: string; name: string } | null }[] | null) ?? [];
+    const options = rows
+      .map((row) => ({
+        id: row.condominium?.id ?? row.condominium_id,
+        name: row.condominium?.name ?? 'Condominio',
+      }))
+      .filter((row, index, list) => list.findIndex((item) => item.id === row.id) === index);
+
+    if (options.length > 0) {
+      setCondominiums(options);
+      setSelectedCondoId((current) =>
+        options.some((option) => option.id === current) ? current : options[0]!.id,
+      );
+    }
+  }, [supabase]);
 
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes] =
+    const condoId = selectedCondoId || DEMO_CONDO_ID;
+
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes] =
       await Promise.all([
       supabase
         .from('units')
         .select('id, identifier, cluster_id')
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('identifier'),
       supabase
         .from('clusters')
         .select('id, name')
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('name'),
       supabase
         .from('fund_balances')
         .select('fund_type, balance, as_of_date')
-        .eq('condominium_id', DEMO_CONDO_ID),
+        .eq('condominium_id', condoId),
       supabase
         .from('charges')
         .select(
           'id, concept, amount, due_date, status, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
         )
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('due_date', { ascending: false }),
       supabase
         .from('fee_campaigns')
         .select(
           'id, scope, concept, amount, due_date, fund_type, period_month, status, created_at, cluster:clusters(name)',
         )
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
       supabase
         .from('recurring_fees')
         .select(
           'id, scope, concept, due_day, fund_type, status, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
         )
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
       supabase
         .from('payments')
         .select(
-          'id, amount, status, proof_url, created_at, paid_at, unit:units(identifier), charge:charges(concept)',
+          'id, amount, status, proof_url, created_at, paid_at, unit:units(identifier, cluster_id), charge:charges(concept)',
         )
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
       supabase
         .from('expenses')
         .select(
-          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, attachments:expense_attachments(id, file_url, file_name)',
+          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, cluster_id, attachments:expense_attachments(id, file_url, file_name)',
         )
-        .eq('condominium_id', DEMO_CONDO_ID)
+        .eq('condominium_id', condoId)
         .order('expense_date', { ascending: false }),
+      supabase
+        .from('income_entries')
+        .select('id, concept, amount, category, income_date, fund_type, cluster_id, notes')
+        .eq('condominium_id', condoId)
+        .order('income_date', { ascending: false }),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -213,36 +277,75 @@ export function FinanceDashboard() {
     setRecurringFees((recurringRes.data as unknown as RecurringFeeRow[]) ?? []);
     setPayments((paymentsRes.data as unknown as PaymentRow[]) ?? []);
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
+    setIncomeEntries((incomesRes.data as unknown as IncomeEntryRow[]) ?? []);
     setLoading(false);
-  }, [supabase]);
+  }, [selectedCondoId, supabase]);
+
+  useEffect(() => {
+    void loadCondominiums();
+  }, [loadCondominiums]);
+
+  useEffect(() => {
+    setSelectedClusterId('');
+  }, [selectedCondoId]);
 
   useEffect(() => {
     void ensureMonthlyRecurringCharges().then(() => load());
   }, [load]);
 
+  const scopedPayments = useMemo(
+    () =>
+      payments.filter((payment) =>
+        matchesFinanceClusterFilter(payment.unit?.cluster_id, selectedClusterId),
+      ),
+    [payments, selectedClusterId],
+  );
+
+  const scopedExpenses = useMemo(
+    () =>
+      expenses.filter((expense) =>
+        matchesFinanceClusterFilter(expense.cluster_id, selectedClusterId, { condoWideApplies: true }),
+      ),
+    [expenses, selectedClusterId],
+  );
+
+  const scopedIncomeEntries = useMemo(
+    () =>
+      incomeEntries.filter((income) =>
+        matchesFinanceClusterFilter(income.cluster_id, selectedClusterId, { condoWideApplies: true }),
+      ),
+    [incomeEntries, selectedClusterId],
+  );
+
+  const scopedCharges = useMemo(
+    () =>
+      charges.filter((charge) => matchesFinanceClusterFilter(charge.unit?.cluster_id, selectedClusterId)),
+    [charges, selectedClusterId],
+  );
+
   const approvedPayments = useMemo(
-    () => payments.filter((p) => p.status === 'approved'),
-    [payments],
+    () => scopedPayments.filter((p) => p.status === 'approved'),
+    [scopedPayments],
   );
 
   const paidExpenses = useMemo(
-    () => expenses.filter((e) => e.status === 'paid'),
-    [expenses],
+    () => scopedExpenses.filter((e) => e.status === 'paid'),
+    [scopedExpenses],
   );
 
   const delinquentCharges = useMemo(
-    () => charges.filter((c) => c.status === 'overdue' || c.status === 'pending'),
-    [charges],
+    () => scopedCharges.filter((c) => c.status === 'overdue' || c.status === 'pending'),
+    [scopedCharges],
   );
 
   const supplierExpenses = useMemo(
-    () => expenses.filter((e) => e.expense_kind === 'supplier'),
-    [expenses],
+    () => scopedExpenses.filter((e) => e.expense_kind === 'supplier'),
+    [scopedExpenses],
   );
 
   const payrollExpenses = useMemo(
-    () => expenses.filter((e) => e.expense_kind === 'payroll'),
-    [expenses],
+    () => scopedExpenses.filter((e) => e.expense_kind === 'payroll'),
+    [scopedExpenses],
   );
 
   const morosityByCluster = useMemo(() => {
@@ -261,14 +364,27 @@ export function FinanceDashboard() {
   }, [clusters, delinquentCharges]);
 
   const incomeByCategory = useMemo(() => {
-    const grouped = groupBy(approvedPayments, (p) => {
+    const paymentGroups = groupBy(approvedPayments, (p) => {
       const concept = p.charge?.concept ?? 'Otros ingresos';
       if (concept.toLowerCase().includes('mantenimiento')) return 'Cuotas de mantenimiento';
       if (concept.toLowerCase().includes('extraordinari')) return 'Cuotas extraordinarias';
-      return 'Otros ingresos';
+      return 'Pagos de residentes';
     });
-    return Object.entries(grouped).map(([label, items]) => ({ label, items, total: sumAmount(items) }));
-  }, [approvedPayments]);
+    const manualGroups = groupBy(scopedIncomeEntries, (income) => incomeCategoryLabel(income.category));
+    const paymentRows = Object.entries(paymentGroups).map(([label, items]) => ({
+      label,
+      items,
+      total: sumAmount(items),
+      kind: 'payment' as const,
+    }));
+    const manualRows = Object.entries(manualGroups).map(([label, items]) => ({
+      label,
+      items,
+      total: sumAmount(items),
+      kind: 'manual' as const,
+    }));
+    return [...paymentRows, ...manualRows];
+  }, [approvedPayments, scopedIncomeEntries]);
 
   const expensesByCategory = useMemo(() => {
     const grouped = groupBy(paidExpenses, (e) => e.category);
@@ -318,6 +434,19 @@ export function FinanceDashboard() {
     void load();
   }
 
+  function runCreateIncome(formData: FormData) {
+    setIncomeMessage(null);
+    startIncome(async () => {
+      const result = await createIncome(formData);
+      if (result.error) {
+        setIncomeMessage(result.error);
+        return;
+      }
+      setIncomeMessage('Ingreso registrado.');
+      void load();
+    });
+  }
+
   function runCreateExpense(formData: FormData) {
     setExpenseMessage(null);
     startExpense(async () => {
@@ -357,9 +486,16 @@ export function FinanceDashboard() {
 
       {tab === 'estado' ? (
         <FinanceEstadoPanel
+          condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
+          clusters={clusters}
+          condominiumId={selectedCondoId}
+          clusterId={selectedClusterId}
+          onCondominiumChange={setSelectedCondoId}
+          onClusterChange={setSelectedClusterId}
           funds={funds}
           payments={payments}
           expenses={expenses}
+          incomeEntries={incomeEntries}
           charges={charges}
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
@@ -385,19 +521,99 @@ export function FinanceDashboard() {
       {tab === 'movimientos' ? (
         <div className="space-y-6">
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Registrar egreso</h2>
-            <p className="mt-1 text-sm text-muted">
-              Clasifica el gasto y adjunta el comprobante cuando esté pagado.
-            </p>
-            {expenseMessage ? (
-              <p
-                className={`mt-3 text-sm ${expenseMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
-              >
-                {expenseMessage}
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--text)]">Alcance de movimientos</h2>
+                <p className="mt-1 text-sm text-muted">Filtra ingresos y egresos por condominio o torre.</p>
+              </div>
+              <FinanceScopeFilter
+                condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
+                clusters={clusters}
+                condominiumId={selectedCondoId}
+                clusterId={selectedClusterId}
+                onCondominiumChange={setSelectedCondoId}
+                onClusterChange={setSelectedClusterId}
+              />
+            </div>
+          </GlassCard>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <GlassCard>
+              <h2 className="text-lg font-semibold text-[var(--text)]">Registrar ingreso</h2>
+              <p className="mt-1 text-sm text-muted">
+                Ingresos manuales fuera del flujo de pagos de residentes (donaciones, servicios, etc.).
               </p>
-            ) : null}
-            <form action={runCreateExpense} className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input name="concept" required placeholder="Concepto del gasto" className="glass-input sm:col-span-2" />
+              {incomeMessage ? (
+                <p
+                  className={`mt-3 text-sm ${incomeMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
+                >
+                  {incomeMessage}
+                </p>
+              ) : null}
+              <form action={runCreateIncome} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                <input name="concept" required placeholder="Concepto del ingreso" className="glass-input sm:col-span-2" />
+                <input
+                  name="amount"
+                  required
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Monto"
+                  className="glass-input"
+                />
+                <input
+                  name="income_date"
+                  required
+                  type="date"
+                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  className="glass-input"
+                />
+                <select name="category" required className="glass-input">
+                  {INCOME_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat} className="bg-slate-900">
+                      {incomeCategoryLabel(cat)}
+                    </option>
+                  ))}
+                </select>
+                <select name="fund_type" defaultValue="operating" className="glass-input">
+                  <option value="operating" className="bg-slate-900">
+                    {fundTypeLabel('operating')}
+                  </option>
+                  <option value="reserve" className="bg-slate-900">
+                    {fundTypeLabel('reserve')}
+                  </option>
+                </select>
+                <div className="sm:col-span-2">
+                  <FinanceClusterField clusters={clusters} />
+                </div>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  placeholder="Notas (opcional)"
+                  className="glass-input min-h-[72px] sm:col-span-2"
+                />
+                <button type="submit" disabled={incomePending} className="glass-btn-primary sm:col-span-2">
+                  {incomePending ? 'Guardando…' : 'Registrar ingreso'}
+                </button>
+              </form>
+            </GlassCard>
+
+            <GlassCard>
+              <h2 className="text-lg font-semibold text-[var(--text)]">Registrar egreso</h2>
+              <p className="mt-1 text-sm text-muted">
+                Clasifica el gasto y adjunta el comprobante cuando esté pagado.
+              </p>
+              {expenseMessage ? (
+                <p
+                  className={`mt-3 text-sm ${expenseMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
+                >
+                  {expenseMessage}
+                </p>
+              ) : null}
+              <form action={runCreateExpense} className="mt-4 grid gap-3 sm:grid-cols-2">
+                <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                <input name="concept" required placeholder="Concepto del gasto" className="glass-input sm:col-span-2" />
               <input
                 name="amount"
                 required
@@ -453,6 +669,9 @@ export function FinanceDashboard() {
                 placeholder="Proveedor o empleado (si aplica)"
                 className="glass-input sm:col-span-2"
               />
+              <div className="sm:col-span-2">
+                <FinanceClusterField clusters={clusters} />
+              </div>
               <textarea
                 name="notes"
                 rows={2}
@@ -465,7 +684,7 @@ export function FinanceDashboard() {
                   inputName="evidence_path"
                   label="Comprobante de pago"
                   hint="Imagen o PDF del gasto comprobado."
-                  buildPath={(ext) => expenseEvidencePath(DEMO_CONDO_ID, expenseFileId, ext)}
+                  buildPath={(ext) => expenseEvidencePath(selectedCondoId, expenseFileId, ext)}
                 />
               </div>
               <button type="submit" disabled={expensePending} className="glass-btn-primary sm:col-span-2">
@@ -473,6 +692,7 @@ export function FinanceDashboard() {
               </button>
             </form>
           </GlassCard>
+          </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
           <GlassCard>
@@ -489,14 +709,21 @@ export function FinanceDashboard() {
                       <span className="text-sm font-bold text-accent">{formatCurrency(group.total)}</span>
                     </div>
                     <ul className="space-y-2">
-                      {group.items.map((payment) => (
-                        <li key={payment.id} className="glass-card-deep flex justify-between gap-3 px-3 py-2 text-sm">
-                          <span className="text-[var(--text)]">
-                            {payment.unit?.identifier} · {payment.charge?.concept}
-                          </span>
-                          <span className="shrink-0 text-muted">{formatCurrency(Number(payment.amount))}</span>
-                        </li>
-                      ))}
+                      {group.kind === 'payment'
+                        ? group.items.map((payment) => (
+                            <li key={payment.id} className="glass-card-deep flex justify-between gap-3 px-3 py-2 text-sm">
+                              <span className="text-[var(--text)]">
+                                {payment.unit?.identifier} · {payment.charge?.concept}
+                              </span>
+                              <span className="shrink-0 text-muted">{formatCurrency(Number(payment.amount))}</span>
+                            </li>
+                          ))
+                        : group.items.map((income) => (
+                            <li key={income.id} className="glass-card-deep flex justify-between gap-3 px-3 py-2 text-sm">
+                              <span className="text-[var(--text)]">{income.concept}</span>
+                              <span className="shrink-0 text-muted">{formatCurrency(Number(income.amount))}</span>
+                            </li>
+                          ))}
                     </ul>
                   </div>
                 ))
