@@ -74,11 +74,6 @@ interface ClusterOption {
   name: string;
 }
 
-interface CondominiumOption {
-  id: string;
-  name: string;
-}
-
 export function FinanceEstadoPanel({
   clusters,
   clusterId,
