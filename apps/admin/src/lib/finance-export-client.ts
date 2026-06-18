@@ -128,8 +128,8 @@ export async function exportFinancialReportPdf(report: FinancialReportExport): P
       ...(report.collectionRate !== null
         ? [['Tasa de cobranza', `${report.collectionRate}%`]]
         : []),
-      ['Por cobrar (morosos)', formatExportAmount(report.totalReceivable)],
-      ['Adeudos a proveedores', formatExportAmount(report.totalPayables)],
+      ['Por cobrar (vencido)', formatExportAmount(report.totalReceivable)],
+      ['Proveedores pendientes', formatExportAmount(report.totalPayables)],
       ...report.agingRows.map((row) => [row.label, formatExportAmount(row.amount)]),
       ...report.fundBalances.map((row) => [
         `${row.label} (al ${row.asOf})`,
