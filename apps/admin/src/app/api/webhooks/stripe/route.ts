@@ -50,9 +50,13 @@ export async function POST(request: Request) {
           })
           .eq('id', payment.id);
 
-        const reviewerId = session.metadata?.user_id;
-        if (reviewerId) {
-          await approvePayment(admin, payment.id, reviewerId);
+        const result = await approvePayment(
+          admin,
+          payment.id,
+          session.metadata?.user_id ?? null,
+        );
+        if ('error' in result) {
+          console.error('[stripe/webhook] approvePayment failed:', result.error);
         }
       }
     }
