@@ -102,6 +102,88 @@ export function TrendBarChart({
   );
 }
 
+export function SignedBarChart({
+  bars,
+  valueFormatter = (v) => formatCurrency(v),
+}: {
+  bars: ChartBar[];
+  valueFormatter?: (value: number) => string;
+}) {
+  if (bars.every((bar) => bar.value === 0)) {
+    return <p className="py-8 text-center text-sm text-subtle">Sin flujo en el periodo.</p>;
+  }
+
+  const maxAbs = Math.max(...bars.map((bar) => Math.abs(bar.value)), 1);
+
+  return (
+    <div className="flex h-48 items-center gap-2">
+      {bars.map((bar) => {
+        const positive = bar.value >= 0;
+        const height = Math.max(8, (Math.abs(bar.value) / maxAbs) * 45);
+        return (
+          <div key={bar.label} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+            <span
+              className={`text-[10px] font-semibold ${positive ? 'text-accent' : 'text-red-300'}`}
+            >
+              {bar.value !== 0 ? valueFormatter(bar.value) : ''}
+            </span>
+            <div className="flex h-24 w-full items-center justify-center">
+              <div
+                className={`w-full max-w-[2.5rem] rounded-lg ${
+                  positive
+                    ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
+                    : 'bg-gradient-to-b from-red-600 to-red-400'
+                }`}
+                style={{ height: `${height}%` }}
+                title={`${bar.label}: ${valueFormatter(bar.value)}`}
+              />
+            </div>
+            <span className="text-center text-[10px] text-subtle">{bar.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function HorizontalBarChart({
+  bars,
+  maxValue = 100,
+  valueFormatter = (v) => `${v}%`,
+}: {
+  bars: ChartBar[];
+  maxValue?: number;
+  valueFormatter?: (value: number) => string;
+}) {
+  if (bars.length === 0 || bars.every((bar) => bar.value === 0)) {
+    return <p className="py-8 text-center text-sm text-subtle">Sin datos para mostrar.</p>;
+  }
+
+  const scale = Math.max(maxValue ?? 0, ...bars.map((bar) => bar.value), 1);
+
+  return (
+    <ul className="space-y-3">
+      {bars.map((bar) => (
+        <li key={bar.label}>
+          <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+            <span className="truncate text-[var(--text)]">{bar.label}</span>
+            <span className="shrink-0 text-muted">
+              {valueFormatter(bar.value)}
+              {bar.meta ? <span className="text-subtle"> · {bar.meta}</span> : null}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+              style={{ width: `${Math.max(4, (bar.value / scale) * 100)}%` }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function ComparisonBarChart({
   income,
   expenses,

@@ -31,12 +31,13 @@ import { CuotasPanel } from '@/components/CuotasPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
+import { UnitStatementPanel } from '@/components/UnitStatementPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
 
-type FinanceTab = 'estado' | 'cuotas' | 'movimientos' | 'proveedores' | 'nomina' | 'morosidad';
+type FinanceTab = 'estado' | 'cuotas' | 'movimientos' | 'cuentas' | 'proveedores' | 'nomina' | 'morosidad';
 
 interface UnitOption {
   id: string;
@@ -62,6 +63,8 @@ interface FundBalanceRow {
 
 interface PaymentRow {
   id: string;
+  charge_id: string;
+  unit_id: string;
   amount: number;
   status: PaymentStatus;
   proof_url: string | null;
@@ -78,6 +81,7 @@ interface PaymentRow {
 
 interface ChargeRow {
   id: string;
+  unit_id: string;
   concept: string;
   amount: number;
   due_date: string;
@@ -140,6 +144,7 @@ const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'estado', label: 'Estado financiero' },
   { id: 'cuotas', label: 'Cuotas' },
   { id: 'movimientos', label: 'Ingresos y egresos' },
+  { id: 'cuentas', label: 'Estado de cuenta' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'nomina', label: 'Empleados' },
   { id: 'morosidad', label: 'Morosidad' },
@@ -243,7 +248,7 @@ export function FinanceDashboard() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
+          'id, unit_id, concept, amount, due_date, status, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
         )
         .eq('condominium_id', condoId)
         .order('due_date', { ascending: false }),
@@ -264,7 +269,7 @@ export function FinanceDashboard() {
       supabase
         .from('payments')
         .select(
-          'id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date)',
+          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -821,6 +826,16 @@ export function FinanceDashboard() {
           </GlassCard>
           </div>
         </div>
+      ) : null}
+
+      {tab === 'cuentas' ? (
+        <UnitStatementPanel
+          units={units}
+          clusters={clusters}
+          charges={scopedCharges}
+          payments={scopedPayments}
+          clusterFilterId={selectedClusterId}
+        />
       ) : null}
 
       {tab === 'proveedores' ? (

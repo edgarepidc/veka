@@ -4,18 +4,30 @@ import { useMemo, useState } from 'react';
 import type { ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
 import {
   EXPENSE_CHART_COLORS,
+  cashFlowBars,
+  collectionRateByCluster,
   dateInMonth,
   dateInYear,
+  delinquencyAgingBars,
   expenseCategoryLabel,
   formatCurrency,
+  formatPercentChange,
   fundTypeLabel,
+  incomeBreakdownSlices,
   matchesFinanceClusterFilter,
   monthLabel,
   parseYearMonth,
   paymentPeriodDate,
+  percentChange,
 } from '@veka/shared';
 
-import { ComparisonBarChart, ExpensePieChart, TrendBarChart } from '@/components/FinanceCharts';
+import {
+  ComparisonBarChart,
+  ExpensePieChart,
+  HorizontalBarChart,
+  SignedBarChart,
+  TrendBarChart,
+} from '@/components/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface FundBalanceRow {
@@ -192,6 +204,52 @@ export function FinanceEstadoPanel({
       ? (clusters.find((cluster) => cluster.id === clusterId)?.name ?? 'Cluster')
       : 'Todo el condominio';
 
+    const prevYear = periodMode === 'month' ? (month === 1 ? year - 1 : year) : year - 1;
+    const prevMonth = periodMode === 'month' ? (month === 1 ? 12 : month - 1) : month;
+
+    const previousIncome = (() => {
+      const prevPayments = approved.filter((p) =>
+        periodMode === 'year'
+          ? dateInYear(paymentPeriodDate(p.paid_at, p.created_at), prevYear)
+          : dateInMonth(paymentPeriodDate(p.paid_at, p.created_at), prevYear, prevMonth),
+      );
+      const prevManual = scopeIncomeEntries.filter((income) =>
+        periodMode === 'year'
+          ? dateInYear(income.income_date, prevYear)
+          : dateInMonth(income.income_date, prevYear, prevMonth),
+      );
+      return (
+        prevPayments.reduce((s, p) => s + Number(p.amount), 0) +
+        prevManual.reduce((s, income) => s + Number(income.amount), 0)
+      );
+    })();
+
+    const previousExpenses = (() => {
+      if (periodMode === 'year') {
+        return paidExpenses
+          .filter((e) => dateInYear(e.expense_date, prevYear))
+          .reduce((s, e) => s + Number(e.amount), 0);
+      }
+      return paidExpenses
+        .filter((e) => dateInMonth(e.expense_date, prevYear, prevMonth))
+        .reduce((s, e) => s + Number(e.amount), 0);
+    })();
+
+    const incomeSlices = incomeBreakdownSlices(
+      approved.filter((p) => inPeriod(paymentPeriodDate(p.paid_at, p.created_at))),
+      scopeIncomeEntries.filter((income) => inPeriod(income.income_date)),
+    );
+    const collectionBars = collectionRateByCluster(scopeCharges, clusters);
+    const agingBars = delinquencyAgingBars(
+      scopeCharges.filter((c) => c.status === 'overdue' || c.status === 'pending'),
+    );
+    const cashFlow = cashFlowBars(
+      scopePayments,
+      scopeExpenses,
+      scopeIncomeEntries,
+      trendMonths,
+    );
+
     return {
       periodIncome,
       periodExpenseTotal,
@@ -201,6 +259,13 @@ export function FinanceEstadoPanel({
       collectedCount: collected.length,
       pieSlices,
       paymentTrend,
+      incomeSlices,
+      collectionBars,
+      agingBars,
+      cashFlow,
+      incomeChange: percentChange(periodIncome, previousIncome),
+      expenseChange: percentChange(periodExpenseTotal, previousExpenses),
+      balanceChange: percentChange(periodIncome - periodExpenseTotal, previousIncome - previousExpenses),
       periodLabel:
         periodMode === 'year' ? String(year) : monthLabel(year, month),
       scopeLabel: clusterLabel,
@@ -261,12 +326,24 @@ export function FinanceEstadoPanel({
       </GlassCard>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Ingresos del periodo" value={formatCurrency(analytics.periodIncome)} tone="green" />
-        <SummaryCard label="Egresos del periodo" value={formatCurrency(analytics.periodExpenseTotal)} tone="neutral" />
+        <SummaryCard
+          label="Ingresos del periodo"
+          value={formatCurrency(analytics.periodIncome)}
+          tone="green"
+          change={analytics.incomeChange}
+        />
+        <SummaryCard
+          label="Egresos del periodo"
+          value={formatCurrency(analytics.periodExpenseTotal)}
+          tone="neutral"
+          change={analytics.expenseChange}
+          invertChange
+        />
         <SummaryCard
           label="Balance del periodo"
           value={formatCurrency(analytics.periodBalance)}
           tone={analytics.periodBalance >= 0 ? 'green' : 'red'}
+          change={analytics.balanceChange}
         />
         <SummaryCard
           label="Tasa de cobranza"
@@ -305,10 +382,38 @@ export function FinanceEstadoPanel({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Ingresos por origen</h3>
+          <p className="mt-1 text-sm text-muted">Cuotas, extraordinarias y otros ingresos del periodo.</p>
+          <div className="mt-4">
+            <ExpensePieChart slices={analytics.incomeSlices} />
+          </div>
+        </GlassCard>
+
+        <GlassCard>
           <h3 className="text-base font-semibold text-[var(--text)]">Egresos por categoría</h3>
           <p className="mt-1 text-sm text-muted">Distribución de gastos comprobados en el periodo.</p>
           <div className="mt-4">
             <ExpensePieChart slices={analytics.pieSlices} />
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Cobranza por torre</h3>
+          <p className="mt-1 text-sm text-muted">Porcentaje de cuotas pagadas en el alcance seleccionado.</p>
+          <div className="mt-4">
+            <HorizontalBarChart bars={analytics.collectionBars} />
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Antigüedad de morosidad</h3>
+          <p className="mt-1 text-sm text-muted">Monto vencido agrupado por días de atraso.</p>
+          <div className="mt-4">
+            <HorizontalBarChart
+              bars={analytics.agingBars}
+              maxValue={0}
+              valueFormatter={(v) => formatCurrency(v)}
+            />
           </div>
         </GlassCard>
 
@@ -319,6 +424,14 @@ export function FinanceEstadoPanel({
           </p>
           <div className="mt-4">
             <TrendBarChart bars={analytics.paymentTrend} />
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Flujo de caja neto</h3>
+          <p className="mt-1 text-sm text-muted">Ingresos menos egresos por mes (positivo = superávit).</p>
+          <div className="mt-4">
+            <SignedBarChart bars={analytics.cashFlow} />
           </div>
         </GlassCard>
       </div>
@@ -359,11 +472,15 @@ function SummaryCard({
   value,
   sub,
   tone,
+  change,
+  invertChange = false,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone: 'green' | 'neutral' | 'amber' | 'red';
+  change?: number | null;
+  invertChange?: boolean;
 }) {
   const toneClass =
     tone === 'green'
@@ -374,10 +491,27 @@ function SummaryCard({
           ? 'text-red-200'
           : 'text-[var(--text)]';
 
+  const changeLabel = formatPercentChange(change ?? null);
+  const changePositive = (change ?? 0) > 0;
+  const changeGood = invertChange ? !changePositive : changePositive;
+  const changeClass =
+    change === null || change === undefined
+      ? 'text-subtle'
+      : change === 0
+        ? 'text-subtle'
+        : changeGood
+          ? 'text-emerald-300'
+          : 'text-red-300';
+
   return (
     <div className="glass-card p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</p>
       <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
+      {change != null ? (
+        <p className={`mt-1 text-xs font-semibold ${changeClass}`}>
+          vs periodo anterior {changeLabel}
+        </p>
+      ) : null}
       {sub ? <p className="mt-1 text-xs text-subtle">{sub}</p> : null}
     </div>
   );

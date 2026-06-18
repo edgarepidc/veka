@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -9,12 +9,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  buildUnitStatementWithBalance,
   chargeDisplaySubtitle,
   chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
   paymentStatusLabel,
+  unitBalanceDue,
 } from '@veka/shared';
 import type { FeeSourceRef } from '@veka/shared';
 
@@ -53,6 +55,7 @@ interface PaymentRow {
   amount: number;
   status: 'pending_review' | 'approved' | 'rejected';
   created_at: string;
+  paid_at: string | null;
 }
 
 interface FundBalance {
@@ -96,10 +99,9 @@ export default function FinanceScreen() {
         .order('due_date', { ascending: false }),
       supabase
         .from('payments')
-        .select('id, charge_id, amount, status, created_at')
+        .select('id, charge_id, amount, status, created_at, paid_at')
         .eq('unit_id', primary.unit_id)
-        .order('created_at', { ascending: false })
-        .limit(10),
+        .order('created_at', { ascending: false }),
       supabase
         .from('fund_balances')
         .select('fund_type, balance')
@@ -140,6 +142,42 @@ export default function FinanceScreen() {
     setRefreshing(true);
     void loadData();
   };
+
+  const statement = useMemo(
+    () =>
+      buildUnitStatementWithBalance(
+        charges.map((charge) => ({
+          id: charge.id,
+          concept: charge.concept,
+          amount: Number(charge.amount),
+          due_date: charge.due_date,
+          status: charge.status,
+        })),
+        payments.map((payment) => ({
+          id: payment.id,
+          charge_id: payment.charge_id,
+          amount: Number(payment.amount),
+          status: payment.status,
+          paid_at: payment.paid_at,
+          created_at: payment.created_at,
+        })),
+      ),
+    [charges, payments],
+  );
+
+  const balanceDue = useMemo(
+    () =>
+      unitBalanceDue(
+        charges.map((charge) => ({
+          id: charge.id,
+          concept: charge.concept,
+          amount: Number(charge.amount),
+          due_date: charge.due_date,
+          status: charge.status,
+        })),
+      ),
+    [charges],
+  );
 
   if (membershipLoading || loading) {
     return (
@@ -192,6 +230,12 @@ export default function FinanceScreen() {
             valueColor={theme.accent2}
           />
           <StatPill
+            label="Saldo pendiente"
+            value={formatCurrency(balanceDue)}
+            sub={balanceDue > 0 ? 'por pagar' : 'al corriente'}
+            valueColor={balanceDue > 0 ? theme.danger : theme.accent}
+          />
+          <StatPill
             label="Pagos"
             value={String(pendingPayments)}
             sub="en revisión"
@@ -224,6 +268,40 @@ export default function FinanceScreen() {
             </GlassCard>
           </View>
         ) : null}
+
+        <SectionLabel title="Mi estado de cuenta" />
+        <View style={styles.section}>
+          <GlassCard>
+            <Text style={[styles.cardLabel, { color: theme.textSubtle, marginBottom: 8 }]}>MOVIMIENTOS</Text>
+            {statement.lines.length === 0 ? (
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin movimientos registrados.</Text>
+            ) : (
+              statement.lines.map((line) => (
+                <View key={line.id} style={styles.ledgerRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cardTitle, { color: theme.text, fontSize: 14 }]}>{line.concept}</Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{line.date}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    {line.debit > 0 ? (
+                      <Text style={{ color: theme.danger, fontWeight: '700', fontSize: 13 }}>
+                        +{formatCurrency(line.debit)}
+                      </Text>
+                    ) : null}
+                    {line.credit > 0 ? (
+                      <Text style={{ color: theme.accent, fontWeight: '700', fontSize: 13 }}>
+                        −{formatCurrency(line.credit)}
+                      </Text>
+                    ) : null}
+                    <Text style={{ color: theme.textSubtle, fontSize: 11, marginTop: 2 }}>
+                      Saldo {formatCurrency(line.runningBalance)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </GlassCard>
+        </View>
 
         <SectionLabel title="Mis cargos" />
         <View style={styles.section}>
@@ -322,4 +400,11 @@ const styles = StyleSheet.create({
   fundAmount: { fontSize: 22, fontWeight: '700', marginTop: 6 },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   emptyText: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 6 },
+  ledgerRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
 });

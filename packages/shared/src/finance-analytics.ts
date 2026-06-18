@@ -41,6 +41,7 @@ export interface ChartSlice {
 export interface ChartBar {
   label: string;
   value: number;
+  meta?: string;
 }
 
 export const EXPENSE_CHART_COLORS = [
