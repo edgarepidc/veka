@@ -1,6 +1,5 @@
 import { isAdminRole, type MembershipRole } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/server';
 
 export interface AdminSession {
@@ -15,6 +14,8 @@ export interface AdminSession {
     role: MembershipRole;
     condominium_id: string;
     condominium_name: string;
+    unit_id: string | null;
+    unit_identifier: string | null;
   } | null;
   isAdmin: boolean;
 }
@@ -31,17 +32,20 @@ export async function loadAdminSession(): Promise<AdminSession | null> {
     supabase.from('profiles').select('full_name, phone, avatar_url').eq('id', user.id).maybeSingle(),
     supabase
       .from('memberships')
-      .select('role, condominium_id, condominium:condominiums(name)')
+      .select('role, condominium_id, unit_id, condominium:condominiums(name), unit:units(identifier)')
       .eq('user_id', user.id)
-      .eq('condominium_id', DEMO_CONDO_ID)
       .eq('status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle(),
   ]);
 
   const membershipRow = membershipRes.data as {
     role: MembershipRole;
     condominium_id: string;
+    unit_id: string | null;
     condominium: { name: string } | null;
+    unit: { identifier: string } | null;
   } | null;
 
   const role = membershipRow?.role ?? 'resident';
@@ -59,6 +63,8 @@ export async function loadAdminSession(): Promise<AdminSession | null> {
           role: membershipRow.role,
           condominium_id: membershipRow.condominium_id,
           condominium_name: membershipRow.condominium?.name ?? 'Condominio',
+          unit_id: membershipRow.unit_id,
+          unit_identifier: membershipRow.unit?.identifier ?? null,
         }
       : null,
     isAdmin: isAdminRole(role),

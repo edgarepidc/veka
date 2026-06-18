@@ -53,7 +53,7 @@ export function CondominiumForm({
             setMessage(null);
             start(async () => {
               const result = await updateCondominium(formData);
-              setMessage(result.error ?? 'Marca actualizada correctamente.');
+              setMessage('error' in result ? result.error : 'Marca actualizada correctamente.');
             });
           }}
         >
@@ -125,7 +125,7 @@ export function CondominiumForm({
             setMessage(null);
             start(async () => {
               const result = await updateCondominium(formData);
-              setMessage(result.error ?? 'Condominio actualizado correctamente.');
+              setMessage('error' in result ? result.error : 'Condominio actualizado correctamente.');
             });
           }}
         >

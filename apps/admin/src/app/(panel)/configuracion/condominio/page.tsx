@@ -1,10 +1,12 @@
 import { ConfigNav } from '@/components/ConfigNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { loadCondominium } from '@/lib/load-condominium';
+import { requireAdminSession } from '@/lib/require-admin';
 
 import { CondominiumForm } from './CondominiumForm';
 
 export default async function CondominioConfigPage() {
+  await requireAdminSession();
   const condo = await loadCondominium();
 
   if (!condo) {

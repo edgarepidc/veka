@@ -1,7 +1,10 @@
 import { FinanceDashboard } from '@/components/FinanceDashboard';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { requireAdminSession } from '@/lib/require-admin';
 
-export default function FinanzasPage() {
+export default async function FinanzasPage() {
+  await requireAdminSession();
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader

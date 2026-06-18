@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const NAV = [
+import { usePanelSession } from '@/components/SessionProvider';
+
+const ADMIN_NAV = [
   { href: '/', label: 'Inicio', icon: '🏠' },
   { href: '/finanzas', label: 'Finanzas', icon: '💳' },
   { href: '/comunidad', label: 'Comunidad', icon: '💬' },
@@ -13,18 +15,26 @@ const NAV = [
   { href: '/configuracion/perfil', label: 'Configuración', icon: '⚙️' },
 ];
 
+const RESIDENT_NAV = [
+  { href: '/mi-cuenta', label: 'Mi cuenta', icon: '💳' },
+  { href: '/configuracion/perfil', label: 'Mi perfil', icon: '👤' },
+];
+
 function isNavActive(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
+  if (href === '/mi-cuenta') return pathname === '/mi-cuenta';
   if (href.startsWith('/configuracion')) return pathname.startsWith('/configuracion');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AdminNav() {
   const pathname = usePathname();
+  const session = usePanelSession();
+  const nav = session.isAdmin ? ADMIN_NAV : RESIDENT_NAV;
 
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3">
-      {NAV.map((item) => {
+      {nav.map((item) => {
         const active = isNavActive(pathname, item.href);
         return (
           <Link

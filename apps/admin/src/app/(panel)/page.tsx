@@ -1,10 +1,12 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { APP_NAME } from '@veka/shared';
 
 import { loadAdminSession } from '@/lib/load-admin-session';
+import { residentHomePath } from '@/lib/route-access';
 
 const modules = [
   { title: 'Finanzas', description: 'Cuotas, pagos, egresos y fondos.', href: '/finanzas', icon: '💳' },
@@ -27,7 +29,10 @@ const modules = [
 
 export default async function AdminHomePage() {
   const session = await loadAdminSession();
-  const condoName = session?.membership?.condominium_name ?? 'Condominio';
+  if (!session) redirect('/login');
+  if (!session.isAdmin) redirect(residentHomePath());
+
+  const condoName = session.membership?.condominium_name ?? 'Condominio';
 
   return (
     <div className="mx-auto max-w-6xl">

@@ -8,9 +8,13 @@ import {
   parseCondominiumSettings,
   type CondominiumSettings,
 } from '@/lib/condominium-settings';
+import { assertAdminAction } from '@/lib/require-admin';
 import { createClient } from '@/lib/supabase/server';
 
 export async function updateCondominium(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const supabase = await createClient();
   const {
     data: { user },

@@ -62,7 +62,9 @@ export function AdminShell({
       <div className="flex min-h-screen">
         <aside className="glass-sidebar hidden w-64 shrink-0 lg:flex lg:flex-col">
           <div className="border-b border-white/10 px-5 py-6">
-            <p className="text-xs font-semibold uppercase tracking-widest text-accent">Panel admin</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-accent">
+              {session.isAdmin ? 'Panel admin' : 'Portal residente'}
+            </p>
             <div className="mt-2 flex items-center gap-3">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -111,9 +113,12 @@ export function AdminShell({
           </header>
 
           {!session.isAdmin ? (
-            <div className="border-b border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 sm:px-6">
-              Tu cuenta no tiene rol de administrador. Puedes editar tu perfil; las acciones operativas
-              requieren permisos de admin.
+            <div className="border-b border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 sm:px-6">
+              Estás en el portal de residente. Para pagar cuotas ve a{' '}
+              <a href="/mi-cuenta" className="font-semibold underline">
+                Mi cuenta
+              </a>
+              . La configuración del condominio es solo para administradores.
             </div>
           ) : null}
 
