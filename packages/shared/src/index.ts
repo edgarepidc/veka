@@ -3,6 +3,7 @@ export * from './constants';
 export * from './fees';
 export * from './finance';
 export * from './finance-analytics';
+export * from './finance-export';
 export * from './finance-dashboard';
 export * from './finance-scope';
 export * from './maintenance';

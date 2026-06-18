@@ -20,15 +20,20 @@ import {
   expenseKindLabel,
   expenseStatusLabel,
   formatCurrency,
+  formatExportDate,
   fundTypeLabel,
   incomeCategoryLabel,
   matchesFinanceClusterFilter,
+  paymentPeriodDate,
+  paymentStatusLabel,
+  type MovementExportRow,
 } from '@veka/shared';
 import type { RecurringFeeStatus } from '@veka/shared';
 
 import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
 import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
+import { ExportMenu } from '@/components/ExportMenu';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
@@ -37,6 +42,10 @@ import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import {
+  downloadMovementsCsv,
+  exportMovementsPdf,
+} from '@/lib/finance-export-client';
 
 type FinanceTab =
   | 'estado'
@@ -487,6 +496,75 @@ export function FinanceDashboard() {
     return clusters.find((cluster) => cluster.id === selectedClusterId)?.name ?? 'Torre';
   }, [clusters, selectedClusterId]);
 
+  const condominiumName = useMemo(
+    () => condominiums.find((condo) => condo.id === selectedCondoId)?.name ?? 'Condominio',
+    [condominiums, selectedCondoId],
+  );
+
+  const movementExportRows = useMemo(() => {
+    const clusterNameById = new Map(clusters.map((cluster) => [cluster.id, cluster.name]));
+    const scopeName = (clusterId: string | null) => {
+      if (!clusterId) return 'Condominio';
+      return clusterNameById.get(clusterId) ?? 'Torre';
+    };
+
+    const rows: MovementExportRow[] = [];
+
+    for (const payment of approvedPayments) {
+      const date = paymentPeriodDate(payment.paid_at, payment.created_at).slice(0, 10);
+      rows.push({
+        movementType: 'Ingreso',
+        date,
+        concept: `${payment.unit?.identifier ?? 'Unidad'} · ${payment.charge?.concept ?? 'Pago'}`,
+        category: 'Cuotas',
+        amount: Number(payment.amount),
+        fund: fundTypeLabel('operating'),
+        scope: scopeName(payment.unit?.cluster_id ?? null),
+        status: paymentStatusLabel(payment.status),
+        reference: payment.id,
+      });
+    }
+
+    for (const income of scopedIncomeEntries) {
+      rows.push({
+        movementType: 'Ingreso',
+        date: income.income_date,
+        concept: income.concept,
+        category: incomeCategoryLabel(income.category),
+        amount: Number(income.amount),
+        fund: fundTypeLabel(income.fund_type),
+        scope: scopeName(income.cluster_id),
+        status: 'Registrado',
+        reference: income.id,
+      });
+    }
+
+    for (const expense of scopedExpenses) {
+      rows.push({
+        movementType: 'Egreso',
+        date: expense.expense_date,
+        concept: expense.concept,
+        category: expenseCategoryLabel(expense.category),
+        amount: Number(expense.amount),
+        fund: fundTypeLabel(expense.fund_type),
+        scope: scopeName(expense.cluster_id),
+        status: expenseStatusLabel(expense.status),
+        reference: expense.id,
+      });
+    }
+
+    return rows.sort((a, b) => b.date.localeCompare(a.date));
+  }, [approvedPayments, clusters, scopedExpenses, scopedIncomeEntries]);
+
+  const movementsExportMeta = useMemo(
+    () => ({
+      condominiumName,
+      scopeLabel,
+      generatedAt: formatExportDate(),
+    }),
+    [condominiumName, scopeLabel],
+  );
+
   async function reviewPayment(
     id: string,
     action: 'approve' | 'reject',
@@ -585,6 +663,7 @@ export function FinanceDashboard() {
 
       {tab === 'estado' ? (
         <FinanceEstadoPanel
+          condominiumName={condominiumName}
           clusters={clusters}
           clusterId={selectedClusterId}
           pendingReviewCount={pendingReviewCount}
@@ -618,6 +697,20 @@ export function FinanceDashboard() {
 
       {tab === 'movimientos' ? (
         <div className="space-y-6">
+          <GlassCard className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--text)]">Libro de movimientos</h2>
+              <p className="mt-1 text-sm text-muted">
+                Exporta ingresos y egresos del alcance actual ({scopeLabel}).
+              </p>
+            </div>
+            <ExportMenu
+              disabled={movementExportRows.length === 0}
+              onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
+              onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
+            />
+          </GlassCard>
+
           <ResidentPaymentsReview
             payments={scopedPayments}
             onReview={reviewPayment}
@@ -878,6 +971,7 @@ export function FinanceDashboard() {
 
       {tab === 'cuentas' ? (
         <UnitStatementPanel
+          condominiumName={condominiumName}
           units={units}
           clusters={clusters}
           charges={scopedCharges}

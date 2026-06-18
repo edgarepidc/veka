@@ -13,6 +13,8 @@
     "@supabase/ssr": "^0.12.0",
     "@veka/shared": "*",
     "@veka/supabase": "*",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"

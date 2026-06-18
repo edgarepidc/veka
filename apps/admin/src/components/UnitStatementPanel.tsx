@@ -6,10 +6,17 @@ import {
   buildUnitStatementWithBalance,
   chargeStatusLabel,
   formatCurrency,
+  formatExportDate,
   paymentStatusLabel,
+  type UnitStatementExport,
 } from '@veka/shared';
 
+import { ExportMenu } from '@/components/ExportMenu';
 import { GlassCard } from '@/components/ui/GlassCard';
+import {
+  downloadUnitStatementCsv,
+  exportUnitStatementPdf,
+} from '@/lib/finance-export-client';
 
 interface UnitOption {
   id: string;
@@ -43,12 +50,14 @@ interface PaymentRow {
 }
 
 export function UnitStatementPanel({
+  condominiumName,
   units,
   clusters,
   charges,
   payments,
   clusterFilterId,
 }: {
+  condominiumName: string;
   units: UnitOption[];
   clusters: ClusterRow[];
   charges: ChargeRow[];
@@ -93,6 +102,30 @@ export function UnitStatementPanel({
 
   const activeUnit = units.find((u) => u.id === activeUnitId);
 
+  const exportStatement = useMemo<UnitStatementExport | null>(() => {
+    if (!activeUnit) return null;
+    return {
+      condominiumName,
+      unitIdentifier: activeUnit.identifier,
+      clusterName: activeUnit.cluster_id
+        ? (clusterMap.get(activeUnit.cluster_id) ?? '—')
+        : 'General',
+      balanceDue: statement.balanceDue,
+      generatedAt: formatExportDate(),
+      lines: statement.lines.map((line) => ({
+        date: line.date,
+        concept: line.concept,
+        debit: line.debit,
+        credit: line.credit,
+        runningBalance: line.runningBalance,
+        status:
+          line.kind === 'charge'
+            ? chargeStatusLabel(line.status as ChargeStatus)
+            : paymentStatusLabel(line.status as PaymentStatus),
+      })),
+    };
+  }, [activeUnit, clusterMap, condominiumName, statement]);
+
   return (
     <div className="space-y-6">
       <GlassCard>
@@ -117,6 +150,13 @@ export function UnitStatementPanel({
               </option>
             ))}
           </select>
+          {exportStatement ? (
+            <ExportMenu
+              disabled={exportStatement.lines.length === 0}
+              onCsv={() => downloadUnitStatementCsv(exportStatement)}
+              onPdf={() => exportUnitStatementPdf(exportStatement)}
+            />
+          ) : null}
         </div>
 
         {activeUnit ? (

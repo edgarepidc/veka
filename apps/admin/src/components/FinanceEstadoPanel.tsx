@@ -13,6 +13,7 @@ import {
   delinquencyAgingBars,
   expenseCategoryLabel,
   formatCurrency,
+  formatExportDate,
   formatPercentChange,
   fundTypeLabel,
   incomeBreakdownSlices,
@@ -21,8 +22,10 @@ import {
   parseYearMonth,
   paymentPeriodDate,
   percentChange,
+  type FinancialReportExport,
 } from '@veka/shared';
 
+import { ExportMenu } from '@/components/ExportMenu';
 import {
   BudgetVsActualChart,
   ComparisonBarChart,
@@ -32,6 +35,10 @@ import {
   TrendBarChart,
 } from '@/components/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
+import {
+  downloadFinancialReportCsv,
+  exportFinancialReportPdf,
+} from '@/lib/finance-export-client';
 
 interface FundBalanceRow {
   fund_type: FundType;
@@ -91,6 +98,7 @@ interface AnnualBudgetRow {
 }
 
 export function FinanceEstadoPanel({
+  condominiumName,
   clusters,
   clusterId,
   pendingReviewCount,
@@ -105,6 +113,7 @@ export function FinanceEstadoPanel({
   totalReceivable,
   totalPayables,
 }: {
+  condominiumName: string;
   clusters: ClusterOption[];
   clusterId: string;
   pendingReviewCount: number;
@@ -321,6 +330,71 @@ export function FinanceEstadoPanel({
     ],
   );
 
+  const exportReport = useMemo<FinancialReportExport>(
+    () => ({
+      condominiumName,
+      periodLabel: analytics.periodLabel,
+      scopeLabel: analytics.scopeLabel,
+      generatedAt: formatExportDate(),
+      kpis: [
+        {
+          label: 'Ingresos del periodo',
+          value: formatCurrency(analytics.periodIncome),
+          change: formatPercentChange(analytics.incomeChange),
+        },
+        {
+          label: 'Egresos del periodo',
+          value: formatCurrency(analytics.periodExpenseTotal),
+          change: formatPercentChange(analytics.expenseChange),
+        },
+        {
+          label: 'Balance del periodo',
+          value: formatCurrency(analytics.periodBalance),
+          change: formatPercentChange(analytics.balanceChange),
+        },
+        {
+          label: 'Tasa de cobranza',
+          value: analytics.collectionRate !== null ? `${analytics.collectionRate}%` : 'N/D',
+          change: null,
+        },
+      ],
+      incomeByCategory: analytics.incomeSlices.map((slice) => ({
+        label: slice.label,
+        amount: slice.value,
+      })),
+      expenseByCategory: analytics.pieSlices.map((slice) => ({
+        label: slice.label,
+        amount: slice.value,
+      })),
+      budgetRows: budgetSummary.expenseRows.map((row) => ({
+        label: row.label,
+        budget: row.budget,
+        actual: row.actual,
+        variance: row.variance,
+      })),
+      fundBalances: funds.map((fund) => ({
+        label: fundTypeLabel(fund.fund_type),
+        amount: Number(fund.balance),
+        asOf: fund.as_of_date,
+      })),
+      agingRows: analytics.agingBars.map((bar) => ({
+        label: bar.label,
+        amount: bar.value,
+      })),
+      totalReceivable,
+      totalPayables,
+      collectionRate: analytics.collectionRate,
+    }),
+    [
+      analytics,
+      budgetSummary.expenseRows,
+      condominiumName,
+      funds,
+      totalPayables,
+      totalReceivable,
+    ],
+  );
+
   return (
     <div className="space-y-6">
       <GlassCard>
@@ -334,7 +408,12 @@ export function FinanceEstadoPanel({
               <span className="font-semibold text-[var(--text)]">{analytics.scopeLabel}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <ExportMenu
+              onCsv={() => downloadFinancialReportCsv(exportReport)}
+              onPdf={() => exportFinancialReportPdf(exportReport)}
+            />
+            <div className="flex flex-wrap items-end gap-2">
             <div className="glass-tab-strip !inline-flex">
               <button
                 type="button"
@@ -368,6 +447,7 @@ export function FinanceEstadoPanel({
                 className="glass-input w-28"
               />
             )}
+            </div>
           </div>
         </div>
       </GlassCard>
