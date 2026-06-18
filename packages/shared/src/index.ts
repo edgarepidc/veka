@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './fees';
 export * from './finance';
+export * from './finance-analytics';
 export * from './maintenance';
 export * from './roles';
 export * from './storage';

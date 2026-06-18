@@ -36,6 +36,8 @@ export default function DashboardScreen() {
     formatDateTime,
     chargeStatusLabel,
     chargeStatusTone,
+    chargeDisplayTitle,
+    chargeDisplaySubtitle,
     formatCurrency,
   } = useDashboard(primary);
 
@@ -115,12 +117,19 @@ export default function DashboardScreen() {
                   {data.nextCharge ? (
                     <GlassCard style={styles.cardGap}>
                       <View style={styles.cardTop}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>{data.nextCharge.concept}</Text>
+                        <Text style={[styles.cardTitle, { color: theme.text }]}>
+                          {chargeDisplayTitle(data.nextCharge)}
+                        </Text>
                         <Tag label={chargeStatusLabel(data.nextCharge.status)} tone={mapChargeTone(chargeStatusTone(data.nextCharge.status))} />
                       </View>
                       <Text style={[styles.amount, { color: theme.accent }]}>
                         {formatCurrency(data.nextCharge.amount)}
                       </Text>
+                      {chargeDisplaySubtitle(data.nextCharge) ? (
+                        <Text style={{ color: theme.accent2, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
+                          {chargeDisplaySubtitle(data.nextCharge)}
+                        </Text>
+                      ) : null}
                       <Text style={{ color: theme.textMuted, fontSize: 13 }}>
                         Vence el {formatShortDate(data.nextCharge.due_date)}
                       </Text>

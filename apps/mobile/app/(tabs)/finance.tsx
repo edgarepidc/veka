@@ -9,11 +9,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  chargeDisplaySubtitle,
+  chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
   paymentStatusLabel,
 } from '@veka/shared';
+import type { FeeCampaignRef } from '@veka/shared';
 
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
@@ -33,6 +36,14 @@ interface ChargeRow {
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   fund_type: string;
+  fee_campaign: FeeCampaignRef | null;
+}
+
+function normalizeFeeCampaign(raw: unknown): FeeCampaignRef | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as FeeCampaignRef & { cluster?: { name: string } | { name: string }[] | null };
+  const cluster = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+  return { ...row, cluster: cluster ?? null };
 }
 
 interface PaymentRow {
@@ -77,7 +88,9 @@ export default function FinanceScreen() {
     const [chargesRes, paymentsRes, fundsRes, expensesRes] = await Promise.all([
       supabase
         .from('charges')
-        .select('id, concept, amount, due_date, status, fund_type')
+        .select(
+          'id, concept, amount, due_date, status, fund_type, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name))',
+        )
         .eq('unit_id', primary.unit_id)
         .order('due_date', { ascending: false }),
       supabase
@@ -98,7 +111,14 @@ export default function FinanceScreen() {
         .limit(5),
     ]);
 
-    setCharges((chargesRes.data as ChargeRow[]) ?? []);
+    setCharges(
+      ((chargesRes.data as Omit<ChargeRow, 'fee_campaign'>[] | null) ?? []).map((charge) => ({
+        ...charge,
+        fee_campaign: normalizeFeeCampaign(
+          (charge as { fee_campaign?: unknown }).fee_campaign,
+        ),
+      })),
+    );
     setPayments((paymentsRes.data as PaymentRow[]) ?? []);
     setFunds((fundsRes.data as FundBalance[]) ?? []);
     setExpenses((expensesRes.data as ExpenseRow[]) ?? []);
@@ -184,7 +204,9 @@ export default function FinanceScreen() {
                 {formatCurrency(Number(nextCharge.amount))}
               </Text>
               <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>
-                {nextCharge.concept} · Vence {nextCharge.due_date}
+                {chargeDisplayTitle(nextCharge)}
+                {chargeDisplaySubtitle(nextCharge) ? ` · ${chargeDisplaySubtitle(nextCharge)}` : ''}
+                {' · '}Vence {nextCharge.due_date}
               </Text>
               <PaymentProofUploader
                 chargeId={nextCharge.id}
@@ -202,7 +224,14 @@ export default function FinanceScreen() {
           {charges.map((charge) => (
             <GlassCard key={charge.id} style={styles.cardGap}>
               <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>{charge.concept}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>{chargeDisplayTitle(charge)}</Text>
+                  {chargeDisplaySubtitle(charge) ? (
+                    <Text style={{ color: theme.accent2, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+                      {chargeDisplaySubtitle(charge)}
+                    </Text>
+                  ) : null}
+                </View>
                 <Tag label={chargeStatusLabel(charge.status)} tone={mapChargeTone(chargeStatusTone(charge.status))} />
               </View>
               <Text style={{ color: theme.textMuted, fontSize: 13 }}>

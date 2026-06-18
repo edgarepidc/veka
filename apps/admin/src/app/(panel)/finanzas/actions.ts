@@ -8,6 +8,7 @@ import {
   EXPENSE_STATUSES,
   FEE_SCOPES,
   FUND_TYPES,
+  applyCoefficient,
 } from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
@@ -38,7 +39,7 @@ export async function createFeeCampaign(formData: FormData) {
 
   let unitsQuery = supabase
     .from('units')
-    .select('id')
+    .select('id, coefficient')
     .eq('condominium_id', DEMO_CONDO_ID);
 
   if (scope === 'cluster') {
@@ -73,18 +74,21 @@ export async function createFeeCampaign(formData: FormData) {
   }
 
   const { error: chargesError } = await supabase.from('charges').insert(
-    units.map((unit) => ({
-      condominium_id: DEMO_CONDO_ID,
-      unit_id: unit.id,
-      fee_campaign_id: campaign.id,
-      concept,
-      amount,
-      fund_type: fundType,
-      due_date: dueDate,
-      period_month: periodMonth || null,
-      status: 'pending' as const,
-      created_by: user.id,
-    })),
+    units.map((unit) => {
+      const unitAmount = applyCoefficient(amount, Number(unit.coefficient ?? 1));
+      return {
+        condominium_id: DEMO_CONDO_ID,
+        unit_id: unit.id,
+        fee_campaign_id: campaign.id,
+        concept,
+        amount: unitAmount,
+        fund_type: fundType,
+        due_date: dueDate,
+        period_month: periodMonth || null,
+        status: 'pending' as const,
+        created_by: user.id,
+      };
+    }),
   );
 
   if (chargesError) return { error: chargesError.message };

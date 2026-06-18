@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  chargeDisplaySubtitle,
+  chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
 } from '@veka/shared';
+import type { FeeCampaignRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -14,6 +17,14 @@ export interface DashboardCharge {
   amount: number;
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  fee_campaign: FeeCampaignRef | null;
+}
+
+function normalizeFeeCampaign(raw: unknown): FeeCampaignRef | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as FeeCampaignRef & { cluster?: { name: string } | { name: string }[] | null };
+  const cluster = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+  return { ...row, cluster: cluster ?? null };
 }
 
 export interface DashboardPost {
@@ -89,7 +100,9 @@ export function useDashboard(primary: ActiveMembership | null) {
     const [chargesRes, postsRes, reservationsRes, packagesRes] = await Promise.all([
       supabase
         .from('charges')
-        .select('id, concept, amount, due_date, status')
+        .select(
+          'id, concept, amount, due_date, status, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name))',
+        )
         .eq('unit_id', primary.unit_id)
         .in('status', ['pending', 'overdue'])
         .order('due_date', { ascending: true })
@@ -129,8 +142,17 @@ export function useDashboard(primary: ActiveMembership | null) {
     const amenity = reservationRow?.amenity;
     const amenityName = Array.isArray(amenity) ? amenity[0]?.name : amenity?.name;
 
+    const chargeRow = chargesRes.data?.[0] as
+      | (Omit<DashboardCharge, 'fee_campaign'> & { fee_campaign?: unknown })
+      | undefined;
+
     setData({
-      nextCharge: (chargesRes.data?.[0] as DashboardCharge | undefined) ?? null,
+      nextCharge: chargeRow
+        ? {
+            ...chargeRow,
+            fee_campaign: normalizeFeeCampaign(chargeRow.fee_campaign),
+          }
+        : null,
       latestPost: (postsRes.data?.[0] as DashboardPost | undefined) ?? null,
       upcomingReservation: reservationRow
         ? {
@@ -165,6 +187,8 @@ export function useDashboard(primary: ActiveMembership | null) {
     formatDateTime,
     chargeStatusLabel,
     chargeStatusTone,
+    chargeDisplayTitle,
+    chargeDisplaySubtitle,
     formatCurrency,
   };
 }

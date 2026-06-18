@@ -1,0 +1,339 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import type { ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
+import {
+  EXPENSE_CHART_COLORS,
+  dateInMonth,
+  dateInYear,
+  expenseCategoryLabel,
+  formatCurrency,
+  fundTypeLabel,
+  monthLabel,
+  parseYearMonth,
+  paymentPeriodDate,
+} from '@veka/shared';
+
+import { ComparisonBarChart, ExpensePieChart, TrendBarChart } from '@/components/FinanceCharts';
+import { GlassCard } from '@/components/ui/GlassCard';
+
+interface FundBalanceRow {
+  fund_type: FundType;
+  balance: number;
+  as_of_date: string;
+}
+
+interface PaymentRow {
+  id: string;
+  amount: number;
+  status: PaymentStatus;
+  proof_url: string | null;
+  created_at: string;
+  paid_at: string | null;
+  unit: { identifier: string } | null;
+  charge: { concept: string } | null;
+}
+
+interface ExpenseRow {
+  amount: number;
+  category: string;
+  expense_date: string;
+  status: ExpenseStatus;
+}
+
+interface ChargeRow {
+  amount: number;
+  due_date: string;
+  status: ChargeStatus;
+}
+
+export function FinanceEstadoPanel({
+  funds,
+  payments,
+  expenses,
+  charges,
+  totalReceivable,
+  totalPayables,
+  onReviewPayment,
+  onViewProof,
+}: {
+  funds: FundBalanceRow[];
+  payments: PaymentRow[];
+  expenses: ExpenseRow[];
+  charges: ChargeRow[];
+  totalReceivable: number;
+  totalPayables: number;
+  onReviewPayment: (id: string, action: 'approve' | 'reject') => void;
+  onViewProof: (path: string) => void;
+}) {
+  const now = new Date();
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
+  const [selectedMonth, setSelectedMonth] = useState(now.toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+
+  const parsedMonth = parseYearMonth(selectedMonth);
+  const year = periodMode === 'year' ? Number(selectedYear) : (parsedMonth?.year ?? now.getFullYear());
+  const month = parsedMonth?.month ?? now.getMonth() + 1;
+
+  const analytics = useMemo(() => {
+    const approved = payments.filter((p) => p.status === 'approved');
+    const paidExpenses = expenses.filter((e) => e.status === 'paid');
+
+    const inPeriod = (iso: string) =>
+      periodMode === 'year' ? dateInYear(iso, year) : dateInMonth(iso, year, month);
+
+    const periodPayments = approved.filter((p) =>
+      inPeriod(paymentPeriodDate(p.paid_at, p.created_at)),
+    );
+    const periodExpenses = paidExpenses.filter((e) => inPeriod(e.expense_date));
+
+    const periodIncome = periodPayments.reduce((s, p) => s + Number(p.amount), 0);
+    const periodExpenseTotal = periodExpenses.reduce((s, e) => s + Number(e.amount), 0);
+
+    const periodCharges = charges.filter((c) => inPeriod(c.due_date) && c.status !== 'cancelled');
+    const collected = periodCharges.filter((c) => c.status === 'paid');
+    const collectionRate =
+      periodCharges.length > 0
+        ? Math.round((collected.length / periodCharges.length) * 100)
+        : null;
+
+    const expenseByCategory = periodExpenses.reduce<Record<string, number>>((acc, expense) => {
+      acc[expense.category] = (acc[expense.category] ?? 0) + Number(expense.amount);
+      return acc;
+    }, {});
+
+    const pieSlices = Object.entries(expenseByCategory)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, value], index) => ({
+        label: expenseCategoryLabel(category),
+        value,
+        color: EXPENSE_CHART_COLORS[index % EXPENSE_CHART_COLORS.length]!,
+      }));
+
+    const trendMonths =
+      periodMode === 'year'
+        ? Array.from({ length: 12 }, (_, i) => ({ year, month: i + 1 }))
+        : Array.from({ length: 6 }, (_, i) => {
+            const d = new Date(year, month - 1 - (5 - i), 1);
+            return { year: d.getFullYear(), month: d.getMonth() + 1 };
+          });
+
+    const paymentTrend = trendMonths.map(({ year: y, month: m }) => ({
+      label: monthLabel(y, m),
+      value: approved
+        .filter((p) => dateInMonth(paymentPeriodDate(p.paid_at, p.created_at), y, m))
+        .reduce((s, p) => s + Number(p.amount), 0),
+    }));
+
+    const pendingReview = payments.filter((p) => p.status === 'pending_review');
+
+    return {
+      periodIncome,
+      periodExpenseTotal,
+      periodBalance: periodIncome - periodExpenseTotal,
+      collectionRate,
+      periodChargesCount: periodCharges.length,
+      collectedCount: collected.length,
+      pieSlices,
+      paymentTrend,
+      pendingReview,
+      periodLabel:
+        periodMode === 'year' ? String(year) : monthLabel(year, month),
+    };
+  }, [charges, expenses, month, payments, periodMode, year]);
+
+  return (
+    <div className="space-y-6">
+      <GlassCard>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Dashboard financiero</h2>
+            <p className="mt-1 text-sm text-muted">
+              Vista del periodo: <span className="font-semibold text-[var(--text)]">{analytics.periodLabel}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="glass-tab-strip !inline-flex">
+              <button
+                type="button"
+                onClick={() => setPeriodMode('month')}
+                className={`glass-tab !min-w-0 !flex-none px-4 ${periodMode === 'month' ? 'glass-tab-active' : ''}`}
+              >
+                Mes
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodMode('year')}
+                className={`glass-tab !min-w-0 !flex-none px-4 ${periodMode === 'year' ? 'glass-tab-active' : ''}`}
+              >
+                Año
+              </button>
+            </div>
+            {periodMode === 'month' ? (
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="glass-input w-auto"
+              />
+            ) : (
+              <input
+                type="number"
+                min="2020"
+                max="2100"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="glass-input w-28"
+              />
+            )}
+          </div>
+        </div>
+      </GlassCard>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Ingresos del periodo" value={formatCurrency(analytics.periodIncome)} tone="green" />
+        <SummaryCard label="Egresos del periodo" value={formatCurrency(analytics.periodExpenseTotal)} tone="neutral" />
+        <SummaryCard
+          label="Balance del periodo"
+          value={formatCurrency(analytics.periodBalance)}
+          tone={analytics.periodBalance >= 0 ? 'green' : 'red'}
+        />
+        <SummaryCard
+          label="Tasa de cobranza"
+          value={analytics.collectionRate === null ? '—' : `${analytics.collectionRate}%`}
+          sub={
+            analytics.periodChargesCount > 0
+              ? `${analytics.collectedCount}/${analytics.periodChargesCount} cuotas`
+              : 'Sin cuotas en el periodo'
+          }
+          tone="amber"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SummaryCard label="Por cobrar (morosos)" value={formatCurrency(totalReceivable)} tone="amber" />
+        <SummaryCard label="Adeudos a proveedores" value={formatCurrency(totalPayables)} tone="red" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Egresos por categoría</h3>
+          <p className="mt-1 text-sm text-muted">Distribución de gastos comprobados en el periodo.</p>
+          <div className="mt-4">
+            <ExpensePieChart slices={analytics.pieSlices} />
+          </div>
+        </GlassCard>
+
+        <GlassCard>
+          <h3 className="text-base font-semibold text-[var(--text)]">Tendencia de pagos</h3>
+          <p className="mt-1 text-sm text-muted">
+            Ingresos por pagos aprobados {periodMode === 'year' ? `en ${year}` : '(últimos 6 meses)'}.
+          </p>
+          <div className="mt-4">
+            <TrendBarChart bars={analytics.paymentTrend} />
+          </div>
+        </GlassCard>
+      </div>
+
+      <GlassCard>
+        <h3 className="text-base font-semibold text-[var(--text)]">Ingresos vs egresos</h3>
+        <p className="mt-1 text-sm text-muted">Comparativo del periodo seleccionado.</p>
+        <div className="mt-4">
+          <ComparisonBarChart income={analytics.periodIncome} expenses={analytics.periodExpenseTotal} />
+        </div>
+      </GlassCard>
+
+      <GlassCard>
+        <h2 className="text-lg font-semibold text-[var(--text)]">Saldos por fondo</h2>
+        <p className="mt-1 text-sm text-muted">Posición actual de caja (no filtrada por periodo).</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {funds.length === 0 ? (
+            <p className="text-sm text-subtle">Sin saldos registrados.</p>
+          ) : (
+            funds.map((fund) => (
+              <div key={fund.fund_type} className="glass-card-deep p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                  {fundTypeLabel(fund.fund_type)}
+                </p>
+                <p className="mt-1 text-2xl font-bold text-accent">{formatCurrency(Number(fund.balance))}</p>
+                <p className="mt-1 text-xs text-subtle">Al {fund.as_of_date}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </GlassCard>
+
+      <GlassCard>
+        <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
+        <div className="mt-4 space-y-3">
+          {analytics.pendingReview.length === 0 ? (
+            <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
+          ) : (
+            analytics.pendingReview.map((payment) => (
+              <div key={payment.id} className="glass-card-deep p-4">
+                <p className="font-medium text-[var(--text)]">
+                  {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
+                </p>
+                <p className="text-sm text-muted">{payment.charge?.concept}</p>
+                {payment.proof_url ? (
+                  <button
+                    type="button"
+                    onClick={() => onViewProof(payment.proof_url!)}
+                    className="mt-2 inline-block text-sm text-accent-2 hover:underline"
+                  >
+                    Ver comprobante
+                  </button>
+                ) : null}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onReviewPayment(payment.id, 'approve')}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
+                  >
+                    Aprobar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReviewPayment(payment.id, 'reject')}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </GlassCard>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone: 'green' | 'neutral' | 'amber' | 'red';
+}) {
+  const toneClass =
+    tone === 'green'
+      ? 'text-accent'
+      : tone === 'amber'
+        ? 'text-amber-200'
+        : tone === 'red'
+          ? 'text-red-200'
+          : 'text-[var(--text)]';
+
+  return (
+    <div className="glass-card p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</p>
+      <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
+      {sub ? <p className="mt-1 text-xs text-subtle">{sub}</p> : null}
+    </div>
+  );
+}

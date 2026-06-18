@@ -27,6 +27,7 @@ import {
 } from '@veka/shared';
 
 import { cancelFeeCampaign, createExpense, createFeeCampaign } from '@/app/(panel)/finanzas/actions';
+import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
@@ -421,91 +422,19 @@ export function FinanceDashboard() {
       </div>
 
       {tab === 'estado' ? (
-        <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryCard label="Ingresos comprobados" value={formatCurrency(totalIncome)} tone="green" />
-            <SummaryCard label="Egresos comprobados" value={formatCurrency(totalVerifiedExpenses)} tone="neutral" />
-            <SummaryCard label="Por cobrar (morosos)" value={formatCurrency(totalReceivable)} tone="amber" />
-            <SummaryCard label="Adeudos a proveedores" value={formatCurrency(totalPayables)} tone="red" />
-          </div>
-
-          <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Saldos por fondo</h2>
-            <p className="mt-1 text-sm text-muted">Posición al cierre más reciente registrada.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {funds.length === 0 ? (
-                <p className="text-sm text-subtle">Sin saldos registrados.</p>
-              ) : (
-                funds.map((fund) => (
-                  <div key={fund.fund_type} className="glass-card-deep p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-                      {fundTypeLabel(fund.fund_type)}
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-accent">{formatCurrency(Number(fund.balance))}</p>
-                    <p className="mt-1 text-xs text-subtle">Al {fund.as_of_date}</p>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-muted">
-              <p>
-                <span className="font-semibold text-[var(--text)]">Resultado del periodo:</span>{' '}
-                {formatCurrency(totalIncome - totalVerifiedExpenses)}{' '}
-                <span className="text-subtle">(ingresos − egresos comprobados)</span>
-              </p>
-            </div>
-          </GlassCard>
-
-          <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
-            <div className="mt-4 space-y-3">
-              {payments.filter((p) => p.status === 'pending_review').length === 0 ? (
-                <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
-              ) : (
-                payments
-                  .filter((p) => p.status === 'pending_review')
-                  .map((payment) => (
-                    <div key={payment.id} className="glass-card-deep p-4">
-                      <p className="font-medium text-[var(--text)]">
-                        {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
-                      </p>
-                      <p className="text-sm text-muted">{payment.charge?.concept}</p>
-                      {payment.proof_url ? (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from('payment-proofs')
-                              .createSignedUrl(payment.proof_url!, 3600);
-                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-                          }}
-                          className="mt-2 inline-block text-sm text-accent-2 hover:underline"
-                        >
-                          Ver comprobante
-                        </button>
-                      ) : null}
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => reviewPayment(payment.id, 'approve')}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-                        >
-                          Aprobar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => reviewPayment(payment.id, 'reject')}
-                          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
-                        >
-                          Rechazar
-                        </button>
-                      </div>
-                    </div>
-                  ))
-              )}
-            </div>
-          </GlassCard>
-        </div>
+        <FinanceEstadoPanel
+          funds={funds}
+          payments={payments}
+          expenses={expenses}
+          charges={charges}
+          totalReceivable={totalReceivable}
+          totalPayables={totalPayables}
+          onReviewPayment={reviewPayment}
+          onViewProof={async (path) => {
+            const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 3600);
+            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+          }}
+        />
       ) : null}
 
       {tab === 'cuotas' ? (
@@ -597,7 +526,7 @@ export function FinanceDashboard() {
                 value={feeForm.amount}
                 onChange={(e) => setFeeForm((p) => ({ ...p, amount: e.target.value }))}
                 className="glass-input"
-                placeholder="Monto por unidad"
+                placeholder="Monto base por unidad (× coeficiente)"
               />
               <input
                 name="due_date"
@@ -630,7 +559,7 @@ export function FinanceDashboard() {
               <p className="text-xs text-subtle">
                 Se generarán cargos para{' '}
                 <span className="font-semibold text-[var(--text)]">{affectedUnitsCount}</span> unidad
-                {affectedUnitsCount === 1 ? '' : 'es'}.
+                {affectedUnitsCount === 1 ? '' : 'es'}, cada una según su coeficiente.
               </p>
               <button type="submit" disabled={campaignPending || affectedUnitsCount === 0} className="glass-btn-primary">
                 {campaignPending ? 'Emitiendo…' : 'Emitir cuota'}
@@ -661,7 +590,7 @@ export function FinanceDashboard() {
                             {feeScopeLabel(campaign.scope)}
                             {campaign.cluster?.name ? ` · ${campaign.cluster.name}` : ''}
                             {' · '}
-                            {formatCurrency(Number(campaign.amount))} / unidad
+                            {formatCurrency(Number(campaign.amount))} base / unidad
                             {' · '}
                             Vence {campaign.due_date}
                           </p>
@@ -1050,32 +979,6 @@ function StatChip({
     <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
       {label}: {value}
     </span>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: 'green' | 'neutral' | 'amber' | 'red';
-}) {
-  const toneClass =
-    tone === 'green'
-      ? 'text-accent'
-      : tone === 'amber'
-        ? 'text-amber-200'
-        : tone === 'red'
-          ? 'text-red-200'
-          : 'text-[var(--text)]';
-
-  return (
-    <div className="glass-card p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</p>
-      <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
-    </div>
   );
 }
 
