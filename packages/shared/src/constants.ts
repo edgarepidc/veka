@@ -50,3 +50,9 @@ export const MAINTENANCE_TICKET_CATEGORIES = [
   'other',
 ] as const;
 export type MaintenanceTicketCategory = (typeof MAINTENANCE_TICKET_CATEGORIES)[number];
+
+export const FEE_SCOPES = ['general', 'cluster', 'extraordinary'] as const;
+export type FeeScope = (typeof FEE_SCOPES)[number];
+
+export const FEE_CAMPAIGN_STATUSES = ['active', 'cancelled'] as const;
+export type FeeCampaignStatus = (typeof FEE_CAMPAIGN_STATUSES)[number];

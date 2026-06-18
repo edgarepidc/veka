@@ -7,7 +7,7 @@ export default function FinanzasPage() {
       <PageHeader
         title="Finanzas"
         highlight="del condominio"
-        subtitle="Estado financiero, ingresos, egresos, proveedores, nómina y morosidad por torre."
+        subtitle="Estado financiero, cuotas, ingresos, egresos, proveedores, nómina y morosidad por torre."
       />
       <FinanceDashboard />
     </div>

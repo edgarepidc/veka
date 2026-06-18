@@ -1,11 +1,126 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ExpenseKind, ExpenseStatus, FundType } from '@veka/shared';
-import { EXPENSE_CATEGORIES, EXPENSE_KINDS, EXPENSE_STATUSES, FUND_TYPES } from '@veka/shared';
+import type { ExpenseKind, ExpenseStatus, FeeScope, FundType } from '@veka/shared';
+import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_KINDS,
+  EXPENSE_STATUSES,
+  FEE_SCOPES,
+  FUND_TYPES,
+} from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/server';
+
+export async function createFeeCampaign(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const scope = String(formData.get('scope') ?? '') as FeeScope;
+  const clusterId = String(formData.get('cluster_id') ?? '').trim();
+  const concept = String(formData.get('concept') ?? '').trim();
+  const amount = Number(formData.get('amount'));
+  const dueDate = String(formData.get('due_date') ?? '');
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const periodMonth = String(formData.get('period_month') ?? '').trim();
+
+  if (!FEE_SCOPES.includes(scope)) return { error: 'Tipo de cuota inválido.' };
+  if (!concept) return { error: 'Concepto obligatorio.' };
+  if (!amount || amount <= 0) return { error: 'Monto inválido.' };
+  if (!dueDate) return { error: 'Fecha de vencimiento obligatoria.' };
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (scope === 'cluster' && !clusterId) return { error: 'Selecciona la torre o cluster.' };
+
+  let unitsQuery = supabase
+    .from('units')
+    .select('id')
+    .eq('condominium_id', DEMO_CONDO_ID);
+
+  if (scope === 'cluster') {
+    unitsQuery = unitsQuery.eq('cluster_id', clusterId);
+  } else if (scope === 'extraordinary' && clusterId) {
+    unitsQuery = unitsQuery.eq('cluster_id', clusterId);
+  }
+
+  const { data: units, error: unitsError } = await unitsQuery;
+  if (unitsError) return { error: unitsError.message };
+  if (!units?.length) return { error: 'No hay unidades en el alcance seleccionado.' };
+
+  const { data: campaign, error: campaignError } = await supabase
+    .from('fee_campaigns')
+    .insert({
+      condominium_id: DEMO_CONDO_ID,
+      cluster_id: scope === 'general' ? null : clusterId || null,
+      scope,
+      concept,
+      amount,
+      fund_type: fundType,
+      due_date: dueDate,
+      period_month: periodMonth || null,
+      status: 'active',
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (campaignError || !campaign) {
+    return { error: campaignError?.message ?? 'No se pudo crear la cuota.' };
+  }
+
+  const { error: chargesError } = await supabase.from('charges').insert(
+    units.map((unit) => ({
+      condominium_id: DEMO_CONDO_ID,
+      unit_id: unit.id,
+      fee_campaign_id: campaign.id,
+      concept,
+      amount,
+      fund_type: fundType,
+      due_date: dueDate,
+      period_month: periodMonth || null,
+      status: 'pending' as const,
+      created_by: user.id,
+    })),
+  );
+
+  if (chargesError) return { error: chargesError.message };
+
+  revalidatePath('/finanzas');
+  return { success: true, unitCount: units.length };
+}
+
+export async function cancelFeeCampaign(campaignId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+  if (!campaignId) return { error: 'Cuota inválida.' };
+
+  const { error: campaignError } = await supabase
+    .from('fee_campaigns')
+    .update({ status: 'cancelled' })
+    .eq('id', campaignId)
+    .eq('condominium_id', DEMO_CONDO_ID);
+
+  if (campaignError) return { error: campaignError.message };
+
+  const { error: chargesError } = await supabase
+    .from('charges')
+    .update({ status: 'cancelled' })
+    .eq('fee_campaign_id', campaignId)
+    .in('status', ['pending', 'overdue']);
+
+  if (chargesError) return { error: chargesError.message };
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
 
 export async function createExpense(formData: FormData) {
   const supabase = await createClient();

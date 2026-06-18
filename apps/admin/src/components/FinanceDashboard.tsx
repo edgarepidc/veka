@@ -1,26 +1,38 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useState, useTransition } from 'react';
-import type { ChargeStatus, ExpenseKind, ExpenseStatus, FundType, PaymentStatus } from '@veka/shared';
+import type {
+  ChargeStatus,
+  ExpenseKind,
+  ExpenseStatus,
+  FeeCampaignStatus,
+  FeeScope,
+  FundType,
+  PaymentStatus,
+} from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
+  FEE_SCOPES,
   STORAGE_BUCKETS,
   chargeStatusLabel,
+  defaultFeeConcept,
   expenseCategoryLabel,
   expenseEvidencePath,
   expenseKindLabel,
   expenseStatusLabel,
+  feeCampaignStatusLabel,
+  feeScopeLabel,
   formatCurrency,
   fundTypeLabel,
 } from '@veka/shared';
 
-import { createExpense } from '@/app/(panel)/finanzas/actions';
+import { cancelFeeCampaign, createExpense, createFeeCampaign } from '@/app/(panel)/finanzas/actions';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
 
-type FinanceTab = 'estado' | 'movimientos' | 'proveedores' | 'nomina' | 'morosidad';
+type FinanceTab = 'estado' | 'cuotas' | 'movimientos' | 'proveedores' | 'nomina' | 'morosidad';
 
 interface UnitOption {
   id: string;
@@ -56,7 +68,21 @@ interface ChargeRow {
   amount: number;
   due_date: string;
   status: ChargeStatus;
+  fee_campaign_id: string | null;
   unit: { identifier: string; cluster_id: string | null } | null;
+}
+
+interface FeeCampaignRow {
+  id: string;
+  scope: FeeScope;
+  concept: string;
+  amount: number;
+  due_date: string;
+  fund_type: FundType;
+  period_month: string | null;
+  status: FeeCampaignStatus;
+  created_at: string;
+  cluster: { name: string } | null;
 }
 
 interface ExpenseRow {
@@ -74,6 +100,7 @@ interface ExpenseRow {
 
 const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'estado', label: 'Estado financiero' },
+  { id: 'cuotas', label: 'Cuotas' },
   { id: 'movimientos', label: 'Ingresos y egresos' },
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'nomina', label: 'Empleados' },
@@ -101,25 +128,32 @@ export function FinanceDashboard() {
   const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
   const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
   const [expensePending, startExpense] = useTransition();
+  const [campaignMessage, setCampaignMessage] = useState<string | null>(null);
+  const [campaignPending, startCampaign] = useTransition();
 
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [clusters, setClusters] = useState<ClusterRow[]>([]);
   const [funds, setFunds] = useState<FundBalanceRow[]>([]);
   const [charges, setCharges] = useState<ChargeRow[]>([]);
+  const [feeCampaigns, setFeeCampaigns] = useState<FeeCampaignRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
 
-  const [newCharge, setNewCharge] = useState({
-    unitId: '',
-    concept: 'Cuota de mantenimiento',
+  const [feeForm, setFeeForm] = useState({
+    scope: 'general' as FeeScope,
+    clusterId: '',
+    concept: defaultFeeConcept('general'),
     amount: '3500',
     dueDate: '',
+    fundType: 'operating' as FundType,
+    periodMonth: new Date().toISOString().slice(0, 7) + '-01',
   });
 
   const load = useCallback(async () => {
     setLoading(true);
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, paymentsRes, expensesRes] = await Promise.all([
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, paymentsRes, expensesRes] =
+      await Promise.all([
       supabase
         .from('units')
         .select('id, identifier, cluster_id')
@@ -136,9 +170,18 @@ export function FinanceDashboard() {
         .eq('condominium_id', DEMO_CONDO_ID),
       supabase
         .from('charges')
-        .select('id, concept, amount, due_date, status, unit:units(identifier, cluster_id)')
+        .select(
+          'id, concept, amount, due_date, status, fee_campaign_id, unit:units(identifier, cluster_id)',
+        )
         .eq('condominium_id', DEMO_CONDO_ID)
         .order('due_date', { ascending: false }),
+      supabase
+        .from('fee_campaigns')
+        .select(
+          'id, scope, concept, amount, due_date, fund_type, period_month, status, created_at, cluster:clusters(name)',
+        )
+        .eq('condominium_id', DEMO_CONDO_ID)
+        .order('created_at', { ascending: false }),
       supabase
         .from('payments')
         .select(
@@ -159,6 +202,7 @@ export function FinanceDashboard() {
     setClusters((clustersRes.data as ClusterRow[]) ?? []);
     setFunds((fundsRes.data as FundBalanceRow[]) ?? []);
     setCharges((chargesRes.data as unknown as ChargeRow[]) ?? []);
+    setFeeCampaigns((campaignsRes.data as unknown as FeeCampaignRow[]) ?? []);
     setPayments((paymentsRes.data as unknown as PaymentRow[]) ?? []);
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
     setLoading(false);
@@ -245,27 +289,82 @@ export function FinanceDashboard() {
   const totalReceivable = sumAmount(delinquentCharges.filter((c) => c.status === 'overdue'));
   const totalPayables = sumAmount(supplierExpenses.filter((e) => e.status === 'pending'));
 
-  async function createCharge(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newCharge.unitId || !newCharge.dueDate) return;
-
-    const { error } = await supabase.from('charges').insert({
-      condominium_id: DEMO_CONDO_ID,
-      unit_id: newCharge.unitId,
-      concept: newCharge.concept,
-      amount: Number(newCharge.amount),
-      due_date: newCharge.dueDate,
-      status: 'pending',
-      fund_type: 'operating',
-    });
-
-    if (error) {
-      alert(error.message);
-      return;
+  const campaignStats = useMemo(() => {
+    const map = new Map<string, { paid: number; pending: number; overdue: number; total: number }>();
+    for (const charge of charges) {
+      if (!charge.fee_campaign_id) continue;
+      const stats = map.get(charge.fee_campaign_id) ?? { paid: 0, pending: 0, overdue: 0, total: 0 };
+      stats.total += 1;
+      if (charge.status === 'paid') stats.paid += 1;
+      else if (charge.status === 'overdue') stats.overdue += 1;
+      else if (charge.status === 'pending') stats.pending += 1;
+      map.set(charge.fee_campaign_id, stats);
     }
+    return map;
+  }, [charges]);
 
-    setNewCharge((prev) => ({ ...prev, concept: 'Cuota de mantenimiento', amount: '3500' }));
-    void load();
+  const affectedUnitsCount = useMemo(() => {
+    if (feeForm.scope === 'cluster') {
+      if (!feeForm.clusterId) return 0;
+      return units.filter((u) => u.cluster_id === feeForm.clusterId).length;
+    }
+    if (feeForm.scope === 'extraordinary' && feeForm.clusterId) {
+      return units.filter((u) => u.cluster_id === feeForm.clusterId).length;
+    }
+    return units.length;
+  }, [feeForm.clusterId, feeForm.scope, units]);
+
+  const activeCampaigns = useMemo(
+    () => feeCampaigns.filter((c) => c.status === 'active'),
+    [feeCampaigns],
+  );
+
+  function updateFeeScope(scope: FeeScope) {
+    const clusterName = clusters.find((c) => c.id === feeForm.clusterId)?.name;
+    setFeeForm((prev) => ({
+      ...prev,
+      scope,
+      clusterId: scope === 'general' ? '' : prev.clusterId,
+      concept: defaultFeeConcept(scope, clusterName),
+    }));
+  }
+
+  function updateFeeCluster(clusterId: string) {
+    const clusterName = clusters.find((c) => c.id === clusterId)?.name;
+    setFeeForm((prev) => ({
+      ...prev,
+      clusterId,
+      concept: defaultFeeConcept(prev.scope, clusterName),
+    }));
+  }
+
+  function runCreateFeeCampaign(formData: FormData) {
+    setCampaignMessage(null);
+    startCampaign(async () => {
+      const result = await createFeeCampaign(formData);
+      if (result.error) {
+        setCampaignMessage(result.error);
+        return;
+      }
+      const count = 'unitCount' in result ? result.unitCount : 0;
+      setCampaignMessage(`Cuota creada para ${count} unidad${count === 1 ? '' : 'es'}.`);
+      setFeeForm((prev) => ({
+        ...prev,
+        concept: defaultFeeConcept(prev.scope, clusters.find((c) => c.id === prev.clusterId)?.name),
+        dueDate: '',
+      }));
+      void load();
+    });
+  }
+
+  function handleCancelCampaign(campaignId: string) {
+    if (!confirm('¿Cancelar esta cuota? Se cancelarán los cargos pendientes de las unidades.')) return;
+    setCampaignMessage(null);
+    startCampaign(async () => {
+      const result = await cancelFeeCampaign(campaignId);
+      setCampaignMessage(result.error ?? 'Cuota cancelada.');
+      void load();
+    });
   }
 
   async function reviewPayment(id: string, action: 'approve' | 'reject') {
@@ -357,103 +456,255 @@ export function FinanceDashboard() {
             </div>
           </GlassCard>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <GlassCard>
-              <h2 className="text-lg font-semibold text-[var(--text)]">Nueva cuota</h2>
-              <form onSubmit={createCharge} className="mt-4 space-y-3">
+          <GlassCard>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
+            <div className="mt-4 space-y-3">
+              {payments.filter((p) => p.status === 'pending_review').length === 0 ? (
+                <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
+              ) : (
+                payments
+                  .filter((p) => p.status === 'pending_review')
+                  .map((payment) => (
+                    <div key={payment.id} className="glass-card-deep p-4">
+                      <p className="font-medium text-[var(--text)]">
+                        {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
+                      </p>
+                      <p className="text-sm text-muted">{payment.charge?.concept}</p>
+                      {payment.proof_url ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from('payment-proofs')
+                              .createSignedUrl(payment.proof_url!, 3600);
+                            if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                          }}
+                          className="mt-2 inline-block text-sm text-accent-2 hover:underline"
+                        >
+                          Ver comprobante
+                        </button>
+                      ) : null}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => reviewPayment(payment.id, 'approve')}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => reviewPayment(payment.id, 'reject')}
+                          className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+          </GlassCard>
+        </div>
+      ) : null}
+
+      {tab === 'cuotas' ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <GlassCard>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Nueva cuota</h2>
+            <p className="mt-1 text-sm text-muted">
+              Emite cuotas de mantenimiento general, por torre o extraordinarias a todas las unidades del
+              alcance.
+            </p>
+            {campaignMessage ? (
+              <p
+                className={`mt-3 text-sm ${campaignMessage.includes('creada') || campaignMessage.includes('cancelada') ? 'text-accent' : 'text-red-300'}`}
+              >
+                {campaignMessage}
+              </p>
+            ) : null}
+            <form action={runCreateFeeCampaign} className="mt-4 space-y-3">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Tipo de cuota</p>
+                <div className="flex flex-wrap gap-2">
+                  {FEE_SCOPES.map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => updateFeeScope(scope)}
+                      className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                        feeForm.scope === scope
+                          ? 'bg-emerald-500/20 text-accent ring-1 ring-emerald-400/40'
+                          : 'bg-white/5 text-muted hover:bg-white/10'
+                      }`}
+                    >
+                      {feeScopeLabel(scope)}
+                    </button>
+                  ))}
+                </div>
+                <input type="hidden" name="scope" value={feeForm.scope} />
+              </div>
+
+              {feeForm.scope === 'cluster' ? (
                 <select
+                  name="cluster_id"
                   required
-                  value={newCharge.unitId}
-                  onChange={(e) => setNewCharge((p) => ({ ...p, unitId: e.target.value }))}
+                  value={feeForm.clusterId}
+                  onChange={(e) => updateFeeCluster(e.target.value)}
                   className="glass-input"
                 >
-                  <option value="">Selecciona unidad</option>
-                  {units.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.identifier}
+                  <option value="">Selecciona torre / cluster</option>
+                  {clusters.map((cluster) => (
+                    <option key={cluster.id} value={cluster.id} className="bg-slate-900">
+                      {cluster.name}
                     </option>
                   ))}
                 </select>
-                <input
-                  required
-                  value={newCharge.concept}
-                  onChange={(e) => setNewCharge((p) => ({ ...p, concept: e.target.value }))}
+              ) : feeForm.scope === 'extraordinary' ? (
+                <select
+                  name="cluster_id"
+                  value={feeForm.clusterId}
+                  onChange={(e) => updateFeeCluster(e.target.value)}
                   className="glass-input"
-                  placeholder="Concepto"
-                />
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newCharge.amount}
-                  onChange={(e) => setNewCharge((p) => ({ ...p, amount: e.target.value }))}
-                  className="glass-input"
-                  placeholder="Monto"
-                />
-                <input
-                  required
-                  type="date"
-                  value={newCharge.dueDate}
-                  onChange={(e) => setNewCharge((p) => ({ ...p, dueDate: e.target.value }))}
-                  className="glass-input"
-                />
-                <button type="submit" className="glass-btn-primary">
-                  Crear cuota
-                </button>
-              </form>
-            </GlassCard>
+                >
+                  <option value="" className="bg-slate-900">
+                    Todo el condominio
+                  </option>
+                  {clusters.map((cluster) => (
+                    <option key={cluster.id} value={cluster.id} className="bg-slate-900">
+                      Solo {cluster.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input type="hidden" name="cluster_id" value="" />
+              )}
 
-            <GlassCard>
-              <h2 className="text-lg font-semibold text-[var(--text)]">Pagos por revisar</h2>
-              <div className="mt-4 space-y-3">
-                {payments.filter((p) => p.status === 'pending_review').length === 0 ? (
-                  <p className="text-sm text-subtle">No hay comprobantes pendientes.</p>
-                ) : (
-                  payments
-                    .filter((p) => p.status === 'pending_review')
-                    .map((payment) => (
-                      <div key={payment.id} className="glass-card-deep p-4">
-                        <p className="font-medium text-[var(--text)]">
-                          {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
-                        </p>
-                        <p className="text-sm text-muted">{payment.charge?.concept}</p>
-                        {payment.proof_url ? (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const { data } = await supabase.storage
-                                .from('payment-proofs')
-                                .createSignedUrl(payment.proof_url!, 3600);
-                              if (data?.signedUrl) window.open(data.signedUrl, '_blank');
-                            }}
-                            className="mt-2 inline-block text-sm text-accent-2 hover:underline"
-                          >
-                            Ver comprobante
-                          </button>
-                        ) : null}
-                        <div className="mt-3 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => reviewPayment(payment.id, 'approve')}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-                          >
-                            Aprobar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => reviewPayment(payment.id, 'reject')}
-                            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
-                          >
-                            Rechazar
-                          </button>
+              <input
+                name="concept"
+                required
+                value={feeForm.concept}
+                onChange={(e) => setFeeForm((p) => ({ ...p, concept: e.target.value }))}
+                className="glass-input"
+                placeholder="Concepto"
+              />
+              <input
+                name="amount"
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={feeForm.amount}
+                onChange={(e) => setFeeForm((p) => ({ ...p, amount: e.target.value }))}
+                className="glass-input"
+                placeholder="Monto por unidad"
+              />
+              <input
+                name="due_date"
+                required
+                type="date"
+                value={feeForm.dueDate}
+                onChange={(e) => setFeeForm((p) => ({ ...p, dueDate: e.target.value }))}
+                className="glass-input"
+              />
+              <input
+                name="period_month"
+                type="date"
+                value={feeForm.periodMonth}
+                onChange={(e) => setFeeForm((p) => ({ ...p, periodMonth: e.target.value }))}
+                className="glass-input"
+              />
+              <select
+                name="fund_type"
+                value={feeForm.fundType}
+                onChange={(e) => setFeeForm((p) => ({ ...p, fundType: e.target.value as FundType }))}
+                className="glass-input"
+              >
+                <option value="operating" className="bg-slate-900">
+                  {fundTypeLabel('operating')}
+                </option>
+                <option value="reserve" className="bg-slate-900">
+                  {fundTypeLabel('reserve')}
+                </option>
+              </select>
+              <p className="text-xs text-subtle">
+                Se generarán cargos para{' '}
+                <span className="font-semibold text-[var(--text)]">{affectedUnitsCount}</span> unidad
+                {affectedUnitsCount === 1 ? '' : 'es'}.
+              </p>
+              <button type="submit" disabled={campaignPending || affectedUnitsCount === 0} className="glass-btn-primary">
+                {campaignPending ? 'Emitiendo…' : 'Emitir cuota'}
+              </button>
+            </form>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Cuotas activas</h2>
+            <p className="mt-1 text-sm text-muted">Registro de cuotas emitidas y cobranza por unidad.</p>
+            <div className="mt-4 space-y-3">
+              {activeCampaigns.length === 0 ? (
+                <p className="text-sm text-subtle">No hay cuotas activas.</p>
+              ) : (
+                activeCampaigns.map((campaign) => {
+                  const stats = campaignStats.get(campaign.id) ?? {
+                    paid: 0,
+                    pending: 0,
+                    overdue: 0,
+                    total: 0,
+                  };
+                  return (
+                    <div key={campaign.id} className="glass-card-deep p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-[var(--text)]">{campaign.concept}</p>
+                          <p className="mt-1 text-xs text-subtle">
+                            {feeScopeLabel(campaign.scope)}
+                            {campaign.cluster?.name ? ` · ${campaign.cluster.name}` : ''}
+                            {' · '}
+                            {formatCurrency(Number(campaign.amount))} / unidad
+                            {' · '}
+                            Vence {campaign.due_date}
+                          </p>
                         </div>
+                        <span className="glass-tag-green">{feeCampaignStatusLabel(campaign.status)}</span>
                       </div>
-                    ))
-                )}
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <StatChip label="Unidades" value={stats.total} tone="neutral" />
+                        <StatChip label="Pagadas" value={stats.paid} tone="green" />
+                        <StatChip label="Pendientes" value={stats.pending} tone="amber" />
+                        {stats.overdue > 0 ? (
+                          <StatChip label="Vencidas" value={stats.overdue} tone="red" />
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={campaignPending}
+                        onClick={() => handleCancelCampaign(campaign.id)}
+                        className="mt-3 text-xs text-red-300 hover:underline"
+                      >
+                        Cancelar cuota
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {feeCampaigns.some((c) => c.status === 'cancelled') ? (
+              <div className="mt-6 border-t border-white/10 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Historial</p>
+                <ul className="space-y-2">
+                  {feeCampaigns
+                    .filter((c) => c.status === 'cancelled')
+                    .map((campaign) => (
+                      <li key={campaign.id} className="text-sm text-subtle">
+                        {campaign.concept} · {feeCampaignStatusLabel(campaign.status)}
+                      </li>
+                    ))}
+                </ul>
               </div>
-            </GlassCard>
-          </div>
+            ) : null}
+          </GlassCard>
         </div>
       ) : null}
 
@@ -776,6 +1027,29 @@ export function FinanceDashboard() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'green' | 'amber' | 'neutral' | 'red';
+}) {
+  const tones = {
+    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
+    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
+    neutral: 'border-white/15 bg-white/10 text-[var(--text)]',
+    red: 'border-red-400/30 bg-red-400/15 text-red-100',
+  };
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+      {label}: {value}
+    </span>
   );
 }
 

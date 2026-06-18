@@ -1,4 +1,5 @@
 export * from './constants';
+export * from './fees';
 export * from './finance';
 export * from './maintenance';
 export * from './roles';
