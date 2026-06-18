@@ -27,6 +27,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 
 interface ChargeRow {
   id: string;
+  unit_id: string;
   concept: string;
   amount: number;
   due_date: string;
@@ -58,6 +59,7 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 export function MorosidadPanel({
+  condominiumId,
   lateFeeSettings,
   overdueReminderRule,
   reminderLog,
@@ -66,7 +68,9 @@ export function MorosidadPanel({
   expandedClusters,
   onToggleCluster,
   onReload,
+  onOpenUnitStatement,
 }: {
+  condominiumId: string;
   lateFeeSettings: LateFeeSettings;
   overdueReminderRule: NotificationRuleRow | null;
   reminderLog: ReminderLogRow[];
@@ -75,6 +79,7 @@ export function MorosidadPanel({
   expandedClusters: Record<string, boolean>;
   onToggleCluster: (clusterId: string) => void;
   onReload: () => void;
+  onOpenUnitStatement?: (unitId: string) => void;
 }) {
   const [enabled, setEnabled] = useState(lateFeeSettings.enabled);
   const [graceDays, setGraceDays] = useState(String(lateFeeSettings.grace_days));
@@ -118,6 +123,7 @@ export function MorosidadPanel({
     setSettingsMessage(null);
     const formData = new FormData();
     if (enabled) formData.set('enabled', 'true');
+    formData.set('condominium_id', condominiumId);
     formData.set('grace_days', graceDays);
     formData.set('fee_type', feeType);
     formData.set('fee_value', feeValue);
@@ -140,6 +146,7 @@ export function MorosidadPanel({
     setReminderMessage(null);
     const formData = new FormData();
     if (reminderEnabled) formData.set('reminder_enabled', 'true');
+    formData.set('condominium_id', condominiumId);
     formData.set('days_after', daysAfter);
 
     startReminderSave(async () => {
@@ -425,6 +432,15 @@ export function MorosidadPanel({
                           >
                             {reminderPendingId === charge.id ? 'Enviando…' : 'Recordar'}
                           </button>
+                          {onOpenUnitStatement && charge.unit ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenUnitStatement(charge.unit_id)}
+                              className="glass-btn px-2.5 py-1 text-xs font-semibold"
+                            >
+                              Estado de cuenta
+                            </button>
+                          ) : null}
                         </div>
                       </li>
                     );

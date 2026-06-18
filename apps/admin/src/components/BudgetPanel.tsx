@@ -39,9 +39,11 @@ function emptyAmounts(categories: readonly string[]): Record<string, string> {
 }
 
 export function BudgetPanel({
+  condominiumId,
   budgets,
   onReload,
 }: {
+  condominiumId: string;
   budgets: AnnualBudgetRow[];
   onReload: () => void;
 }) {
@@ -105,6 +107,7 @@ export function BudgetPanel({
     setMessage(null);
     const formData = new FormData();
     formData.set('fiscal_year', fiscalYear);
+    formData.set('condominium_id', condominiumId);
     formData.set('fund_type', fundType);
     formData.set('notes', notes);
     for (const category of EXPENSE_CATEGORIES) {

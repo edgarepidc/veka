@@ -98,7 +98,7 @@ export default function FinanceScreen() {
           'id, concept, amount, due_date, status, fund_type, charge_kind, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
-        .order('due_date', { ascending: false }),
+        .order('due_date', { ascending: true }),
       supabase
         .from('payments')
         .select('id, charge_id, amount, status, created_at, paid_at')

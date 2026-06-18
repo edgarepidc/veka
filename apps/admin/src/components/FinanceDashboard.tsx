@@ -25,6 +25,8 @@ import {
   matchesFinanceClusterFilter,
   paymentPeriodDate,
   paymentStatusLabel,
+  delinquentBalance,
+  isDelinquentCharge,
   type LateFeeSettings,
   type MovementExportRow,
 } from '@veka/shared';
@@ -95,7 +97,7 @@ interface PaymentRow {
     cluster_id: string | null;
     cluster: { name: string } | null;
   } | null;
-  charge: { concept: string; due_date: string } | null;
+  charge: { concept: string; due_date: string; fund_type: FundType } | null;
 }
 
 interface ChargeRow {
@@ -245,6 +247,7 @@ export function FinanceDashboard() {
     is_enabled: boolean;
   } | null>(null);
   const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
+  const [statementUnitId, setStatementUnitId] = useState('');
 
   const loadCondominiums = useCallback(async () => {
     const {
@@ -320,7 +323,7 @@ export function FinanceDashboard() {
       supabase
         .from('payments')
         .select(
-          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date)',
+          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date, fund_type)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -403,8 +406,8 @@ export function FinanceDashboard() {
   }, [selectedCondoId]);
 
   useEffect(() => {
-    void ensureMonthlyRecurringCharges().then(() => load());
-  }, [load]);
+    void ensureMonthlyRecurringCharges(selectedCondoId).then(() => load());
+  }, [load, selectedCondoId]);
 
   const scopedPayments = useMemo(
     () =>
@@ -446,11 +449,6 @@ export function FinanceDashboard() {
     [scopedExpenses],
   );
 
-  const delinquentCharges = useMemo(
-    () => scopedCharges.filter((c) => c.status === 'overdue' || c.status === 'pending'),
-    [scopedCharges],
-  );
-
   const supplierExpenses = useMemo(
     () => scopedExpenses.filter((e) => e.expense_kind === 'supplier'),
     [scopedExpenses],
@@ -465,7 +463,7 @@ export function FinanceDashboard() {
     const clusterMap = new Map(clusters.map((c) => [c.id, c.name]));
     const grouped: Record<string, { clusterName: string; items: ChargeRow[]; total: number }> = {};
 
-    for (const charge of delinquentCharges.filter((c) => c.status === 'overdue')) {
+    for (const charge of scopedCharges.filter((c) => isDelinquentCharge(c))) {
       const clusterId = charge.unit?.cluster_id ?? 'sin-cluster';
       const clusterName = clusterId === 'sin-cluster' ? 'Sin torre' : (clusterMap.get(clusterId) ?? 'Sin torre');
       grouped[clusterId] ??= { clusterName, items: [], total: 0 };
@@ -474,7 +472,7 @@ export function FinanceDashboard() {
     }
 
     return Object.entries(grouped).sort((a, b) => a[1].clusterName.localeCompare(b[1].clusterName));
-  }, [clusters, delinquentCharges]);
+  }, [clusters, scopedCharges]);
 
   const incomeByCategory = useMemo(() => {
     const paymentGroups = groupBy(approvedPayments, (p) => {
@@ -521,9 +519,7 @@ export function FinanceDashboard() {
     }));
   }, [supplierExpenses]);
 
-  const totalIncome = sumAmount(approvedPayments);
-  const totalVerifiedExpenses = sumAmount(paidExpenses);
-  const totalReceivable = sumAmount(delinquentCharges.filter((c) => c.status === 'overdue'));
+  const totalReceivable = delinquentBalance(scopedCharges);
   const totalPayables = sumAmount(supplierExpenses.filter((e) => e.status === 'pending'));
 
   const extraordinaryCampaigns = useMemo(
@@ -572,7 +568,7 @@ export function FinanceDashboard() {
         concept: `${payment.unit?.identifier ?? 'Unidad'} · ${payment.charge?.concept ?? 'Pago'}`,
         category: 'Cuotas',
         amount: Number(payment.amount),
-        fund: fundTypeLabel('operating'),
+        fund: fundTypeLabel(payment.charge?.fund_type ?? 'operating'),
         scope: scopeName(payment.unit?.cluster_id ?? null),
         status: paymentStatusLabel(payment.status),
         reference: payment.id,
@@ -735,7 +731,7 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'presupuesto' ? (
-        <BudgetPanel budgets={budgets} onReload={() => void load()} />
+        <BudgetPanel condominiumId={selectedCondoId} budgets={budgets} onReload={() => void load()} />
       ) : null}
 
       {tab === 'cuotas' ? (
@@ -1031,6 +1027,7 @@ export function FinanceDashboard() {
           charges={scopedCharges}
           payments={scopedPayments}
           clusterFilterId={selectedClusterId}
+          initialUnitId={statementUnitId}
         />
       ) : null}
 
@@ -1113,6 +1110,7 @@ export function FinanceDashboard() {
 
       {tab === 'morosidad' ? (
         <MorosidadPanel
+          condominiumId={selectedCondoId}
           lateFeeSettings={lateFeeSettings}
           overdueReminderRule={overdueReminderRule}
           reminderLog={reminderLog}
@@ -1123,6 +1121,10 @@ export function FinanceDashboard() {
             setExpandedClusters((prev) => ({ ...prev, [clusterId]: !(prev[clusterId] ?? true) }))
           }
           onReload={() => void load()}
+          onOpenUnitStatement={(unitId) => {
+            setStatementUnitId(unitId);
+            setTab('cuentas');
+          }}
         />
       ) : null}
     </div>

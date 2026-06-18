@@ -503,8 +503,8 @@ export function FinanceEstadoPanel({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <SummaryCard label="Por cobrar (morosos)" value={formatCurrency(totalReceivable)} tone="amber" />
-        <SummaryCard label="Adeudos a proveedores" value={formatCurrency(totalPayables)} tone="red" />
+        <SummaryCard label="Por cobrar (vencido)" value={formatCurrency(totalReceivable)} tone="amber" />
+        <SummaryCard label="Proveedores pendientes" value={formatCurrency(totalPayables)} tone="red" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -599,6 +599,35 @@ export function FinanceEstadoPanel({
             </p>
           )}
         </GlassCard>
+
+        {budgetSummary.incomeRows.length > 0 ? (
+          <GlassCard className="lg:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (ingresos)</h3>
+                <p className="mt-1 text-sm text-muted">
+                  Fondo operativo · {analytics.periodLabel}
+                  {budgetSummary.proratedNote ? ` · ${budgetSummary.proratedNote}` : ''}
+                </p>
+              </div>
+              {budgetSummary.incomePercentUsed !== null ? (
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-wide text-subtle">Cumplimiento</p>
+                  <p className="text-xl font-bold text-accent">{budgetSummary.incomePercentUsed}%</p>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4">
+              <BudgetVsActualChart
+                rows={budgetSummary.incomeRows.map((row) => ({
+                  label: row.label,
+                  budget: row.budget,
+                  actual: row.actual,
+                }))}
+              />
+            </div>
+          </GlassCard>
+        ) : null}
       </div>
 
       <GlassCard>

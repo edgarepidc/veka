@@ -10,7 +10,7 @@ export interface AgingBucket {
 }
 
 export const DELINQUENCY_AGING_BUCKETS: AgingBucket[] = [
-  { id: '0-30', label: '1–30 días', minDays: 1, maxDays: 30 },
+  { id: '0-30', label: '0–30 días', minDays: 0, maxDays: 30 },
   { id: '31-60', label: '31–60 días', minDays: 31, maxDays: 60 },
   { id: '61-90', label: '61–90 días', minDays: 61, maxDays: 90 },
   { id: '90+', label: 'Más de 90 días', minDays: 91, maxDays: null },
@@ -88,7 +88,6 @@ export function delinquencyAgingBars(
     const value = delinquent
       .filter((charge) => {
         const days = daysPastDue(charge.due_date, reference);
-        if (days === 0) return false;
         if (bucket.maxDays === null) return days >= bucket.minDays;
         return days >= bucket.minDays && days <= bucket.maxDays;
       })
@@ -213,6 +212,18 @@ export function unitBalanceDue(charges: UnitStatementCharge[]): number {
   return roundMoney(
     charges
       .filter((charge) => charge.status === 'pending' || charge.status === 'overdue')
+      .reduce((sum, charge) => sum + Number(charge.amount), 0),
+  );
+}
+
+/** Unpaid charges that are past due (overdue status or pending after due date). */
+export function delinquentBalance(
+  charges: Pick<UnitStatementCharge, 'amount' | 'due_date' | 'status'>[],
+  reference = new Date(),
+): number {
+  return roundMoney(
+    charges
+      .filter((charge) => isDelinquentCharge(charge, reference))
       .reduce((sum, charge) => sum + Number(charge.amount), 0),
   );
 }

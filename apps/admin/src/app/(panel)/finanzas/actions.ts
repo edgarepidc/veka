@@ -24,7 +24,12 @@ import {
 } from '@/lib/recurring-fees';
 import { createClient } from '@/lib/supabase/server';
 
-export async function ensureMonthlyRecurringCharges() {
+function resolveCondoId(value?: string | null): string {
+  const id = value?.trim();
+  return id || DEMO_CONDO_ID;
+}
+
+export async function ensureMonthlyRecurringCharges(condominiumId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,9 +37,12 @@ export async function ensureMonthlyRecurringCharges() {
 
   if (!user) return { error: 'No autorizado' };
 
+  const condoId = resolveCondoId(condominiumId);
+
   try {
-    const generated = await ensureRecurringChargesForCondo(supabase, DEMO_CONDO_ID, user.id);
-    const lateFees = await ensureLateFeesForCondo(supabase, DEMO_CONDO_ID, user.id);
+    await supabase.rpc('refresh_charge_statuses');
+    const generated = await ensureRecurringChargesForCondo(supabase, condoId, user.id);
+    const lateFees = await ensureLateFeesForCondo(supabase, condoId, user.id);
     revalidatePath('/finanzas');
     return { success: true, generated, lateFees };
   } catch (error) {
@@ -445,7 +453,7 @@ export async function saveAnnualBudget(formData: FormData) {
     .from('annual_budgets')
     .upsert(
       {
-        condominium_id: DEMO_CONDO_ID,
+        condominium_id: resolveCondoId(String(formData.get('condominium_id') ?? '')),
         fiscal_year: fiscalYear,
         fund_type: fundType,
         notes: notes || null,
@@ -515,9 +523,11 @@ export async function saveLateFeeSettings(formData: FormData) {
     }
   }
 
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+
   const { error } = await supabase.from('late_fee_settings').upsert(
     {
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condoId,
       enabled,
       grace_days: graceDays,
       fee_type: feeType,
@@ -534,7 +544,7 @@ export async function saveLateFeeSettings(formData: FormData) {
   if (error) return { error: error.message };
 
   if (enabled) {
-    await ensureLateFeesForCondo(supabase, DEMO_CONDO_ID, user.id);
+    await ensureLateFeesForCondo(supabase, condoId, user.id);
   }
 
   revalidatePath('/finanzas');
@@ -556,9 +566,11 @@ export async function saveOverdueReminderRule(formData: FormData) {
     return { error: 'Los días después del vencimiento deben estar entre 1 y 365.' };
   }
 
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+
   const { error } = await supabase.from('notification_rules').upsert(
     {
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condoId,
       rule_key: 'charge_overdue_reminder',
       days_before: null,
       days_after: daysAfter,

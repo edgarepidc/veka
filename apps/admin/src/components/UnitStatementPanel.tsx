@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ChargeStatus, PaymentStatus } from '@veka/shared';
 import {
   buildUnitStatementWithBalance,
@@ -56,6 +56,7 @@ export function UnitStatementPanel({
   charges,
   payments,
   clusterFilterId,
+  initialUnitId = '',
 }: {
   condominiumName: string;
   units: UnitOption[];
@@ -63,6 +64,7 @@ export function UnitStatementPanel({
   charges: ChargeRow[];
   payments: PaymentRow[];
   clusterFilterId: string;
+  initialUnitId?: string;
 }) {
   const visibleUnits = useMemo(() => {
     if (!clusterFilterId) return units;
@@ -70,6 +72,14 @@ export function UnitStatementPanel({
   }, [clusterFilterId, units]);
 
   const [selectedUnitId, setSelectedUnitId] = useState('');
+
+  useEffect(() => {
+    setSelectedUnitId('');
+  }, [clusterFilterId]);
+
+  useEffect(() => {
+    if (initialUnitId) setSelectedUnitId(initialUnitId);
+  }, [initialUnitId]);
 
   const activeUnitId = selectedUnitId || visibleUnits[0]?.id || '';
 
