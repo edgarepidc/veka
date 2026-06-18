@@ -1,3 +1,4 @@
+export * from './budget';
 export * from './constants';
 export * from './fees';
 export * from './finance';

@@ -223,3 +223,76 @@ values (
   'paid'
 )
 on conflict (id) do nothing;
+
+-- Additional paid expenses (budget vs actual demo)
+insert into public.expenses (
+  id, condominium_id, cluster_id, concept, amount, fund_type, category, expense_date, vendor_name, expense_kind, status
+)
+values
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Servicios de limpieza áreas comunes',
+    8500.00,
+    'operating',
+    'servicios',
+    (current_date - interval '12 days')::date,
+    'Limpieza Total SA',
+    'supplier',
+    'paid'
+  ),
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Nómina conserjes — quincena',
+    14500.00,
+    'operating',
+    'nomina',
+    (current_date - interval '3 days')::date,
+    'Nómina interna',
+    'payroll',
+    'paid'
+  ),
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa04',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Vigilancia mensual',
+    4000.00,
+    'operating',
+    'seguridad',
+    (date_trunc('month', current_date) + interval '2 days')::date,
+    'Seguridad Privada MX',
+    'supplier',
+    'paid'
+  )
+on conflict (id) do nothing;
+
+-- Annual operating budget (current fiscal year)
+insert into public.annual_budgets (
+  id, condominium_id, fiscal_year, fund_type, notes
+)
+values (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1',
+  '22222222-2222-2222-2222-222222222222',
+  extract(year from current_date)::int,
+  'operating',
+  'Presupuesto demo — aprobado en asamblea ordinaria'
+)
+on conflict (condominium_id, fiscal_year, fund_type) do update set notes = excluded.notes;
+
+insert into public.budget_lines (id, budget_id, line_kind, category, annual_amount)
+values
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'mantenimiento', 72000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'servicios', 36000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'nomina', 180000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb04', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'seguridad', 48000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb05', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'administracion', 24000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb06', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'suministros', 18000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb07', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'expense', 'otros', 12000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb11', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'cuotas', 136800.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb12', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'servicios', 24000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb13', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'extraordinario', 60000.00)
+on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;

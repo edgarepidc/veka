@@ -27,6 +27,7 @@ import {
 import type { RecurringFeeStatus } from '@veka/shared';
 
 import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
+import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
@@ -37,7 +38,15 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
 
-type FinanceTab = 'estado' | 'cuotas' | 'movimientos' | 'cuentas' | 'proveedores' | 'nomina' | 'morosidad';
+type FinanceTab =
+  | 'estado'
+  | 'presupuesto'
+  | 'cuotas'
+  | 'movimientos'
+  | 'cuentas'
+  | 'proveedores'
+  | 'nomina'
+  | 'morosidad';
 
 interface UnitOption {
   id: string;
@@ -140,8 +149,24 @@ interface IncomeEntryRow {
   notes: string | null;
 }
 
+interface BudgetLineRow {
+  id: string;
+  line_kind: 'expense' | 'income';
+  category: string;
+  annual_amount: number;
+}
+
+interface AnnualBudgetRow {
+  id: string;
+  fiscal_year: number;
+  fund_type: FundType;
+  notes: string | null;
+  lines: BudgetLineRow[];
+}
+
 const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'estado', label: 'Estado financiero' },
+  { id: 'presupuesto', label: 'Presupuesto' },
   { id: 'cuotas', label: 'Cuotas' },
   { id: 'movimientos', label: 'Ingresos y egresos' },
   { id: 'cuentas', label: 'Estado de cuenta' },
@@ -194,6 +219,7 @@ export function FinanceDashboard() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntryRow[]>([]);
+  const [budgets, setBudgets] = useState<AnnualBudgetRow[]>([]);
 
   const loadCondominiums = useCallback(async () => {
     const {
@@ -229,7 +255,7 @@ export function FinanceDashboard() {
 
     const condoId = selectedCondoId || DEMO_CONDO_ID;
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -285,6 +311,11 @@ export function FinanceDashboard() {
         .select('id, concept, amount, category, income_date, fund_type, cluster_id, notes')
         .eq('condominium_id', condoId)
         .order('income_date', { ascending: false }),
+      supabase
+        .from('annual_budgets')
+        .select('id, fiscal_year, fund_type, notes, lines:budget_lines(id, line_kind, category, annual_amount)')
+        .eq('condominium_id', condoId)
+        .order('fiscal_year', { ascending: false }),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -296,6 +327,7 @@ export function FinanceDashboard() {
     setPayments(((paymentsRes.data as unknown as PaymentRow[]) ?? []).map(normalizePaymentRow));
     setExpenses((expensesRes.data as unknown as ExpenseRow[]) ?? []);
     setIncomeEntries((incomesRes.data as unknown as IncomeEntryRow[]) ?? []);
+    setBudgets((budgetsRes.data as unknown as AnnualBudgetRow[]) ?? []);
     setLoading(false);
   }, [selectedCondoId, supabase]);
 
@@ -441,6 +473,15 @@ export function FinanceDashboard() {
     [scopedPayments],
   );
 
+  const totalUnitCount = units.length;
+  const clusterUnitCount = useMemo(
+    () =>
+      selectedClusterId
+        ? units.filter((unit) => unit.cluster_id === selectedClusterId).length
+        : totalUnitCount,
+    [selectedClusterId, totalUnitCount, units],
+  );
+
   const scopeLabel = useMemo(() => {
     if (!selectedClusterId) return 'Todo el condominio';
     return clusters.find((cluster) => cluster.id === selectedClusterId)?.name ?? 'Torre';
@@ -552,9 +593,16 @@ export function FinanceDashboard() {
           expenses={expenses}
           incomeEntries={incomeEntries}
           charges={charges}
+          budgets={budgets}
+          totalUnitCount={totalUnitCount}
+          clusterUnitCount={clusterUnitCount}
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
         />
+      ) : null}
+
+      {tab === 'presupuesto' ? (
+        <BudgetPanel budgets={budgets} onReload={() => void load()} />
       ) : null}
 
       {tab === 'cuotas' ? (

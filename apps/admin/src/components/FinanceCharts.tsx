@@ -215,3 +215,72 @@ export function ComparisonBarChart({
     </div>
   );
 }
+
+export interface GroupedBarRow {
+  label: string;
+  budget: number;
+  actual: number;
+}
+
+export function BudgetVsActualChart({
+  rows,
+}: {
+  rows: GroupedBarRow[];
+}) {
+  if (rows.length === 0 || rows.every((row) => row.budget === 0 && row.actual === 0)) {
+    return <p className="py-8 text-center text-sm text-subtle">Sin presupuesto ni egresos en el periodo.</p>;
+  }
+
+  const max = Math.max(...rows.flatMap((row) => [row.budget, row.actual]), 1);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4 text-xs text-subtle">
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-6 rounded bg-slate-400/80" />
+          Presupuesto
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-6 rounded bg-emerald-400" />
+          Real
+        </span>
+      </div>
+      <ul className="space-y-4">
+        {rows.map((row) => {
+          const over = row.actual > row.budget && row.budget > 0;
+          return (
+            <li key={row.label}>
+              <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+                <span className="truncate text-[var(--text)]">{row.label}</span>
+                <span className="shrink-0 text-muted">
+                  {formatCurrency(row.actual)}
+                  <span className="text-subtle"> / {formatCurrency(row.budget)}</span>
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                  <div
+                    className="h-full rounded-full bg-slate-400/70"
+                    style={{ width: `${Math.max(row.budget > 0 ? 4 : 0, (row.budget / max) * 100)}%` }}
+                    title={`Presupuesto: ${formatCurrency(row.budget)}`}
+                  />
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                  <div
+                    className={`h-full rounded-full ${
+                      over
+                        ? 'bg-gradient-to-r from-red-500 to-red-400'
+                        : 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                    }`}
+                    style={{ width: `${Math.max(row.actual > 0 ? 4 : 0, (row.actual / max) * 100)}%` }}
+                    title={`Real: ${formatCurrency(row.actual)}`}
+                  />
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}

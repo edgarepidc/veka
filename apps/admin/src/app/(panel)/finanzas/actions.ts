@@ -11,6 +11,7 @@ import {
   applyCoefficient,
   currentPeriodMonth,
   nextPeriodMonth,
+  parseBudgetAmount,
 } from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
@@ -397,6 +398,78 @@ export async function createExpense(formData: FormData) {
     });
 
     if (attachError) return { error: attachError.message };
+  }
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function saveAnnualBudget(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const fiscalYear = Number(formData.get('fiscal_year'));
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!Number.isInteger(fiscalYear) || fiscalYear < 2000 || fiscalYear > 2100) {
+    return { error: 'Año fiscal inválido.' };
+  }
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+
+  const lines: { line_kind: 'expense' | 'income'; category: string; annual_amount: number }[] = [];
+
+  for (const category of EXPENSE_CATEGORIES) {
+    const raw = String(formData.get(`expense_${category}`) ?? '');
+    const amount = parseBudgetAmount(raw);
+    if (amount === null) return { error: `Monto inválido en egreso: ${category}.` };
+    if (amount > 0) lines.push({ line_kind: 'expense', category, annual_amount: amount });
+  }
+
+  for (const category of INCOME_CATEGORIES) {
+    const raw = String(formData.get(`income_${category}`) ?? '');
+    const amount = parseBudgetAmount(raw);
+    if (amount === null) return { error: `Monto inválido en ingreso: ${category}.` };
+    if (amount > 0) lines.push({ line_kind: 'income', category, annual_amount: amount });
+  }
+
+  const { data: budget, error: budgetError } = await supabase
+    .from('annual_budgets')
+    .upsert(
+      {
+        condominium_id: DEMO_CONDO_ID,
+        fiscal_year: fiscalYear,
+        fund_type: fundType,
+        notes: notes || null,
+        created_by: user.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'condominium_id,fiscal_year,fund_type' },
+    )
+    .select('id')
+    .single();
+
+  if (budgetError || !budget) {
+    return { error: budgetError?.message ?? 'No se pudo guardar el presupuesto.' };
+  }
+
+  const { error: deleteError } = await supabase.from('budget_lines').delete().eq('budget_id', budget.id);
+  if (deleteError) return { error: deleteError.message };
+
+  if (lines.length > 0) {
+    const { error: linesError } = await supabase.from('budget_lines').insert(
+      lines.map((line) => ({
+        budget_id: budget.id,
+        line_kind: line.line_kind,
+        category: line.category,
+        annual_amount: line.annual_amount,
+      })),
+    );
+    if (linesError) return { error: linesError.message };
   }
 
   revalidatePath('/finanzas');

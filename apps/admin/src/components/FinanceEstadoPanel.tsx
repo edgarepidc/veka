@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import type { ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
 import {
   EXPENSE_CHART_COLORS,
+  budgetProrateRatio,
+  buildBudgetSummary,
   cashFlowBars,
   collectionRateByCluster,
   dateInMonth,
@@ -22,6 +24,7 @@ import {
 } from '@veka/shared';
 
 import {
+  BudgetVsActualChart,
   ComparisonBarChart,
   ExpensePieChart,
   HorizontalBarChart,
@@ -53,6 +56,7 @@ interface ExpenseRow {
   expense_date: string;
   status: ExpenseStatus;
   cluster_id: string | null;
+  fund_type: FundType;
 }
 
 interface IncomeRow {
@@ -74,6 +78,18 @@ interface ClusterOption {
   name: string;
 }
 
+interface BudgetLineRow {
+  line_kind: 'expense' | 'income';
+  category: string;
+  annual_amount: number;
+}
+
+interface AnnualBudgetRow {
+  fiscal_year: number;
+  fund_type: FundType;
+  lines: BudgetLineRow[];
+}
+
 export function FinanceEstadoPanel({
   clusters,
   clusterId,
@@ -83,6 +99,9 @@ export function FinanceEstadoPanel({
   expenses,
   incomeEntries,
   charges,
+  budgets,
+  totalUnitCount,
+  clusterUnitCount,
   totalReceivable,
   totalPayables,
 }: {
@@ -94,6 +113,9 @@ export function FinanceEstadoPanel({
   expenses: ExpenseRow[];
   incomeEntries: IncomeRow[];
   charges: ChargeRow[];
+  budgets: AnnualBudgetRow[];
+  totalUnitCount: number;
+  clusterUnitCount: number;
   totalReceivable: number;
   totalPayables: number;
 }) {
@@ -269,6 +291,36 @@ export function FinanceEstadoPanel({
     };
   }, [clusterId, clusters, month, periodMode, scopeCharges, scopeExpenses, scopeIncomeEntries, scopePayments, year]);
 
+  const scoped = Boolean(clusterId);
+  const prorate = budgetProrateRatio(clusterUnitCount, totalUnitCount, scoped);
+  const operatingBudget = budgets.find((budget) => budget.fiscal_year === year && budget.fund_type === 'operating');
+  const budgetSummary = useMemo(
+    () =>
+      buildBudgetSummary({
+        fiscalYear: year,
+        periodMode,
+        month,
+        fundType: 'operating',
+        budgetLines: operatingBudget?.lines ?? [],
+        expenses: scopeExpenses,
+        incomeEntries: scopeIncomeEntries,
+        payments: scopePayments,
+        prorateRatio: prorate,
+        scoped,
+      }),
+    [
+      month,
+      operatingBudget?.lines,
+      periodMode,
+      prorate,
+      scopeExpenses,
+      scopeIncomeEntries,
+      scopePayments,
+      scoped,
+      year,
+    ],
+  );
+
   return (
     <div className="space-y-6">
       <GlassCard>
@@ -428,6 +480,44 @@ export function FinanceEstadoPanel({
           <div className="mt-4">
             <SignedBarChart bars={analytics.cashFlow} />
           </div>
+        </GlassCard>
+
+        <GlassCard className="lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (egresos)</h3>
+              <p className="mt-1 text-sm text-muted">
+                Fondo operativo · {analytics.periodLabel}
+                {budgetSummary.proratedNote ? ` · ${budgetSummary.proratedNote}` : ''}
+              </p>
+            </div>
+            {budgetSummary.expensePercentUsed !== null ? (
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wide text-subtle">Ejecución</p>
+                <p
+                  className={`text-xl font-bold ${
+                    budgetSummary.expensePercentUsed > 100 ? 'text-red-300' : 'text-accent'
+                  }`}
+                >
+                  {budgetSummary.expensePercentUsed}%
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-4">
+            <BudgetVsActualChart
+              rows={budgetSummary.expenseRows.map((row) => ({
+                label: row.label,
+                budget: row.budget,
+                actual: row.actual,
+              }))}
+            />
+          </div>
+          {operatingBudget ? null : (
+            <p className="mt-3 text-xs text-amber-200">
+              No hay presupuesto operativo para {year}. Configúralo en la pestaña Presupuesto.
+            </p>
+          )}
         </GlassCard>
       </div>
 
