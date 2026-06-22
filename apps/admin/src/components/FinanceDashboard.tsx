@@ -28,6 +28,7 @@ import {
   paymentStatusLabel,
   delinquentBalance,
   isDelinquentCharge,
+  chargeBalanceDue,
   type LateFeeSettings,
   type MovementExportRow,
 } from '@veka/shared';
@@ -115,6 +116,7 @@ interface ChargeRow {
   unit_id: string;
   concept: string;
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: ChargeStatus;
   charge_kind: string;
@@ -349,7 +351,7 @@ export function FinanceDashboard() {
       supabase
         .from('charges')
         .select(
-          'id, unit_id, concept, amount, due_date, status, charge_kind, parent_charge_id, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
+          'id, unit_id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id, fee_campaign_id, recurring_fee_id, unit:units(identifier, cluster_id)',
         )
         .eq('condominium_id', condoId)
         .order('due_date', { ascending: false }),
@@ -537,7 +539,7 @@ export function FinanceDashboard() {
       const clusterName = clusterId === 'sin-cluster' ? 'Sin torre' : (clusterMap.get(clusterId) ?? 'Sin torre');
       grouped[clusterId] ??= { clusterName, items: [], total: 0 };
       grouped[clusterId].items.push(charge);
-      grouped[clusterId].total += Number(charge.amount);
+      grouped[clusterId].total += chargeBalanceDue(charge);
     }
 
     return Object.entries(grouped).sort((a, b) => a[1].clusterName.localeCompare(b[1].clusterName));

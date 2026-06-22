@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import type { ChargeStatus } from '@veka/shared';
 import {
   buildNextPaymentGroup,
+  chargeBalanceDue,
   chargeStatusLabel,
   formatCurrency,
+  unitTotalBalanceDue,
   type ChargeForSettlement,
 } from '@veka/shared';
 
@@ -16,9 +19,13 @@ interface ChargeRow extends ChargeForSettlement {
 
 export function ResidentPayOnlineButton({
   chargeId,
+  amount,
+  maxAmount,
   disabled,
 }: {
   chargeId: string;
+  amount: number;
+  maxAmount: number;
   disabled?: boolean;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -26,12 +33,21 @@ export function ResidentPayOnlineButton({
 
   function handlePay() {
     setMessage(null);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Indica un monto mayor a cero.');
+      return;
+    }
+    if (amount > maxAmount + 0.01) {
+      setMessage(`El monto no puede exceder ${formatCurrency(maxAmount)}.`);
+      return;
+    }
+
     startTransition(async () => {
       try {
         const response = await fetch('/api/payments/checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chargeId }),
+          body: JSON.stringify({ chargeId, amount }),
         });
         const payload = (await response.json()) as { url?: string; error?: string };
         if (!response.ok || !payload.url) {
@@ -44,6 +60,8 @@ export function ResidentPayOnlineButton({
     });
   }
 
+  const isPartial = amount < maxAmount - 0.01;
+
   return (
     <div>
       <button
@@ -52,7 +70,11 @@ export function ResidentPayOnlineButton({
         disabled={disabled || pending}
         className="glass-btn-primary w-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
-        {pending ? 'Abriendo pasarela…' : 'Pagar en línea'}
+        {pending
+          ? 'Abriendo pasarela…'
+          : isPartial
+            ? `Pagar abono ${formatCurrency(amount)}`
+            : 'Pagar en línea'}
       </button>
       {message ? <p className="mt-2 text-sm text-red-300">{message}</p> : null}
     </div>
@@ -70,9 +92,18 @@ export function ResidentAccountPanel({
 }) {
   const paymentGroup = buildNextPaymentGroup(charges);
   const nextCharge = paymentGroup?.primaryCharge ?? null;
-  const balanceDue = charges
-    .filter((charge) => charge.status === 'pending' || charge.status === 'overdue')
-    .reduce((sum, charge) => sum + Number(charge.amount), 0);
+  const groupMax = paymentGroup?.totalAmount ?? 0;
+  const balanceDue = unitTotalBalanceDue(charges);
+
+  const [payAmount, setPayAmount] = useState('');
+
+  useEffect(() => {
+    setPayAmount(groupMax > 0 ? String(groupMax) : '');
+  }, [groupMax, nextCharge?.id]);
+
+  const parsedAmount = useMemo(() => Number(payAmount.replace(/,/g, '')), [payAmount]);
+  const isPartial =
+    Number.isFinite(parsedAmount) && groupMax > 0 && parsedAmount < groupMax - 0.01;
 
   return (
     <div className="space-y-6">
@@ -87,9 +118,7 @@ export function ResidentAccountPanel({
       {nextCharge ? (
         <GlassCard>
           <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Próximo pago</p>
-          <p className="mt-2 text-3xl font-bold text-accent">
-            {formatCurrency(paymentGroup?.totalAmount ?? 0)}
-          </p>
+          <p className="mt-2 text-3xl font-bold text-accent">{formatCurrency(groupMax)}</p>
           {paymentGroup && paymentGroup.relatedCharges.length > 0 ? (
             <p className="mt-1 text-sm text-amber-200">
               Incluye {paymentGroup.relatedCharges.length} recargo(s) por mora
@@ -99,13 +128,36 @@ export function ResidentAccountPanel({
             {(charges.find((c) => c.id === nextCharge.id) as ChargeRow | undefined)?.concept}
           </p>
           <p className="text-sm text-subtle">
-            Vence {nextCharge.due_date} · {chargeStatusLabel(nextCharge.status)}
+            Vence {nextCharge.due_date} · {chargeStatusLabel(nextCharge.status as ChargeStatus)}
           </p>
-          <div className="mt-4">
-            <ResidentPayOnlineButton chargeId={nextCharge.id} />
+
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm">
+              <span className="mb-1 block text-subtle">Monto a pagar (abono parcial permitido)</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={groupMax}
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                className="glass-input w-full"
+              />
+            </label>
+            <p className="text-xs text-subtle">
+              Máximo para este grupo: {formatCurrency(groupMax)}
+              {isPartial ? ` · Abono parcial de ${formatCurrency(parsedAmount)}` : ''}
+            </p>
+            <ResidentPayOnlineButton
+              chargeId={nextCharge.id}
+              amount={parsedAmount}
+              maxAmount={groupMax}
+              disabled={!Number.isFinite(parsedAmount) || parsedAmount <= 0}
+            />
           </div>
+
           <p className="mt-3 text-xs text-subtle">
-            También puedes pagar desde la app móvil Veka subiendo tu comprobante de transferencia.
+            También puedes pagar desde la app móvil subiendo tu comprobante de transferencia.
           </p>
         </GlassCard>
       ) : (
@@ -117,20 +169,34 @@ export function ResidentAccountPanel({
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Mis cargos</h2>
         <ul className="mt-4 space-y-3">
-          {charges.map((charge) => (
-            <li
-              key={charge.id}
-              className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3 last:border-0"
-            >
-              <div>
-                <p className="font-medium text-[var(--text)]">{charge.concept}</p>
-                <p className="text-sm text-subtle">
-                  Vence {charge.due_date} · {chargeStatusLabel(charge.status)}
-                </p>
-              </div>
-              <p className="font-semibold text-[var(--text)]">{formatCurrency(Number(charge.amount))}</p>
-            </li>
-          ))}
+          {charges.map((charge) => {
+            const balance = chargeBalanceDue(charge);
+            const paid = Number(charge.amount) - balance;
+            return (
+              <li
+                key={charge.id}
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3 last:border-0"
+              >
+                <div>
+                  <p className="font-medium text-[var(--text)]">{charge.concept}</p>
+                  <p className="text-sm text-subtle">
+                    Vence {charge.due_date} · {chargeStatusLabel(charge.status as ChargeStatus)}
+                    {paid > 0 && balance > 0
+                      ? ` · Abonado ${formatCurrency(paid)}`
+                      : null}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-[var(--text)]">
+                    {balance > 0 ? formatCurrency(balance) : formatCurrency(Number(charge.amount))}
+                  </p>
+                  {paid > 0 && balance > 0 ? (
+                    <p className="text-xs text-subtle">de {formatCurrency(Number(charge.amount))}</p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </GlassCard>
     </div>

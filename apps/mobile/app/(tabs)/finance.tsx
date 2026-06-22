@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,6 +39,7 @@ interface ChargeRow {
   id: string;
   concept: string;
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: 'pending' | 'paid' | 'overdue' | 'cancelled';
   fund_type: string;
@@ -98,7 +100,7 @@ export default function FinanceScreen() {
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fund_type, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
+          'id, concept, amount, amount_paid, due_date, status, fund_type, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
         .order('due_date', { ascending: true }),
@@ -123,6 +125,8 @@ export default function FinanceScreen() {
       ((chargesRes.data as Omit<ChargeRow, 'fee_campaign' | 'recurring_fee'>[] | null) ?? []).map(
         (charge) => ({
           ...charge,
+          amount: Number(charge.amount),
+          amount_paid: Number(charge.amount_paid ?? 0),
           fee_campaign: normalizeFeeSource(
             (charge as { fee_campaign?: unknown }).fee_campaign,
           ),
@@ -155,6 +159,7 @@ export default function FinanceScreen() {
           id: charge.id,
           concept: charge.concept,
           amount: Number(charge.amount),
+          amount_paid: Number(charge.amount_paid ?? 0),
           due_date: charge.due_date,
           status: charge.status,
         })),
@@ -177,6 +182,7 @@ export default function FinanceScreen() {
           id: charge.id,
           concept: charge.concept,
           amount: Number(charge.amount),
+          amount_paid: Number(charge.amount_paid ?? 0),
           due_date: charge.due_date,
           status: charge.status,
         })),
@@ -187,6 +193,13 @@ export default function FinanceScreen() {
   const paymentGroup = useMemo(() => buildNextPaymentGroup(charges), [charges]);
   const nextCharge = paymentGroup?.primaryCharge ?? null;
   const paymentTotal = paymentGroup?.totalAmount ?? 0;
+  const [payAmountInput, setPayAmountInput] = useState('');
+
+  useEffect(() => {
+    setPayAmountInput(paymentTotal > 0 ? String(paymentTotal) : '');
+  }, [paymentTotal, nextCharge?.id]);
+
+  const payAmount = useMemo(() => Number(payAmountInput.replace(/,/g, '')), [payAmountInput]);
 
   if (membershipLoading || loading) {
     return (
@@ -271,15 +284,45 @@ export default function FinanceScreen() {
                 {chargeDisplaySubtitle(nextCharge) ? ` · ${chargeDisplaySubtitle(nextCharge)}` : ''}
                 {' · '}Vence {nextCharge.due_date}
               </Text>
+              <Text style={{ color: theme.textSubtle, fontSize: 12, marginBottom: 6 }}>
+                Monto a pagar (abono parcial permitido)
+              </Text>
+              <TextInput
+                value={payAmountInput}
+                onChangeText={setPayAmountInput}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={theme.textSubtle}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  color: theme.text,
+                  backgroundColor: theme.card,
+                  marginBottom: 8,
+                }}
+              />
+              <Text style={{ color: theme.textSubtle, fontSize: 11, marginBottom: 12 }}>
+                Máximo {formatCurrency(paymentTotal)}
+              </Text>
               <PaymentProofUploader
                 chargeId={nextCharge.id}
                 condominiumId={primary.condominium_id}
                 unitId={primary.unit_id}
-                amount={paymentTotal}
+                amount={payAmount}
+                maxAmount={paymentTotal}
                 onUploaded={loadData}
               />
               <View style={{ height: 10 }} />
-              <OnlinePaymentButton chargeId={nextCharge.id} onStarted={loadData} />
+              <OnlinePaymentButton
+                chargeId={nextCharge.id}
+                amount={payAmount}
+                maxAmount={paymentTotal}
+                disabled={!Number.isFinite(payAmount) || payAmount <= 0}
+                onStarted={loadData}
+              />
             </GlassCard>
           </View>
         ) : null}

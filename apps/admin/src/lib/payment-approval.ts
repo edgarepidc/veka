@@ -1,7 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { chargeIdsSettledByPayment, type ChargeForSettlement } from '@veka/shared';
+import {
+  allocatePaymentToCharges,
+  chargeAmountPaid,
+  chargeIdsSettledByPayment,
+  roundMoney,
+  type ChargeForSettlement,
+} from '@veka/shared';
 
 import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
+
+function nextChargeStatus(
+  charge: ChargeForSettlement,
+  newAmountPaid: number,
+): 'paid' | 'pending' | 'overdue' {
+  if (newAmountPaid >= Number(charge.amount) - 0.01) return 'paid';
+  return charge.status === 'overdue' ? 'overdue' : 'pending';
+}
 
 export async function settleChargesForPayment(
   supabase: SupabaseClient,
@@ -12,37 +26,35 @@ export async function settleChargesForPayment(
 ): Promise<string[]> {
   const { data: unitCharges, error } = await supabase
     .from('charges')
-    .select('id, amount, due_date, status, charge_kind, parent_charge_id')
+    .select('id, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
     .eq('unit_id', unitId);
 
   if (error) throw new Error(error.message);
 
   const charges = (unitCharges ?? []) as ChargeForSettlement[];
   const chargeIds = chargeIdsSettledByPayment(primaryChargeId, charges);
-  const expectedTotal = charges
-    .filter((charge) => chargeIds.includes(charge.id))
-    .reduce((sum, charge) => sum + Number(charge.amount), 0);
+  const allocations = allocatePaymentToCharges(paymentAmount, chargeIds, charges);
 
-  if (Math.abs(expectedTotal - paymentAmount) > 0.01) {
-    throw new Error(
-      `El monto del pago (${paymentAmount}) no coincide con el total a liquidar (${expectedTotal.toFixed(2)}).`,
-    );
+  for (const allocation of allocations) {
+    const charge = charges.find((row) => row.id === allocation.chargeId);
+    if (!charge) continue;
+
+    const newAmountPaid = roundMoney(chargeAmountPaid(charge) + allocation.amount);
+    const newStatus = nextChargeStatus(charge, newAmountPaid);
+
+    const { error: updateError } = await supabase
+      .from('charges')
+      .update({ status: newStatus, amount_paid: newAmountPaid })
+      .eq('id', allocation.chargeId);
+
+    if (updateError) throw new Error(updateError.message);
   }
 
-  const { error: paidError } = await supabase
-    .from('charges')
-    .update({ status: 'paid' })
-    .in('id', chargeIds);
-
-  if (paidError) throw new Error(paidError.message);
-
-  const allocationRows = charges
-    .filter((charge) => chargeIds.includes(charge.id))
-    .map((charge) => ({
-      payment_id: paymentId,
-      charge_id: charge.id,
-      amount: Number(charge.amount),
-    }));
+  const allocationRows = allocations.map((allocation) => ({
+    payment_id: paymentId,
+    charge_id: allocation.chargeId,
+    amount: allocation.amount,
+  }));
 
   if (allocationRows.length > 0) {
     const { error: allocError } = await supabase.from('payment_allocations').upsert(allocationRows, {
@@ -51,7 +63,7 @@ export async function settleChargesForPayment(
     if (allocError) throw new Error(allocError.message);
   }
 
-  return chargeIds;
+  return allocations.map((allocation) => allocation.chargeId);
 }
 
 export async function approvePayment(

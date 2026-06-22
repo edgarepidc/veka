@@ -3,20 +3,38 @@ import { Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { formatCurrency } from '@veka/shared';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_URL = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'http://localhost:3000';
 
 interface OnlinePaymentButtonProps {
   chargeId: string;
+  amount: number;
+  maxAmount: number;
   disabled?: boolean;
   onStarted?: () => void;
 }
 
-export function OnlinePaymentButton({ chargeId, disabled, onStarted }: OnlinePaymentButtonProps) {
+export function OnlinePaymentButton({
+  chargeId,
+  amount,
+  maxAmount,
+  disabled,
+  onStarted,
+}: OnlinePaymentButtonProps) {
   const [loading, setLoading] = useState(false);
 
   const startCheckout = useCallback(async () => {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert('Monto inválido', 'Indica un monto mayor a cero.');
+      return;
+    }
+    if (amount > maxAmount + 0.01) {
+      Alert.alert('Monto inválido', `El abono no puede exceder ${formatCurrency(maxAmount)}.`);
+      return;
+    }
+
     setLoading(true);
     try {
       const {
@@ -33,7 +51,7 @@ export function OnlinePaymentButton({ chargeId, disabled, onStarted }: OnlinePay
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ chargeId }),
+        body: JSON.stringify({ chargeId, amount }),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -48,11 +66,14 @@ export function OnlinePaymentButton({ chargeId, disabled, onStarted }: OnlinePay
     } finally {
       setLoading(false);
     }
-  }, [chargeId, onStarted]);
+  }, [amount, chargeId, maxAmount, onStarted]);
+
+  const isPartial = amount < maxAmount - 0.01;
+  const label = isPartial ? `Pagar abono ${formatCurrency(amount)}` : 'Pagar en línea';
 
   return (
     <PrimaryButton
-      label="Pagar en línea"
+      label={label}
       loading={loading}
       disabled={disabled}
       onPress={() => void startCheckout()}

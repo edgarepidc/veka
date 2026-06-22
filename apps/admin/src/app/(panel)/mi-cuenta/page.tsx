@@ -26,7 +26,7 @@ export default async function MiCuentaPage() {
   const supabase = await createClient();
   const { data: charges } = await supabase
     .from('charges')
-    .select('id, concept, amount, due_date, status, charge_kind, parent_charge_id')
+    .select('id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
     .eq('unit_id', unitId)
     .order('due_date', { ascending: true });
 
@@ -44,6 +44,7 @@ export default async function MiCuentaPage() {
           id: charge.id,
           concept: charge.concept,
           amount: Number(charge.amount),
+          amount_paid: Number(charge.amount_paid ?? 0),
           due_date: charge.due_date,
           status: charge.status as ChargeSettlementStatus,
           charge_kind: charge.charge_kind,

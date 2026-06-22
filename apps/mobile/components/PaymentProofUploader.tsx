@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { formatCurrency } from '@veka/shared';
 import { supabase } from '@/lib/supabase';
 
 interface PaymentProofUploaderProps {
@@ -10,6 +11,7 @@ interface PaymentProofUploaderProps {
   condominiumId: string;
   unitId: string;
   amount: number;
+  maxAmount: number;
   onUploaded: () => void;
 }
 
@@ -18,11 +20,21 @@ export function PaymentProofUploader({
   condominiumId,
   unitId,
   amount,
+  maxAmount,
   onUploaded,
 }: PaymentProofUploaderProps) {
   const [uploading, setUploading] = useState(false);
 
   const uploadProof = useCallback(async () => {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert('Monto inválido', 'Indica un monto mayor a cero.');
+      return;
+    }
+    if (amount > maxAmount + 0.01) {
+      Alert.alert('Monto inválido', `El abono no puede exceder ${formatCurrency(maxAmount)}.`);
+      return;
+    }
+
     const result = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: true,
@@ -57,14 +69,19 @@ export function PaymentProofUploader({
 
       if (paymentError) throw paymentError;
 
-      Alert.alert('Comprobante enviado', 'La administración revisará tu pago pronto.');
+      Alert.alert(
+        'Comprobante enviado',
+        amount < maxAmount - 0.01
+          ? `Abono de ${formatCurrency(amount)} en revisión.`
+          : 'La administración revisará tu pago pronto.',
+      );
       onUploaded();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo subir el comprobante');
     } finally {
       setUploading(false);
     }
-  }, [amount, chargeId, condominiumId, onUploaded, unitId]);
+  }, [amount, chargeId, condominiumId, maxAmount, onUploaded, unitId]);
 
   return (
     <PrimaryButton label="Subir comprobante" loading={uploading} onPress={() => void uploadProof()} />

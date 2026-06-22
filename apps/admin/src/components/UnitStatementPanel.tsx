@@ -35,6 +35,7 @@ interface ChargeRow {
   unit_id: string;
   concept: string;
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: string;
   unit: { identifier: string; cluster_id: string | null } | null;
@@ -117,6 +118,7 @@ export function UnitStatementPanel({
       .filter((charge) => charge.unit_id === activeUnitId)
       .map((charge) => ({
         amount: Number(charge.amount),
+        amount_paid: Number(charge.amount_paid ?? 0),
         due_date: charge.due_date,
         status: charge.status,
       }));

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   buildNextPaymentGroup,
   chargeIdsSettledByPayment,
+  groupBalanceDue,
   type ChargeForSettlement,
 } from '@veka/shared';
 
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  const body = (await request.json()) as { chargeId?: string };
+  const body = (await request.json()) as { chargeId?: string; amount?: number };
   const chargeId = body.chargeId?.trim();
   if (!chargeId) {
     return NextResponse.json({ error: 'chargeId requerido' }, { status: 400 });
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
 
   const { data: charge, error: chargeError } = await supabase
     .from('charges')
-    .select('id, unit_id, condominium_id, concept, amount, due_date, status, charge_kind, parent_charge_id')
+    .select('id, unit_id, condominium_id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
     .eq('id', chargeId)
     .single();
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cargo no encontrado' }, { status: 404 });
   }
 
-  if (charge.status === 'paid' || charge.status === 'cancelled') {
+  if (charge.status === 'paid' || charge.status === 'cancelled' || charge.status === 'forgiven') {
     return NextResponse.json({ error: 'Este cargo ya no está pendiente.' }, { status: 400 });
   }
 
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
 
   const { data: unitCharges } = await supabase
     .from('charges')
-    .select('id, amount, due_date, status, charge_kind, parent_charge_id')
+    .select('id, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
     .eq('unit_id', charge.unit_id);
 
   const charges = (unitCharges ?? []) as ChargeForSettlement[];
@@ -68,10 +69,23 @@ export async function POST(request: Request) {
   }
 
   const chargeIds = chargeIdsSettledByPayment(chargeId, charges);
-  const totalAmount = charges
-    .filter((row) => chargeIds.includes(row.id))
-    .reduce((sum, row) => sum + Number(row.amount), 0);
+  const maxOwed = groupBalanceDue(chargeIds, charges);
+  const paymentAmount =
+    body.amount != null && Number.isFinite(Number(body.amount))
+      ? Number(body.amount)
+      : maxOwed;
 
+  if (paymentAmount <= 0) {
+    return NextResponse.json({ error: 'El monto debe ser mayor a cero.' }, { status: 400 });
+  }
+  if (paymentAmount > maxOwed + 0.01) {
+    return NextResponse.json(
+      { error: `El monto no puede exceder el saldo pendiente (${maxOwed.toFixed(2)}).` },
+      { status: 400 },
+    );
+  }
+
+  const isPartial = paymentAmount < maxOwed - 0.01;
   const baseUrl = adminBaseUrl();
   const stripe = getStripe();
 
@@ -84,12 +98,13 @@ export async function POST(request: Request) {
           currency: 'mxn',
           product_data: {
             name: group.primaryCharge.charge_kind === 'late_fee' ? charge.concept : `Cuota — ${charge.concept}`,
-            description:
-              group.relatedCharges.length > 0
+            description: isPartial
+              ? `Abono parcial · saldo del grupo ${maxOwed.toFixed(2)} MXN`
+              : group.relatedCharges.length > 0
                 ? `Incluye ${group.relatedCharges.length} recargo(s) por mora`
                 : `Vence ${charge.due_date}`,
           },
-          unit_amount: Math.round(totalAmount * 100),
+          unit_amount: Math.round(paymentAmount * 100),
         },
         quantity: 1,
       },
@@ -100,6 +115,7 @@ export async function POST(request: Request) {
       condominium_id: charge.condominium_id,
       unit_id: charge.unit_id,
       user_id: user.id,
+      partial: isPartial ? 'true' : 'false',
     },
     success_url: `${baseUrl}/api/payments/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${baseUrl}/api/payments/checkout/cancel`,
@@ -111,7 +127,7 @@ export async function POST(request: Request) {
       charge_id: chargeId,
       condominium_id: charge.condominium_id,
       unit_id: charge.unit_id,
-      amount: totalAmount,
+      amount: paymentAmount,
       status: 'pending_review',
       payment_method: 'gateway',
       stripe_checkout_session_id: session.id,
@@ -125,5 +141,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: paymentError?.message ?? 'No se pudo registrar el pago' }, { status: 400 });
   }
 
-  return NextResponse.json({ url: session.url, paymentId: payment.id });
+  return NextResponse.json({ url: session.url, paymentId: payment.id, amount: paymentAmount, partial: isPartial });
 }

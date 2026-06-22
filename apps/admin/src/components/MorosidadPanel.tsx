@@ -7,6 +7,7 @@ import {
   LATE_FEE_APPLY_MODES,
   LATE_FEE_TYPES,
   chargeKindLabel,
+  chargeBalanceDue,
   chargeStatusLabel,
   describeLateFeeSettings,
   formatCurrency,
@@ -31,6 +32,7 @@ interface ChargeRow {
   unit_id: string;
   concept: string;
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: ChargeStatus;
   charge_kind: string;
@@ -463,7 +465,7 @@ export function MorosidadPanel({
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-amber-200">
-                            {formatCurrency(Number(charge.amount))}
+                            {formatCurrency(chargeBalanceDue(charge))}
                           </span>
                           <span className="rounded-full border border-red-400/30 bg-red-400/15 px-2 py-0.5 text-xs font-bold text-red-100">
                             {chargeStatusLabel(charge.status)}

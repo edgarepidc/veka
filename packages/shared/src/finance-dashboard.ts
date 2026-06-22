@@ -1,6 +1,7 @@
 import type { ChartBar, ChartSlice } from './finance-analytics';
 import { EXPENSE_CHART_COLORS, dateInMonth, paymentPeriodDate, roundMoney } from './finance-analytics';
 import { paymentIncomeCategory } from './fees';
+import { chargeBalanceDue } from './payments';
 import { incomeCategoryLabel } from './finance-scope';
 
 export interface AgingBucket {
@@ -19,6 +20,7 @@ export const DELINQUENCY_AGING_BUCKETS: AgingBucket[] = [
 
 export interface ChargeForAnalytics {
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: string;
   unit?: { cluster_id: string | null } | null;
@@ -47,6 +49,7 @@ export interface UnitStatementCharge {
   id: string;
   concept: string;
   amount: number;
+  amount_paid?: number;
   due_date: string;
   status: string;
 }
@@ -98,7 +101,7 @@ export function delinquencyAgingBars(
         if (bucket.maxDays === null) return days >= bucket.minDays;
         return days >= bucket.minDays && days <= bucket.maxDays;
       })
-      .reduce((sum, charge) => sum + Number(charge.amount), 0);
+      .reduce((sum, charge) => sum + chargeBalanceDue(charge), 0);
 
     return { label: bucket.label, value: roundMoney(value) };
   });
@@ -213,7 +216,7 @@ export function unitBalanceDue(charges: UnitStatementCharge[]): number {
   return roundMoney(
     charges
       .filter((charge) => charge.status === 'pending' || charge.status === 'overdue')
-      .reduce((sum, charge) => sum + Number(charge.amount), 0),
+      .reduce((sum, charge) => sum + chargeBalanceDue(charge), 0),
   );
 }
 
@@ -225,7 +228,7 @@ export function delinquentBalance(
   return roundMoney(
     charges
       .filter((charge) => isDelinquentCharge(charge, reference))
-      .reduce((sum, charge) => sum + Number(charge.amount), 0),
+      .reduce((sum, charge) => sum + chargeBalanceDue(charge), 0),
   );
 }
 
