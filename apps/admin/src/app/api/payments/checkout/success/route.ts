@@ -55,7 +55,7 @@ export async function GET(request: Request) {
       );
     }
 
-    if (payment.status === 'pending_review') {
+    if (payment.status === 'pending_review' || payment.status === 'awaiting_payment') {
       await admin
         .from('payments')
         .update({
@@ -66,14 +66,18 @@ export async function GET(request: Request) {
         })
         .eq('id', payment.id);
 
-      const result = await approvePayment(admin, payment.id, session.metadata?.user_id ?? null);
-      if ('error' in result) {
-        console.error('[checkout/success] approvePayment failed:', result.error);
-        return htmlResponse(
-          'Pago recibido en Stripe',
-          'El cobro se procesó, pero la confirmación en Veka tardará unos minutos. Revisa Mi cuenta o espera la notificación del webhook.',
-          miCuentaUrl,
-        );
+      if (session.payment_status === 'paid') {
+        const result = await approvePayment(admin, payment.id, session.metadata?.user_id ?? null, {
+          skipDual: true,
+        });
+        if ('error' in result) {
+          console.error('[checkout/success] approvePayment failed:', result.error);
+          return htmlResponse(
+            'Pago recibido en Stripe',
+            'El cobro se procesó, pero la confirmación en Veka tardará unos minutos. Revisa Mi cuenta o espera la notificación del webhook.',
+            miCuentaUrl,
+          );
+        }
       }
     }
 

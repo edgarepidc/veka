@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import type { PaymentStatus } from '@veka/shared';
 import { formatCurrency, paymentStatusLabel } from '@veka/shared';
 
@@ -11,8 +12,11 @@ export interface ResidentPaymentRow {
   status: PaymentStatus;
   proof_url: string | null;
   payment_method: string | null;
+  gateway_method: string | null;
+  gateway_reference: string | null;
   created_at: string;
   paid_at: string | null;
+  first_reviewed_at: string | null;
   unit: {
     identifier: string;
     cluster_id: string | null;
@@ -21,7 +25,9 @@ export interface ResidentPaymentRow {
   charge: { concept: string; due_date: string } | null;
 }
 
-function paymentMethodLabel(method: string | null): string {
+function paymentMethodLabel(method: string | null, gatewayMethod: string | null): string {
+  if (gatewayMethod === 'oxxo') return 'Oxxo (en línea)';
+  if (gatewayMethod === 'spei') return 'SPEI (en línea)';
   if (!method) return 'Transferencia';
   const labels: Record<string, string> = {
     transfer: 'Transferencia bancaria',
@@ -52,6 +58,8 @@ export function ResidentPaymentsReview({
   onViewProof: (path: string) => void;
 }) {
   const pending = payments.filter((payment) => payment.status === 'pending_review');
+  const secondReview = payments.filter((payment) => payment.status === 'pending_second_review');
+  const awaiting = payments.filter((payment) => payment.status === 'awaiting_payment');
   const history = payments
     .filter((payment) => payment.status === 'approved' || payment.status === 'rejected')
     .slice(0, 12);
@@ -69,8 +77,7 @@ export function ResidentPaymentsReview({
           <div>
             <h2 className="text-lg font-semibold text-[var(--text)]">Pagos de residentes por validar</h2>
             <p className="mt-1 text-sm text-muted">
-              Los residentes suben el comprobante de transferencia desde la app. Al aprobar, el cargo se marca
-              como pagado y el monto suma en ingresos del periodo.
+              Transferencias con comprobante y primera aprobación del flujo maker-checker.
             </p>
           </div>
           {pending.length > 0 ? (
@@ -88,6 +95,7 @@ export function ResidentPaymentsReview({
               <PaymentReviewCard
                 key={payment.id}
                 payment={payment}
+                approveLabel="Aprobar (1ª revisión o final)"
                 onApprove={() => onReview(payment.id, 'approve')}
                 onReject={() => handleReject(payment.id)}
                 onViewProof={onViewProof}
@@ -97,9 +105,49 @@ export function ResidentPaymentsReview({
         </div>
       </GlassCard>
 
+      {secondReview.length > 0 ? (
+        <GlassCard className="ring-1 ring-sky-400/30">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Segunda aprobación requerida</h2>
+          <p className="mt-1 text-sm text-muted">
+            Un administrador distinto debe confirmar estos pagos para liquidar cargos.
+          </p>
+          <div className="mt-4 space-y-3">
+            {secondReview.map((payment) => (
+              <PaymentReviewCard
+                key={payment.id}
+                payment={payment}
+                approveLabel="Confirmar 2ª aprobación"
+                onApprove={() => onReview(payment.id, 'approve')}
+                onReject={() => handleReject(payment.id)}
+                onViewProof={onViewProof}
+              />
+            ))}
+          </div>
+        </GlassCard>
+      ) : null}
+
+      {awaiting.length > 0 ? (
+        <GlassCard>
+          <h2 className="text-lg font-semibold text-[var(--text)]">Esperando Oxxo / SPEI</h2>
+          <p className="mt-1 text-sm text-muted">Referencias abiertas en Stripe. Se aprobarán al recibir el abono.</p>
+          <div className="mt-4 space-y-3">
+            {awaiting.map((payment) => (
+              <div key={payment.id} className="glass-card-deep p-4 text-sm">
+                <p className="font-semibold text-[var(--text)]">
+                  {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
+                </p>
+                <p className="text-muted">
+                  {paymentMethodLabel(payment.payment_method, payment.gateway_method)}
+                  {payment.gateway_reference ? ` · Ref: ${payment.gateway_reference}` : ''}
+                </p>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      ) : null}
+
       <GlassCard>
         <h3 className="text-base font-semibold text-[var(--text)]">Historial de validaciones</h3>
-        <p className="mt-1 text-sm text-muted">Pagos de residentes ya revisados por la administración.</p>
         <div className="mt-4 space-y-2">
           {history.length === 0 ? (
             <p className="text-sm text-subtle">Aún no hay pagos validados.</p>
@@ -115,7 +163,6 @@ export function ResidentPaymentsReview({
                   </p>
                   <p className="text-xs text-subtle">
                     {payment.charge?.concept ?? 'Cuota de mantenimiento'}
-                    {payment.unit?.cluster?.name ? ` · ${payment.unit.cluster.name}` : ''}
                     {' · '}
                     {formatDateTime(payment.paid_at ?? payment.created_at)}
                   </p>
@@ -143,11 +190,13 @@ export function ResidentPaymentsReview({
 
 function PaymentReviewCard({
   payment,
+  approveLabel,
   onApprove,
   onReject,
   onViewProof,
 }: {
   payment: ResidentPaymentRow;
+  approveLabel: string;
   onApprove: () => void;
   onReject: () => void;
   onViewProof: (path: string) => void;
@@ -161,11 +210,12 @@ function PaymentReviewCard({
           </p>
           <p className="mt-1 text-sm text-muted">{payment.charge?.concept ?? 'Cuota de mantenimiento'}</p>
           <p className="mt-1 text-xs text-subtle">
-            {payment.unit?.cluster?.name ? `${payment.unit.cluster.name} · ` : ''}
-            {paymentMethodLabel(payment.payment_method)}
+            {paymentMethodLabel(payment.payment_method, payment.gateway_method)}
             {' · '}
             Enviado {formatDateTime(payment.created_at)}
-            {payment.charge?.due_date ? ` · Vence ${payment.charge.due_date}` : ''}
+            {payment.first_reviewed_at
+              ? ` · 1ª aprobación ${formatDateTime(payment.first_reviewed_at)}`
+              : ''}
           </p>
         </div>
         <span className="rounded-full border border-amber-400/35 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-100">
@@ -182,7 +232,7 @@ function PaymentReviewCard({
           Ver comprobante (imagen o PDF)
         </button>
       ) : (
-        <p className="mt-3 text-xs text-red-300">Sin comprobante adjunto.</p>
+        <p className="mt-3 text-xs text-subtle">Pago en línea sin comprobante adjunto.</p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -191,7 +241,7 @@ function PaymentReviewCard({
           onClick={onApprove}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
         >
-          Aprobar y registrar ingreso
+          {approveLabel}
         </button>
         <button
           type="button"

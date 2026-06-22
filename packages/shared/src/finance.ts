@@ -32,6 +32,8 @@ export function chargeStatusTone(status: ChargeStatus): 'default' | 'success' | 
 export function paymentStatusLabel(status: PaymentStatus): string {
   const labels: Record<PaymentStatus, string> = {
     pending_review: 'En revisión',
+    pending_second_review: '2ª aprobación',
+    awaiting_payment: 'Esperando pago',
     approved: 'Aprobado',
     rejected: 'Rechazado',
   };

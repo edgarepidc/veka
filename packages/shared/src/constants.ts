@@ -15,7 +15,13 @@ export type VisitType = (typeof VISIT_TYPES)[number];
 export const CHARGE_STATUSES = ['pending', 'paid', 'overdue', 'cancelled', 'forgiven'] as const;
 export type ChargeStatus = (typeof CHARGE_STATUSES)[number];
 
-export const PAYMENT_STATUSES = ['pending_review', 'approved', 'rejected'] as const;
+export const PAYMENT_STATUSES = [
+  'pending_review',
+  'pending_second_review',
+  'awaiting_payment',
+  'approved',
+  'rejected',
+] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const FUND_TYPES = ['operating', 'reserve'] as const;

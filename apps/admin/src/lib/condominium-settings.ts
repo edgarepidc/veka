@@ -1,3 +1,5 @@
+import type { ApprovalSettings } from '@veka/shared';
+
 export interface CondominiumBranding {
   logo_url?: string;
   primary_color?: string;
@@ -6,6 +8,7 @@ export interface CondominiumBranding {
 
 export interface CondominiumSettings {
   branding?: CondominiumBranding;
+  approvals?: ApprovalSettings;
 }
 
 export function parseCondominiumSettings(raw: unknown): CondominiumSettings {

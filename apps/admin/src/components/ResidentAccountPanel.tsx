@@ -35,6 +35,7 @@ export function ResidentPayOnlineButton({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [paymentMethod, setPaymentMethod] = useState<'all' | 'card' | 'oxxo' | 'spei'>('all');
 
   function handlePay() {
     setMessage(null);
@@ -52,13 +53,23 @@ export function ResidentPayOnlineButton({
         const response = await fetch('/api/payments/checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            installmentId ? { installmentId, chargeId, amount } : { chargeId, amount },
-          ),
+          body: JSON.stringify({
+            ...(installmentId ? { installmentId, chargeId } : { chargeId }),
+            amount,
+            paymentMethod,
+          }),
         });
-        const payload = (await response.json()) as { url?: string; error?: string };
+        const payload = (await response.json()) as {
+          url?: string;
+          error?: string;
+          awaitingPayment?: boolean;
+          gatewayReference?: string | null;
+        };
         if (!response.ok || !payload.url) {
           throw new Error(payload.error ?? 'No se pudo iniciar el pago');
+        }
+        if (payload.awaitingPayment && payload.gatewayReference) {
+          setMessage(`Referencia generada: ${payload.gatewayReference}. Completa el pago en la pasarela.`);
         }
         window.location.href = payload.url;
       } catch (error) {
@@ -70,7 +81,20 @@ export function ResidentPayOnlineButton({
   const isPartial = amount < maxAmount - 0.01;
 
   return (
-    <div>
+    <div className="space-y-3">
+      <label className="block text-sm">
+        <span className="mb-1 block text-subtle">Forma de pago</span>
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+          className="glass-input w-full"
+        >
+          <option value="all" className="bg-slate-900">Tarjeta, Oxxo o SPEI</option>
+          <option value="card" className="bg-slate-900">Solo tarjeta</option>
+          <option value="oxxo" className="bg-slate-900">Oxxo</option>
+          <option value="spei" className="bg-slate-900">SPEI</option>
+        </select>
+      </label>
       <button
         type="button"
         onClick={handlePay}

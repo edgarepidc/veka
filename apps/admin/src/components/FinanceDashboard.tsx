@@ -29,6 +29,10 @@ import {
   delinquentBalance,
   isDelinquentCharge,
   chargeBalanceDue,
+  buildPolizaRows,
+  parseApprovalSettings,
+  DEFAULT_APPROVAL_SETTINGS,
+  type ApprovalSettings,
   type LateFeeSettings,
   type MovementExportRow,
 } from '@veka/shared';
@@ -41,6 +45,7 @@ import { CuotasPanel } from '@/components/CuotasPanel';
 import { ExportMenu } from '@/components/ExportMenu';
 import { MorosidadPanel } from '@/components/MorosidadPanel';
 import { PaymentPlansPanel, type PaymentPlanRow } from '@/components/PaymentPlansPanel';
+import { FinanceCompliancePanel } from '@/components/FinanceCompliancePanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
@@ -49,8 +54,10 @@ import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import { parseCondominiumSettings } from '@/lib/condominium-settings';
 import {
   downloadMovementsCsv,
+  downloadPolizaCsv,
   exportMovementsPdf,
 } from '@/lib/finance-export-client';
 
@@ -62,7 +69,8 @@ type FinanceTab =
   | 'cuentas'
   | 'proveedores'
   | 'nomina'
-  | 'morosidad';
+  | 'morosidad'
+  | 'contabilidad';
 
 interface UnitOption {
   id: string;
@@ -95,6 +103,9 @@ interface PaymentRow {
   status: PaymentStatus;
   proof_url: string | null;
   payment_method: string | null;
+  gateway_method: string | null;
+  gateway_reference: string | null;
+  first_reviewed_at: string | null;
   created_at: string;
   paid_at: string | null;
   unit: {
@@ -219,6 +230,7 @@ const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'nomina', label: 'Empleados' },
   { id: 'morosidad', label: 'Morosidad' },
+  { id: 'contabilidad', label: 'CFDI y contabilidad' },
 ];
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {
@@ -298,6 +310,50 @@ export function FinanceDashboard() {
   const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransactionRow[]>([]);
   const [paymentPlans, setPaymentPlans] = useState<PaymentPlanRow[]>([]);
+  const [approvalSettings, setApprovalSettings] = useState<ApprovalSettings>(DEFAULT_APPROVAL_SETTINGS);
+  const [fiscalProfile, setFiscalProfile] = useState<{
+    legal_name: string;
+    rfc: string;
+    tax_regime: string;
+    postal_code: string;
+    default_series: string;
+    auto_invoice_on_approve: boolean;
+    pac_organization_id: string | null;
+  } | null>(null);
+  const [unitTaxProfiles, setUnitTaxProfiles] = useState<
+    {
+      unit_id: string;
+      legal_name: string;
+      rfc: string;
+      postal_code: string;
+      cfdi_use: string;
+      email: string | null;
+      tax_regime: string | null;
+    }[]
+  >([]);
+  const [accountingMaps, setAccountingMaps] = useState<
+    {
+      id: string;
+      movement_type: 'income' | 'expense';
+      veka_category: string;
+      account_code: string;
+      account_name: string | null;
+      fund_type: string | null;
+    }[]
+  >([]);
+  const [cfdiInvoices, setCfdiInvoices] = useState<
+    {
+      id: string;
+      status: string;
+      uuid_fiscal: string | null;
+      series: string | null;
+      folio: string | null;
+      total: number;
+      pdf_url: string | null;
+      created_at: string;
+      unit: { identifier: string } | null;
+    }[]
+  >([]);
   const [statementUnitId, setStatementUnitId] = useState('');
 
   const loadCondominiums = useCallback(async () => {
@@ -334,7 +390,7 @@ export function FinanceDashboard() {
 
     const condoId = selectedCondoId || DEMO_CONDO_ID;
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes, condoSettingsRes, fiscalProfileRes, unitTaxRes, accountingMapsRes, cfdiInvoicesRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -374,7 +430,7 @@ export function FinanceDashboard() {
       supabase
         .from('payments')
         .select(
-          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date, fund_type, charge_kind, fee_campaign:fee_campaigns(scope), recurring_fee:recurring_fees(scope))',
+          'id, charge_id, unit_id, amount, status, proof_url, payment_method, gateway_method, gateway_reference, first_reviewed_at, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date, fund_type, charge_kind, fee_campaign:fee_campaigns(scope), recurring_fee:recurring_fees(scope))',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -432,6 +488,23 @@ export function FinanceDashboard() {
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
+      supabase.from('condominiums').select('settings').eq('id', condoId).maybeSingle(),
+      supabase.from('fiscal_profiles').select('*').eq('condominium_id', condoId).maybeSingle(),
+      supabase
+        .from('unit_tax_profiles')
+        .select('unit_id, legal_name, rfc, postal_code, cfdi_use, email, tax_regime, unit:units!inner(condominium_id)')
+        .eq('unit.condominium_id', condoId),
+      supabase
+        .from('accounting_category_maps')
+        .select('id, movement_type, veka_category, account_code, account_name, fund_type')
+        .eq('condominium_id', condoId)
+        .order('movement_type'),
+      supabase
+        .from('cfdi_invoices')
+        .select('id, status, uuid_fiscal, series, folio, total, pdf_url, created_at, unit:units(identifier)')
+        .eq('condominium_id', condoId)
+        .order('created_at', { ascending: false })
+        .limit(20),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -475,6 +548,27 @@ export function FinanceDashboard() {
     setBankAccounts((bankAccountsRes.data as BankAccountRow[]) ?? []);
     setBankTransactions((bankTransactionsRes.data as BankTransactionRow[]) ?? []);
     setPaymentPlans((paymentPlansRes.data as unknown as PaymentPlanRow[]) ?? []);
+    const condoSettings = parseCondominiumSettings(condoSettingsRes.data?.settings);
+    setApprovalSettings(parseApprovalSettings(condoSettings.approvals));
+    setFiscalProfile((fiscalProfileRes.data as typeof fiscalProfile) ?? null);
+    setUnitTaxProfiles((unitTaxRes.data as typeof unitTaxProfiles) ?? []);
+    setAccountingMaps((accountingMapsRes.data as typeof accountingMaps) ?? []);
+    setCfdiInvoices(
+      ((cfdiInvoicesRes.data ?? []) as Array<{
+        id: string;
+        status: string;
+        uuid_fiscal: string | null;
+        series: string | null;
+        folio: string | null;
+        total: number;
+        pdf_url: string | null;
+        created_at: string;
+        unit: { identifier: string } | { identifier: string }[] | null;
+      }>).map((row) => ({
+        ...row,
+        unit: Array.isArray(row.unit) ? (row.unit[0] ?? null) : row.unit,
+      })),
+    );
     setLoading(false);
   }, [selectedCondoId, supabase]);
 
@@ -606,7 +700,11 @@ export function FinanceDashboard() {
   );
 
   const pendingReviewCount = useMemo(
-    () => scopedPayments.filter((payment) => payment.status === 'pending_review').length,
+    () =>
+      scopedPayments.filter(
+        (payment) =>
+          payment.status === 'pending_review' || payment.status === 'pending_second_review',
+      ).length,
     [scopedPayments],
   );
 
@@ -688,6 +786,65 @@ export function FinanceDashboard() {
     () => ({
       condominiumName,
       scopeLabel,
+      generatedAt: formatExportDate(),
+    }),
+    [condominiumName, scopeLabel],
+  );
+
+  const polizaExportRows = useMemo(() => {
+    const clusterNameById = new Map(clusters.map((cluster) => [cluster.id, cluster.name]));
+    const inputs = [];
+
+    for (const payment of approvedPayments) {
+      const date = paymentPeriodDate(payment.paid_at, payment.created_at).slice(0, 10);
+      inputs.push({
+        date,
+        concept: `${payment.unit?.identifier ?? 'Unidad'} · ${payment.charge?.concept ?? 'Pago'}`,
+        movementType: 'income' as const,
+        category: paymentIncomeCategory(payment.charge),
+        amount: Number(payment.amount),
+        fundType: payment.charge?.fund_type ?? 'operating',
+        reference: payment.id,
+        unitIdentifier: payment.unit?.identifier ?? null,
+        clusterName: payment.unit?.cluster_id
+          ? clusterNameById.get(payment.unit.cluster_id) ?? null
+          : null,
+      });
+    }
+
+    for (const income of scopedIncomeEntries) {
+      inputs.push({
+        date: income.income_date,
+        concept: income.concept,
+        movementType: 'income' as const,
+        category: income.category,
+        amount: Number(income.amount),
+        fundType: income.fund_type,
+        reference: income.id,
+        clusterName: income.cluster_id ? clusterNameById.get(income.cluster_id) ?? null : null,
+      });
+    }
+
+    for (const expense of scopedExpenses.filter((row) => row.status === 'paid')) {
+      inputs.push({
+        date: expense.expense_date,
+        concept: expense.concept,
+        movementType: 'expense' as const,
+        category: expense.category,
+        amount: Number(expense.amount),
+        fundType: expense.fund_type,
+        reference: expense.id,
+        clusterName: expense.cluster_id ? clusterNameById.get(expense.cluster_id) ?? null : null,
+      });
+    }
+
+    return buildPolizaRows(inputs, accountingMaps);
+  }, [accountingMaps, approvedPayments, clusters, scopedExpenses, scopedIncomeEntries]);
+
+  const polizaExportMeta = useMemo(
+    () => ({
+      condominiumName,
+      periodLabel: scopeLabel,
       generatedAt: formatExportDate(),
     }),
     [condominiumName, scopeLabel],
@@ -856,6 +1013,7 @@ export function FinanceDashboard() {
               disabled={movementExportRows.length === 0}
               onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
               onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
+              onPolizaCsv={() => downloadPolizaCsv(polizaExportMeta, polizaExportRows)}
             />
           </GlassCard>
 
@@ -1264,6 +1422,19 @@ export function FinanceDashboard() {
             }}
           />
         </>
+      ) : null}
+
+      {tab === 'contabilidad' ? (
+        <FinanceCompliancePanel
+          condominiumId={selectedCondoId}
+          approvalSettings={approvalSettings}
+          fiscalProfile={fiscalProfile}
+          unitTaxProfiles={unitTaxProfiles}
+          accountingMaps={accountingMaps}
+          cfdiInvoices={cfdiInvoices}
+          units={units}
+          onReload={() => void load()}
+        />
       ) : null}
     </div>
   );

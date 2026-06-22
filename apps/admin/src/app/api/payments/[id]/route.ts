@@ -29,7 +29,7 @@ export async function PATCH(
 
   const { data: payment, error: fetchError } = await supabase
     .from('payments')
-    .select('id, status')
+    .select('id, status, first_reviewed_by')
     .eq('id', id)
     .single();
 
@@ -42,7 +42,11 @@ export async function PATCH(
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, settledChargeIds: result.settledChargeIds });
+    return NextResponse.json({
+      ok: true,
+      settledChargeIds: result.settledChargeIds,
+      pendingSecondReview: result.pendingSecondReview ?? false,
+    });
   }
 
   if (payment.status === 'approved') {
@@ -63,6 +67,8 @@ export async function PATCH(
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
       rejection_reason: rejectionReason ?? 'Comprobante no válido',
+      first_reviewed_by: null,
+      first_reviewed_at: null,
     })
     .eq('id', id);
 

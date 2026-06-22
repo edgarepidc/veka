@@ -5,11 +5,13 @@ import { useState } from 'react';
 export function ExportMenu({
   onCsv,
   onPdf,
+  onPolizaCsv,
   disabled = false,
   label = 'Exportar',
 }: {
   onCsv: () => void;
   onPdf: () => void | Promise<void>;
+  onPolizaCsv?: () => void;
   disabled?: boolean;
   label?: string;
 }) {
@@ -35,6 +37,16 @@ export function ExportMenu({
       >
         Excel (CSV)
       </button>
+      {onPolizaCsv ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onPolizaCsv}
+          className="glass-btn px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+        >
+          Póliza contable
+        </button>
+      ) : null}
       <button
         type="button"
         disabled={disabled || pdfPending}

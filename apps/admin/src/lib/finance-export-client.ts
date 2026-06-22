@@ -3,11 +3,13 @@
 import type {
   FinancialReportExport,
   MovementExportRow,
+  PolizaExportRow,
   UnitStatementExport,
 } from '@veka/shared';
 import {
   buildFinancialReportCsv,
   buildMovementsCsv,
+  buildPolizaCsv,
   buildUnitStatementCsv,
   formatExportAmount,
   sanitizeExportFilename,
@@ -39,6 +41,14 @@ export function downloadMovementsCsv(
 ): void {
   const slug = sanitizeExportFilename(`${meta.condominiumName}-${meta.scopeLabel}`);
   downloadCsv(`movimientos-${slug}.csv`, buildMovementsCsv(meta, movements));
+}
+
+export function downloadPolizaCsv(
+  meta: { condominiumName: string; periodLabel: string; generatedAt: string },
+  rows: PolizaExportRow[],
+): void {
+  const slug = sanitizeExportFilename(`${meta.condominiumName}-${meta.periodLabel}`);
+  downloadCsv(`poliza-contable-${slug}.csv`, buildPolizaCsv(meta, rows));
 }
 
 async function loadPdfLibs() {
