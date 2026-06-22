@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
-import { formatCurrency } from '@veka/shared';
+import { useMemo, useRef, useState, useTransition } from 'react';
+import { detectBankImportFormat, formatCurrency } from '@veka/shared';
 
 import {
   importBankTransactions,
@@ -50,6 +50,12 @@ interface ExpenseCandidate {
   expense_date: string;
 }
 
+function formatImportLabel(format?: string) {
+  if (format === 'ofx') return 'OFX';
+  if (format === 'csv') return 'CSV';
+  return 'archivo';
+}
+
 export function BankReconciliationPanel({
   condominiumId,
   bankAccounts,
@@ -67,13 +73,16 @@ export function BankReconciliationPanel({
   expenses: ExpenseCandidate[];
   onReload: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [accountName, setAccountName] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountLast4, setAccountLast4] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(bankAccounts[0]?.id ?? '');
-  const [csv, setCsv] = useState('');
+  const [importContent, setImportContent] = useState('');
+  const [importFileName, setImportFileName] = useState<string | null>(null);
+  const [detectedFormat, setDetectedFormat] = useState<'csv' | 'ofx' | null>(null);
 
   const unmatched = useMemo(
     () => bankTransactions.filter((row) => row.status === 'unmatched'),
@@ -99,31 +108,59 @@ export function BankReconciliationPanel({
     });
   }
 
-  function importCsv() {
+  function handleImportContentChange(value: string, fileName?: string | null) {
+    setImportContent(value);
+    setImportFileName(fileName ?? null);
+    setDetectedFormat(value.trim() ? detectBankImportFormat(value) : null);
+  }
+
+  function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      handleImportContentChange(text, file.name);
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
+  function importFeed() {
     setMessage(null);
     const formData = new FormData();
     formData.set('bank_account_id', selectedAccountId);
-    formData.set('csv', csv);
+    formData.set('import_content', importContent);
+    if (detectedFormat) formData.set('format', detectedFormat);
     startTransition(async () => {
       const result = await importBankTransactions(formData);
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      const formatLabel = formatImportLabel('format' in result ? result.format : detectedFormat ?? undefined);
+      const warning = 'warning' in result && result.warning ? ` ${result.warning}` : '';
       setMessage(
-        result.error ??
-          `Importados ${'imported' in result ? result.imported : 0} movimientos bancarios.`,
+        `Importados ${'imported' in result ? result.imported : 0} movimientos (${formatLabel}).${warning}`,
       );
       if (result.success) {
-        setCsv('');
+        setImportContent('');
+        setImportFileName(null);
+        setDetectedFormat(null);
         onReload();
       }
     });
   }
 
   function suggestMatch(amount: number) {
+    const normalizedAmount = Math.abs(Number(amount));
     const tolerance = 0.01;
-    const payment = payments.find((row) => Math.abs(Number(row.amount) - amount) <= tolerance);
+    const payment = payments.find((row) => Math.abs(Number(row.amount) - normalizedAmount) <= tolerance);
     if (payment) return { type: 'payment' as const, id: payment.id, label: payment.charge?.concept ?? 'Pago' };
-    const income = incomeEntries.find((row) => Math.abs(Number(row.amount) - amount) <= tolerance);
+    const income = incomeEntries.find((row) => Math.abs(Number(row.amount) - normalizedAmount) <= tolerance);
     if (income) return { type: 'income' as const, id: income.id, label: income.concept };
-    const expense = expenses.find((row) => Math.abs(Number(row.amount) - amount) <= tolerance);
+    const expense = expenses.find((row) => Math.abs(Number(row.amount) - normalizedAmount) <= tolerance);
     if (expense) return { type: 'expense' as const, id: expense.id, label: expense.concept };
     return null;
   }
@@ -147,7 +184,7 @@ export function BankReconciliationPanel({
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Conciliación bancaria</h2>
         <p className="mt-1 text-sm text-muted">
-          Importa movimientos del banco y concílialos con pagos, ingresos o egresos del libro.
+          Importa movimientos del banco (OFX o CSV) y concílialos con pagos, ingresos o egresos del libro.
         </p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -183,11 +220,14 @@ export function BankReconciliationPanel({
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-base font-semibold text-[var(--text)]">Importar CSV</h3>
+        <h3 className="text-base font-semibold text-[var(--text)]">Importar feed bancario</h3>
         <p className="mt-1 text-xs text-subtle">
-          Formato: fecha, monto, descripción, referencia (encabezado opcional). Usa coma o punto y coma.
+          Sube un archivo <strong className="font-semibold text-muted">.ofx</strong> /{' '}
+          <strong className="font-semibold text-muted">.qfx</strong> del banco o pega un{' '}
+          <strong className="font-semibold text-muted">CSV</strong> con columnas: fecha, monto,
+          descripción, referencia.
         </p>
-        <div className="mt-3 flex flex-wrap gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <select
             value={selectedAccountId}
             onChange={(event) => setSelectedAccountId(event.target.value)}
@@ -201,19 +241,40 @@ export function BankReconciliationPanel({
               </option>
             ))}
           </select>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".ofx,.qfx,.csv,text/plain,text/csv,application/xml,text/xml"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={pending}
+            className="glass-btn px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            Seleccionar archivo
+          </button>
+          {importFileName ? (
+            <span className="text-xs text-subtle">
+              {importFileName}
+              {detectedFormat ? ` · detectado ${detectedFormat.toUpperCase()}` : ''}
+            </span>
+          ) : null}
         </div>
         <textarea
-          value={csv}
-          onChange={(event) => setCsv(event.target.value)}
+          value={importContent}
+          onChange={(event) => handleImportContentChange(event.target.value)}
           rows={5}
           className="glass-input mt-3 w-full resize-y font-mono text-xs"
-          placeholder={'fecha,monto,descripcion,referencia\n2026-06-01,3500.00,SPEI UNIDAD 101,REF123'}
+          placeholder={'OFX del banco o CSV:\nfecha,monto,descripcion,referencia\n2026-06-01,3500.00,SPEI UNIDAD 101,REF123'}
         />
         <div className="mt-3 flex justify-end">
           <button
             type="button"
-            onClick={importCsv}
-            disabled={pending || !selectedAccountId}
+            onClick={importFeed}
+            disabled={pending || !selectedAccountId || !importContent.trim()}
             className="glass-btn-primary px-4 py-2 text-sm font-semibold disabled:opacity-60"
           >
             Importar movimientos
@@ -222,7 +283,9 @@ export function BankReconciliationPanel({
       </GlassCard>
 
       {message ? (
-        <p className={`text-sm ${message.includes('error') || message.includes('obligat') ? 'text-red-300' : 'text-emerald-300'}`}>
+        <p
+          className={`text-sm ${message.includes('error') || message.includes('obligat') || message.includes('No se') ? 'text-red-300' : 'text-emerald-300'}`}
+        >
           {message}
         </p>
       ) : null}
@@ -237,6 +300,7 @@ export function BankReconciliationPanel({
           <div className="mt-4 space-y-3">
             {unmatched.map((row) => {
               const suggestion = suggestMatch(Number(row.amount));
+              const amount = Number(row.amount);
               return (
                 <div
                   key={row.id}
@@ -244,7 +308,12 @@ export function BankReconciliationPanel({
                 >
                   <div>
                     <p className="font-medium text-[var(--text)]">
-                      {row.transaction_date} · {formatCurrency(Number(row.amount))}
+                      {row.transaction_date} · {formatCurrency(amount)}
+                      {amount < 0 ? (
+                        <span className="ml-2 text-xs text-amber-200">egreso</span>
+                      ) : (
+                        <span className="ml-2 text-xs text-emerald-200">ingreso</span>
+                      )}
                     </p>
                     <p className="text-sm text-muted">{row.description || row.reference || 'Sin descripción'}</p>
                     {suggestion ? (

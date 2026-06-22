@@ -1,6 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import {
+  detectBankImportFormat,
+  ofxAccountLast4,
+  parseBankImportContent,
+  parseOfxAccountInfo,
+} from '@veka/shared';
 
 import { DEMO_CONDO_ID } from '@/lib/constants';
 import { createClient } from '@/lib/supabase/server';
@@ -8,49 +14,6 @@ import { createClient } from '@/lib/supabase/server';
 function resolveCondoId(value?: string | null): string {
   const id = value?.trim();
   return id || DEMO_CONDO_ID;
-}
-
-function parseCsvTransactions(csv: string): {
-  transaction_date: string;
-  amount: number;
-  description: string;
-  reference: string;
-  external_id: string;
-}[] {
-  const lines = csv
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return [];
-
-  const delimiter = lines[0].includes(';') ? ';' : ',';
-  const rows = lines.slice(lines[0].toLowerCase().includes('fecha') ? 1 : 0);
-  const parsed: ReturnType<typeof parseCsvTransactions> = [];
-
-  for (const [index, line] of rows.entries()) {
-    const parts = line.split(delimiter).map((part) => part.trim().replace(/^"|"$/g, ''));
-    if (parts.length < 2) continue;
-
-    const dateRaw = parts[0];
-    const amountRaw = parts[1].replace(/[$,\s]/g, '');
-    const amount = Number(amountRaw);
-    if (!dateRaw || !Number.isFinite(amount)) continue;
-
-    const isoDate = dateRaw.includes('-')
-      ? dateRaw.slice(0, 10)
-      : dateRaw.split('/').reverse().join('-').slice(0, 10);
-
-    parsed.push({
-      transaction_date: isoDate,
-      amount,
-      description: parts[2] ?? '',
-      reference: parts[3] ?? '',
-      external_id: parts[4] ?? `import-${isoDate}-${amount}-${index}`,
-    });
-  }
-
-  return parsed;
 }
 
 export async function saveBankAccount(formData: FormData) {
@@ -89,12 +52,52 @@ export async function importBankTransactions(formData: FormData) {
   if (!user) return { error: 'No autorizado' };
 
   const bankAccountId = String(formData.get('bank_account_id') ?? '').trim();
-  const csv = String(formData.get('csv') ?? '').trim();
-  if (!bankAccountId) return { error: 'Selecciona una cuenta bancaria.' };
-  if (!csv) return { error: 'Pega el contenido CSV a importar.' };
+  const content = String(formData.get('import_content') ?? formData.get('csv') ?? '').trim();
+  const formatInput = String(formData.get('format') ?? 'auto').trim();
 
-  const rows = parseCsvTransactions(csv);
-  if (rows.length === 0) return { error: 'No se encontraron movimientos válidos en el CSV.' };
+  if (!bankAccountId) return { error: 'Selecciona una cuenta bancaria.' };
+  if (!content) return { error: 'Pega o sube un archivo CSV u OFX para importar.' };
+
+  const format =
+    formatInput === 'csv' || formatInput === 'ofx'
+      ? (formatInput as 'csv' | 'ofx')
+      : ('auto' as const);
+
+  let rows;
+  try {
+    rows = parseBankImportContent(content, format);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'No se pudo interpretar el archivo bancario.',
+    };
+  }
+
+  if (rows.length === 0) {
+    return { error: 'No se encontraron movimientos válidos en el archivo.' };
+  }
+
+  const detectedFormat = format === 'auto' ? detectBankImportFormat(content) : format;
+  let accountWarning: string | undefined;
+
+  if (detectedFormat === 'ofx') {
+    const ofxAccount = parseOfxAccountInfo(content);
+    if (ofxAccount?.accountId) {
+      const { data: account } = await supabase
+        .from('bank_accounts')
+        .select('account_last4')
+        .eq('id', bankAccountId)
+        .maybeSingle();
+
+      const ofxLast4 = ofxAccountLast4(ofxAccount.accountId);
+      if (
+        account?.account_last4 &&
+        ofxLast4 &&
+        account.account_last4 !== ofxLast4
+      ) {
+        accountWarning = `El archivo OFX corresponde a una cuenta terminada en ${ofxLast4}, distinta a la seleccionada (···${account.account_last4}).`;
+      }
+    }
+  }
 
   const { error } = await supabase.from('bank_transactions').upsert(
     rows.map((row) => ({
@@ -111,7 +114,12 @@ export async function importBankTransactions(formData: FormData) {
 
   if (error) return { error: error.message };
   revalidatePath('/finanzas');
-  return { success: true, imported: rows.length };
+  return {
+    success: true,
+    imported: rows.length,
+    format: detectedFormat,
+    warning: accountWarning,
+  };
 }
 
 export async function matchBankTransaction(formData: FormData) {
