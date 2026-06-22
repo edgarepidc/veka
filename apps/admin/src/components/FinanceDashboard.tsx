@@ -230,7 +230,7 @@ const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'nomina', label: 'Empleados' },
   { id: 'morosidad', label: 'Morosidad' },
-  { id: 'contabilidad', label: 'CFDI y contabilidad' },
+  { id: 'contabilidad', label: 'Contabilidad' },
 ];
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {

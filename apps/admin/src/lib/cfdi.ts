@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { roundMoney } from '@veka/shared';
+import { isCfdiBillingEnabled, roundMoney } from '@veka/shared';
 
 import { stampCfdiInvoice } from '@/lib/pac/facturapi';
 
@@ -10,6 +10,8 @@ export async function maybeIssueCfdiForPayment(
   paymentId: string,
   createdBy: string | null,
 ): Promise<void> {
+  if (!isCfdiBillingEnabled()) return;
+
   const { data: payment } = await supabase
     .from('payments')
     .select('id, condominium_id, unit_id, amount, status')
@@ -108,6 +110,10 @@ export async function issueCfdiForPaymentManual(
   paymentId: string,
   userId: string,
 ): Promise<{ success: true } | { error: string }> {
+  if (!isCfdiBillingEnabled()) {
+    return { error: 'La facturación CFDI está deshabilitada por ahora.' };
+  }
+
   const { data: payment } = await supabase
     .from('payments')
     .select('id, status')

@@ -1,3 +1,4 @@
+export * from './features';
 export * from './accounting-export';
 export * from './approval-settings';
 export * from './bank-import';

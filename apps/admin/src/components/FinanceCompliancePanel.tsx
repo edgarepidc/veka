@@ -8,6 +8,7 @@ import {
   expenseCategoryLabel,
   formatCurrency,
   incomeCategoryLabel,
+  isCfdiBillingEnabled,
 } from '@veka/shared';
 
 import {
@@ -16,7 +17,6 @@ import {
   saveFiscalProfile,
   saveUnitTaxProfile,
   seedDefaultAccountingMaps,
-  stampPaymentCfdi,
 } from '@/app/(panel)/finanzas/fiscal-actions';
 import { GlassCard } from '@/components/ui/GlassCard';
 
@@ -116,6 +116,8 @@ export function FinanceCompliancePanel({
   const [mapAccountCode, setMapAccountCode] = useState('');
   const [mapAccountName, setMapAccountName] = useState('');
 
+  const cfdiEnabled = isCfdiBillingEnabled();
+
   function run(action: () => Promise<{ error?: string; success?: boolean }>, successMessage: string) {
     setMessage(null);
     startTransition(async () => {
@@ -173,6 +175,7 @@ export function FinanceCompliancePanel({
         </div>
       </GlassCard>
 
+      {cfdiEnabled ? (
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">CFDI / facturación MX</h2>
         <p className="mt-1 text-sm text-muted">
@@ -289,6 +292,15 @@ export function FinanceCompliancePanel({
           </div>
         ) : null}
       </GlassCard>
+      ) : (
+        <GlassCard>
+          <h2 className="text-lg font-semibold text-[var(--text)]">CFDI / facturación MX</h2>
+          <p className="mt-2 text-sm text-muted">
+            Facturación pausada hasta tener datos fiscales del condominio y de los residentes. Maker-checker, export
+            contable y pagos Oxxo/SPEI siguen disponibles abajo.
+          </p>
+        </GlassCard>
+      )}
 
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Export contable avanzado</h2>

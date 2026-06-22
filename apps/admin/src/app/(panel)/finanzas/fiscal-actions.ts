@@ -5,6 +5,7 @@ import {
   DEFAULT_APPROVAL_SETTINGS,
   DEFAULT_EXPENSE_ACCOUNT_MAPS,
   DEFAULT_INCOME_ACCOUNT_MAPS,
+  isCfdiBillingEnabled,
   parseApprovalSettings,
 } from '@veka/shared';
 
@@ -57,6 +58,10 @@ export async function saveApprovalSettings(formData: FormData) {
 }
 
 export async function saveFiscalProfile(formData: FormData) {
+  if (!isCfdiBillingEnabled()) {
+    return { error: 'La facturación CFDI está deshabilitada por ahora.' };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -98,6 +103,10 @@ export async function saveFiscalProfile(formData: FormData) {
 }
 
 export async function saveUnitTaxProfile(formData: FormData) {
+  if (!isCfdiBillingEnabled()) {
+    return { error: 'La facturación CFDI está deshabilitada por ahora.' };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -197,6 +206,10 @@ export async function seedDefaultAccountingMaps(condominiumId: string) {
 }
 
 export async function stampPaymentCfdi(paymentId: string) {
+  if (!isCfdiBillingEnabled()) {
+    return { error: 'La facturación CFDI está deshabilitada por ahora.' };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
