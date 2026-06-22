@@ -352,7 +352,7 @@ export function BudgetPanel({
           type="button"
           onClick={handleSave}
           disabled={pending}
-          className="glass-button-primary px-6 py-2.5 text-sm font-semibold disabled:opacity-60"
+          className="glass-btn-primary px-6 py-2.5 text-sm font-semibold disabled:opacity-60"
         >
           {pending ? 'Guardando…' : 'Guardar presupuesto'}
         </button>

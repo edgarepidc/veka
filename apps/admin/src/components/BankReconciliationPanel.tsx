@@ -214,7 +214,7 @@ export function BankReconciliationPanel({
             type="button"
             onClick={importCsv}
             disabled={pending || !selectedAccountId}
-            className="glass-button-primary px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            className="glass-btn-primary px-4 py-2 text-sm font-semibold disabled:opacity-60"
           >
             Importar movimientos
           </button>
@@ -259,7 +259,7 @@ export function BankReconciliationPanel({
                         type="button"
                         disabled={pending}
                         onClick={() => matchRow(row.id, suggestion.type, suggestion.id)}
-                        className="glass-button-primary px-3 py-1.5 text-xs font-semibold"
+                        className="glass-btn-primary px-3 py-1.5 text-xs font-semibold"
                       >
                         Conciliar sugerido
                       </button>

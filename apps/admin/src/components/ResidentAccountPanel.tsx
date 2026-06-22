@@ -50,7 +50,7 @@ export function ResidentPayOnlineButton({
         type="button"
         onClick={handlePay}
         disabled={disabled || pending}
-        className="glass-button-primary w-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+        className="glass-btn-primary w-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
       >
         {pending ? 'Abriendo pasarela…' : 'Pagar en línea'}
       </button>

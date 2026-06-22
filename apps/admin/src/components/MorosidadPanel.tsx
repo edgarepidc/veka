@@ -298,7 +298,7 @@ export function MorosidadPanel({
               type="button"
               onClick={handleSaveSettings}
               disabled={settingsPending}
-              className="glass-button-primary px-5 py-2 text-sm font-semibold disabled:opacity-60"
+              className="glass-btn-primary px-5 py-2 text-sm font-semibold disabled:opacity-60"
             >
               {settingsPending ? 'Guardando…' : 'Guardar recargos'}
             </button>
