@@ -62,6 +62,11 @@ interface PaymentForBudgetPanel {
   paid_at?: string | null;
   created_at?: string;
   unit?: { cluster_id: string | null } | null;
+  charge?: {
+    charge_kind?: string;
+    fee_campaign?: { scope: string } | null;
+    recurring_fee?: { scope: string } | null;
+  } | null;
 }
 
 export function BudgetPanel({

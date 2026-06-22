@@ -1,5 +1,6 @@
 import type { ChartBar, ChartSlice } from './finance-analytics';
 import { EXPENSE_CHART_COLORS, dateInMonth, paymentPeriodDate, roundMoney } from './finance-analytics';
+import { paymentIncomeCategory } from './fees';
 import { incomeCategoryLabel } from './finance-scope';
 
 export interface AgingBucket {
@@ -28,7 +29,12 @@ export interface PaymentForIncome {
   status: string;
   paid_at?: string | null;
   created_at?: string;
-  charge?: { concept: string } | null;
+  charge?: {
+    concept?: string;
+    charge_kind?: string;
+    fee_campaign?: { scope: string } | null;
+    recurring_fee?: { scope: string } | null;
+  } | null;
 }
 
 export interface IncomeEntryForAnalytics {
@@ -129,33 +135,25 @@ export function incomeBreakdownSlices(
   payments: PaymentForIncome[],
   incomeEntries: IncomeEntryForAnalytics[],
 ): ChartSlice[] {
-  let maintenance = 0;
-  let extraordinary = 0;
-  let otherPayments = 0;
-
-  for (const payment of payments) {
-    if (payment.status !== 'approved') continue;
-    const amount = Number(payment.amount);
-    const concept = payment.charge?.concept?.toLowerCase() ?? '';
-    if (concept.includes('extraordinari')) extraordinary += amount;
-    else if (concept.includes('mantenimiento') || concept.includes('cuota')) maintenance += amount;
-    else otherPayments += amount;
-  }
+  const paymentByCategory = payments.reduce<Record<string, number>>((acc, payment) => {
+    if (payment.status !== 'approved') return acc;
+    const category = paymentIncomeCategory(payment.charge ?? null);
+    acc[category] = (acc[category] ?? 0) + Number(payment.amount);
+    return acc;
+  }, {});
 
   const manualByCategory = incomeEntries.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.category] = (acc[entry.category] ?? 0) + Number(entry.amount);
     return acc;
   }, {});
 
-  const raw: { label: string; value: number }[] = [
-    { label: 'Cuotas de mantenimiento', value: maintenance },
-    { label: 'Cuotas extraordinarias', value: extraordinary },
-    { label: 'Otros pagos', value: otherPayments },
-    ...Object.entries(manualByCategory).map(([category, value]) => ({
+  const categories = new Set([...Object.keys(paymentByCategory), ...Object.keys(manualByCategory)]);
+  const raw: { label: string; value: number }[] = Array.from(categories)
+    .map((category) => ({
       label: incomeCategoryLabel(category),
-      value,
-    })),
-  ].filter((item) => item.value > 0);
+      value: roundMoney((paymentByCategory[category] ?? 0) + (manualByCategory[category] ?? 0)),
+    }))
+    .filter((item) => item.value > 0);
 
   return raw.map((item, index) => ({
     ...item,

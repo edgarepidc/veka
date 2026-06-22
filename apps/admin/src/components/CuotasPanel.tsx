@@ -93,6 +93,7 @@ function StatChip({
 }
 
 export function CuotasPanel({
+  condominiumId,
   clusters,
   units,
   recurringFees,
@@ -102,6 +103,7 @@ export function CuotasPanel({
   scopeLabel,
   onReload,
 }: {
+  condominiumId: string;
   clusters: ClusterRow[];
   units: UnitOption[];
   recurringFees: RecurringFeeRow[];
@@ -282,7 +284,7 @@ export function CuotasPanel({
     if (!confirm(`¿Deseas ${label} esta cuota periódica?`)) return;
     setMessage(null);
     startTransition(async () => {
-      const result = await setRecurringFeeStatus(feeId, status);
+      const result = await setRecurringFeeStatus(feeId, status, condominiumId);
       setMessage(result.error ?? 'Estado actualizado.');
       onReload();
     });
@@ -292,7 +294,7 @@ export function CuotasPanel({
     if (!confirm('¿Cancelar esta cuota extraordinaria? Se cancelarán los cargos pendientes.')) return;
     setMessage(null);
     startTransition(async () => {
-      const result = await cancelFeeCampaign(campaignId);
+      const result = await cancelFeeCampaign(campaignId, condominiumId);
       setMessage(result.error ?? 'Cuota extraordinaria cancelada.');
       onReload();
     });
@@ -321,6 +323,7 @@ export function CuotasPanel({
             coeficiente de cada unidad.
           </p>
           <form action={runCreatePeriodic} className="mt-4 space-y-3">
+            <input type="hidden" name="condominium_id" value={condominiumId} />
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
               <div className="flex flex-wrap gap-2">
@@ -460,6 +463,7 @@ export function CuotasPanel({
                   <div key={fee.id} className="glass-card-deep p-4">
                     {isEditing ? (
                       <form action={runUpdatePeriodic} className="space-y-3">
+                        <input type="hidden" name="condominium_id" value={condominiumId} />
                         <input type="hidden" name="fee_id" value={fee.id} />
                         <input
                           name="concept"
@@ -616,6 +620,7 @@ export function CuotasPanel({
             Emisión única para todo el condominio o una torre, con fecha de vencimiento específica.
           </p>
           <form action={runCreateExtraordinary} className="mt-4 space-y-3">
+            <input type="hidden" name="condominium_id" value={condominiumId} />
             <select
               name="cluster_id"
               value={extraForm.clusterId}

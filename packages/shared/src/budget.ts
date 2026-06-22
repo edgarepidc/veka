@@ -1,6 +1,11 @@
 import type { ExpenseCategory, FundType, IncomeCategory } from './constants';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from './constants';
-import { dateInMonth, dateInYear, roundMoney, type PeriodMode } from './finance-analytics';
+import {
+  inFinancePeriod,
+  roundMoney,
+  type PeriodMode,
+} from './finance-analytics';
+import { paymentIncomeCategory } from './fees';
 import { expenseCategoryLabel } from './finance';
 import { incomeCategoryLabel } from './finance-scope';
 
@@ -35,6 +40,11 @@ export interface PaymentForBudget {
   status: string;
   paid_at?: string | null;
   created_at?: string;
+  charge?: {
+    charge_kind?: string;
+    fee_campaign?: { scope: string } | null;
+    recurring_fee?: { scope: string } | null;
+  } | null;
 }
 
 export interface BudgetVsActualRow {
@@ -58,11 +68,8 @@ export interface BudgetSummary {
   proratedNote: string | null;
 }
 
-function dateOnOrBefore(isoDate: string, reference: Date): boolean {
-  const d = new Date(isoDate.includes('T') ? isoDate : `${isoDate}T12:00:00`);
-  const ref = new Date(reference);
-  ref.setHours(23, 59, 59, 999);
-  return d.getTime() <= ref.getTime();
+function incomePaymentDate(payment: PaymentForBudget): string {
+  return payment.paid_at ?? payment.created_at ?? '';
 }
 
 function expenseInPeriod(
@@ -73,18 +80,7 @@ function expenseInPeriod(
   reference: Date,
 ): boolean {
   if (expense.status !== 'paid') return false;
-  if (periodMode === 'year') {
-    if (!dateInYear(expense.expense_date, year)) return false;
-    if (year === reference.getFullYear()) {
-      return dateOnOrBefore(expense.expense_date, reference);
-    }
-    return true;
-  }
-  return dateInMonth(expense.expense_date, year, month);
-}
-
-function incomePaymentDate(payment: PaymentForBudget): string {
-  return payment.paid_at ?? payment.created_at ?? '';
+  return inFinancePeriod(expense.expense_date, periodMode, year, month, reference);
 }
 
 function incomeInPeriod(
@@ -95,15 +91,7 @@ function incomeInPeriod(
   reference: Date,
 ): boolean {
   if (payment.status !== 'approved') return false;
-  const date = incomePaymentDate(payment);
-  if (periodMode === 'year') {
-    if (!dateInYear(date, year)) return false;
-    if (year === reference.getFullYear()) {
-      return dateOnOrBefore(date, reference);
-    }
-    return true;
-  }
-  return dateInMonth(date, year, month);
+  return inFinancePeriod(incomePaymentDate(payment), periodMode, year, month, reference);
 }
 
 function manualIncomeInPeriod(
@@ -113,14 +101,7 @@ function manualIncomeInPeriod(
   month: number,
   reference: Date,
 ): boolean {
-  if (periodMode === 'year') {
-    if (!dateInYear(income.income_date, year)) return false;
-    if (year === reference.getFullYear()) {
-      return dateOnOrBefore(income.income_date, reference);
-    }
-    return true;
-  }
-  return dateInMonth(income.income_date, year, month);
+  return inFinancePeriod(income.income_date, periodMode, year, month, reference);
 }
 
 export function budgetProrateRatio(clusterUnitCount: number, totalUnitCount: number, scoped: boolean): number {
@@ -223,7 +204,8 @@ export function buildBudgetSummary({
   const incomeActual: Record<string, number> = {};
   for (const payment of payments) {
     if (!incomeInPeriod(payment, periodMode, fiscalYear, month, reference)) continue;
-    incomeActual.cuotas = roundMoney((incomeActual.cuotas ?? 0) + Number(payment.amount));
+    const category = paymentIncomeCategory(payment.charge ?? null);
+    incomeActual[category] = roundMoney((incomeActual[category] ?? 0) + Number(payment.amount));
   }
   for (const income of incomeEntries) {
     if (!manualIncomeInPeriod(income, periodMode, fiscalYear, month, reference)) continue;

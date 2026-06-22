@@ -23,6 +23,7 @@ import {
   fundTypeLabel,
   incomeCategoryLabel,
   matchesFinanceClusterFilter,
+  paymentIncomeCategory,
   paymentPeriodDate,
   paymentStatusLabel,
   delinquentBalance,
@@ -98,7 +99,14 @@ interface PaymentRow {
     cluster_id: string | null;
     cluster: { name: string } | null;
   } | null;
-  charge: { concept: string; due_date: string; fund_type: FundType } | null;
+  charge: {
+    concept: string;
+    due_date: string;
+    fund_type: FundType;
+    charge_kind?: string;
+    fee_campaign?: { scope: string } | null;
+    recurring_fee?: { scope: string } | null;
+  } | null;
 }
 
 interface ChargeRow {
@@ -222,11 +230,25 @@ function sumAmount(items: { amount: number }[]): number {
   return items.reduce((sum, item) => sum + Number(item.amount), 0);
 }
 
+function normalizeRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 function normalizePaymentRow(row: PaymentRow): PaymentRow {
-  if (!row.unit) return row;
+  const charge = row.charge
+    ? {
+        ...row.charge,
+        fee_campaign: normalizeRelation(row.charge.fee_campaign),
+        recurring_fee: normalizeRelation(row.charge.recurring_fee),
+      }
+    : row.charge;
+
+  if (!row.unit) return { ...row, charge };
+
   const cluster = row.unit.cluster as { name: string } | { name: string }[] | null | undefined;
   const normalizedCluster = Array.isArray(cluster) ? (cluster[0] ?? null) : (cluster ?? null);
-  return { ...row, unit: { ...row.unit, cluster: normalizedCluster } };
+  return { ...row, charge, unit: { ...row.unit, cluster: normalizedCluster } };
 }
 
 export function FinanceDashboard() {
@@ -347,7 +369,7 @@ export function FinanceDashboard() {
       supabase
         .from('payments')
         .select(
-          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date, fund_type)',
+          'id, charge_id, unit_id, amount, status, proof_url, payment_method, created_at, paid_at, unit:units(identifier, cluster_id, cluster:clusters(name)), charge:charges(concept, due_date, fund_type, charge_kind, fee_campaign:fee_campaigns(scope), recurring_fee:recurring_fees(scope))',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -516,12 +538,9 @@ export function FinanceDashboard() {
   }, [clusters, scopedCharges]);
 
   const incomeByCategory = useMemo(() => {
-    const paymentGroups = groupBy(approvedPayments, (p) => {
-      const concept = p.charge?.concept ?? 'Otros ingresos';
-      if (concept.toLowerCase().includes('mantenimiento')) return 'Cuotas de mantenimiento';
-      if (concept.toLowerCase().includes('extraordinari')) return 'Cuotas extraordinarias';
-      return 'Pagos de residentes';
-    });
+    const paymentGroups = groupBy(approvedPayments, (p) =>
+      incomeCategoryLabel(paymentIncomeCategory(p.charge ?? null)),
+    );
     const manualGroups = groupBy(scopedIncomeEntries, (income) => incomeCategoryLabel(income.category));
     const paymentRows = Object.entries(paymentGroups).map(([label, items]) => ({
       label,
@@ -788,6 +807,7 @@ export function FinanceDashboard() {
 
       {tab === 'cuotas' ? (
         <CuotasPanel
+          condominiumId={selectedCondoId || DEMO_CONDO_ID}
           clusters={clusters}
           units={units}
           recurringFees={recurringFees}

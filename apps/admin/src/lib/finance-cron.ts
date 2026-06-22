@@ -5,6 +5,9 @@ import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import { deliverChargeReminder } from '@/lib/notifications';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+/** Minimum days between automatic reminders for the same charge. */
+const REMINDER_COOLDOWN_DAYS = 7;
+
 export interface DailyFinanceMaintenanceResult {
   condominiums: number;
   lateFeesCreated: number;
@@ -44,9 +47,22 @@ async function processAutomaticReminders(
   let processed = 0;
   let deliveries = 0;
 
+  const cooldownCutoff = new Date();
+  cooldownCutoff.setDate(cooldownCutoff.getDate() - REMINDER_COOLDOWN_DAYS);
+
   for (const charge of charges ?? []) {
     const days = daysPastDue(charge.due_date);
     if (days < Number(rule.days_after)) continue;
+
+    const { data: recentReminder } = await admin
+      .from('payment_reminder_log')
+      .select('id')
+      .eq('charge_id', charge.id)
+      .gte('sent_at', cooldownCutoff.toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (recentReminder) continue;
 
     const result = await deliverChargeReminder({
       condominiumId,

@@ -9,13 +9,14 @@ import {
   cashFlowBars,
   collectionRateByCluster,
   dateInMonth,
-  dateInYear,
   delinquencyAgingBars,
   expenseCategoryLabel,
   formatCurrency,
   formatExportDate,
   formatPercentChange,
   fundTypeLabel,
+  inComparablePreviousPeriod,
+  inFinancePeriod,
   incomeBreakdownSlices,
   matchesFinanceClusterFilter,
   monthLabel,
@@ -54,7 +55,12 @@ interface PaymentRow {
   created_at: string;
   paid_at: string | null;
   unit: { identifier: string; cluster_id: string | null } | null;
-  charge: { concept: string } | null;
+  charge: {
+    concept: string;
+    charge_kind?: string;
+    fee_campaign?: { scope: string } | null;
+    recurring_fee?: { scope: string } | null;
+  } | null;
 }
 
 interface ExpenseRow {
@@ -168,11 +174,11 @@ export function FinanceEstadoPanel({
   );
 
   const analytics = useMemo(() => {
+    const reference = new Date();
     const approved = scopePayments.filter((p) => p.status === 'approved');
     const paidExpenses = scopeExpenses.filter((e) => e.status === 'paid');
 
-    const inPeriod = (iso: string) =>
-      periodMode === 'year' ? dateInYear(iso, year) : dateInMonth(iso, year, month);
+    const inPeriod = (iso: string) => inFinancePeriod(iso, periodMode, year, month, reference);
 
     const periodPayments = approved.filter((p) =>
       inPeriod(paymentPeriodDate(p.paid_at, p.created_at)),
@@ -230,19 +236,18 @@ export function FinanceEstadoPanel({
       ? (clusters.find((cluster) => cluster.id === clusterId)?.name ?? 'Cluster')
       : 'Todo el condominio';
 
-    const prevYear = periodMode === 'month' ? (month === 1 ? year - 1 : year) : year - 1;
-    const prevMonth = periodMode === 'month' ? (month === 1 ? 12 : month - 1) : month;
-
     const previousIncome = (() => {
       const prevPayments = approved.filter((p) =>
-        periodMode === 'year'
-          ? dateInYear(paymentPeriodDate(p.paid_at, p.created_at), prevYear)
-          : dateInMonth(paymentPeriodDate(p.paid_at, p.created_at), prevYear, prevMonth),
+        inComparablePreviousPeriod(
+          paymentPeriodDate(p.paid_at, p.created_at),
+          periodMode,
+          year,
+          month,
+          reference,
+        ),
       );
       const prevManual = scopeIncomeEntries.filter((income) =>
-        periodMode === 'year'
-          ? dateInYear(income.income_date, prevYear)
-          : dateInMonth(income.income_date, prevYear, prevMonth),
+        inComparablePreviousPeriod(income.income_date, periodMode, year, month, reference),
       );
       return (
         prevPayments.reduce((s, p) => s + Number(p.amount), 0) +
@@ -250,16 +255,9 @@ export function FinanceEstadoPanel({
       );
     })();
 
-    const previousExpenses = (() => {
-      if (periodMode === 'year') {
-        return paidExpenses
-          .filter((e) => dateInYear(e.expense_date, prevYear))
-          .reduce((s, e) => s + Number(e.amount), 0);
-      }
-      return paidExpenses
-        .filter((e) => dateInMonth(e.expense_date, prevYear, prevMonth))
-        .reduce((s, e) => s + Number(e.amount), 0);
-    })();
+    const previousExpenses = paidExpenses
+      .filter((e) => inComparablePreviousPeriod(e.expense_date, periodMode, year, month, reference))
+      .reduce((s, e) => s + Number(e.amount), 0);
 
     const incomeSlices = incomeBreakdownSlices(
       approved.filter((p) => inPeriod(paymentPeriodDate(p.paid_at, p.created_at))),
@@ -293,7 +291,11 @@ export function FinanceEstadoPanel({
       expenseChange: percentChange(periodExpenseTotal, previousExpenses),
       balanceChange: percentChange(periodIncome - periodExpenseTotal, previousIncome - previousExpenses),
       periodLabel:
-        periodMode === 'year' ? String(year) : monthLabel(year, month),
+        periodMode === 'year'
+          ? year === reference.getFullYear()
+            ? `${year} (acumulado)`
+            : String(year)
+          : monthLabel(year, month),
       scopeLabel: clusterLabel,
       manualIncome,
       paymentIncome,

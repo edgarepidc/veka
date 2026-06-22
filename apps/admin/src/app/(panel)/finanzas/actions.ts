@@ -75,10 +75,12 @@ export async function createRecurringFee(formData: FormData) {
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
   if (scope === 'cluster' && !clusterId) return { error: 'Selecciona la torre o cluster.' };
 
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+
   const { data: fee, error: feeError } = await supabase
     .from('recurring_fees')
     .insert({
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condoId,
       cluster_id: scope === 'cluster' ? clusterId : null,
       scope,
       concept,
@@ -102,7 +104,7 @@ export async function createRecurringFee(formData: FormData) {
 
   if (revisionError) return { error: revisionError.message };
 
-  await ensureRecurringChargesForCondo(supabase, DEMO_CONDO_ID, user.id, effectiveFrom);
+  await ensureRecurringChargesForCondo(supabase, condoId, user.id, effectiveFrom);
 
   revalidatePath('/finanzas');
   return { success: true };
@@ -135,11 +137,13 @@ export async function updateRecurringFee(formData: FormData) {
     effectiveFrom = hasCurrent ? nextPeriodMonth(currentPeriod) : currentPeriod;
   }
 
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+
   const { error: updateError } = await supabase
     .from('recurring_fees')
     .update({ concept, due_day: dueDay, fund_type: fundType })
     .eq('id', feeId)
-    .eq('condominium_id', DEMO_CONDO_ID);
+    .eq('condominium_id', condoId);
 
   if (updateError) return { error: updateError.message };
 
@@ -167,14 +171,18 @@ export async function updateRecurringFee(formData: FormData) {
   }
 
   if (effectiveFrom <= currentPeriod) {
-    await ensureRecurringChargesForCondo(supabase, DEMO_CONDO_ID, user.id, currentPeriod);
+    await ensureRecurringChargesForCondo(supabase, condoId, user.id, currentPeriod);
   }
 
   revalidatePath('/finanzas');
   return { success: true, effectiveFrom };
 }
 
-export async function setRecurringFeeStatus(feeId: string, status: 'active' | 'paused' | 'cancelled') {
+export async function setRecurringFeeStatus(
+  feeId: string,
+  status: 'active' | 'paused' | 'cancelled',
+  condominiumId?: string,
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -183,11 +191,13 @@ export async function setRecurringFeeStatus(feeId: string, status: 'active' | 'p
   if (!user) return { error: 'No autorizado' };
   if (!feeId) return { error: 'Cuota inválida.' };
 
+  const condoId = resolveCondoId(condominiumId);
+
   const { error } = await supabase
     .from('recurring_fees')
     .update({ status })
     .eq('id', feeId)
-    .eq('condominium_id', DEMO_CONDO_ID);
+    .eq('condominium_id', condoId);
 
   if (error) return { error: error.message };
 
@@ -222,10 +232,12 @@ export async function createExtraordinaryFee(formData: FormData) {
   if (!dueDate) return { error: 'Fecha de vencimiento obligatoria.' };
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
 
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+
   let unitsQuery = supabase
     .from('units')
     .select('id, coefficient')
-    .eq('condominium_id', DEMO_CONDO_ID);
+    .eq('condominium_id', condoId);
 
   if (clusterId) {
     unitsQuery = unitsQuery.eq('cluster_id', clusterId);
@@ -240,7 +252,7 @@ export async function createExtraordinaryFee(formData: FormData) {
   const { data: campaign, error: campaignError } = await supabase
     .from('fee_campaigns')
     .insert({
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condoId,
       cluster_id: clusterId || null,
       scope: 'extraordinary' satisfies FeeScope,
       concept,
@@ -260,7 +272,7 @@ export async function createExtraordinaryFee(formData: FormData) {
 
   const { error: chargesError } = await supabase.from('charges').insert(
     units.map((unit) => ({
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condoId,
       unit_id: unit.id,
       fee_campaign_id: campaign.id,
       concept,
@@ -279,7 +291,7 @@ export async function createExtraordinaryFee(formData: FormData) {
   return { success: true, unitCount: units.length };
 }
 
-export async function cancelFeeCampaign(campaignId: string) {
+export async function cancelFeeCampaign(campaignId: string, condominiumId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -288,11 +300,13 @@ export async function cancelFeeCampaign(campaignId: string) {
   if (!user) return { error: 'No autorizado' };
   if (!campaignId) return { error: 'Cuota inválida.' };
 
+  const condoId = resolveCondoId(condominiumId);
+
   const { error: campaignError } = await supabase
     .from('fee_campaigns')
     .update({ status: 'cancelled' })
     .eq('id', campaignId)
-    .eq('condominium_id', DEMO_CONDO_ID);
+    .eq('condominium_id', condoId);
 
   if (campaignError) return { error: campaignError.message };
 

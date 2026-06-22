@@ -1,4 +1,4 @@
-import type { FeeCampaignStatus, FeeScope } from './constants';
+import type { FeeCampaignStatus, FeeScope, IncomeCategory } from './constants';
 
 export const FEE_SCOPE_LABELS: Record<FeeScope, string> = {
   general: 'Mantenimiento general',
@@ -67,4 +67,17 @@ export function chargeDisplaySubtitle(charge: {
   const source = chargeFeeSource(charge);
   if (!source) return null;
   return feeCampaignBadge(source.scope, source.cluster?.name ?? null);
+}
+
+export function paymentIncomeCategory(charge: {
+  charge_kind?: string;
+  fee_campaign?: { scope: FeeScope | string } | null;
+  recurring_fee?: { scope: FeeScope | string } | null;
+} | null | undefined): IncomeCategory {
+  if (!charge) return 'otros';
+  if (charge.charge_kind === 'late_fee') return 'multas';
+  const source = charge.recurring_fee ?? charge.fee_campaign ?? null;
+  if (source?.scope === 'extraordinary') return 'extraordinario';
+  if (source?.scope === 'general' || source?.scope === 'cluster') return 'cuotas';
+  return 'cuotas';
 }
