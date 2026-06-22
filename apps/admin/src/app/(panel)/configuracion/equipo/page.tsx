@@ -1,5 +1,6 @@
 import { ConfigNav } from '@/components/ConfigNav';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { HELP } from '@/lib/help-content';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadStaffTeam } from '@/lib/load-team';
 
@@ -16,6 +17,7 @@ export default async function EquipoConfigPage() {
         title="Configuración"
         highlight="del equipo"
         subtitle="Staff administrativo, seguridad y mantenimiento."
+        help={<p>{HELP.equipo}</p>}
       />
       <ConfigNav />
       <TeamManager

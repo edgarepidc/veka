@@ -52,8 +52,10 @@ import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
 import { UnitStatementPanel } from '@/components/UnitStatementPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { HelpHint } from '@/components/ui/HelpHint';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import { HELP } from '@/lib/help-content';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
 import {
   downloadMovementsCsv,
@@ -232,6 +234,18 @@ const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'morosidad', label: 'Morosidad' },
   { id: 'contabilidad', label: 'Contabilidad' },
 ];
+
+const TAB_HELP: Record<FinanceTab, string> = {
+  estado: HELP.finanzas.estado,
+  presupuesto: HELP.finanzas.presupuesto,
+  cuotas: HELP.finanzas.cuotas,
+  movimientos: HELP.finanzas.movimientos,
+  cuentas: HELP.finanzas.cuentas,
+  proveedores: HELP.finanzas.proveedores,
+  nomina: HELP.finanzas.nomina,
+  morosidad: HELP.finanzas.morosidad,
+  contabilidad: HELP.finanzas.contabilidad,
+};
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {
   return items.reduce<Record<string, T[]>>((acc, item) => {
@@ -944,6 +958,13 @@ export function FinanceDashboard() {
             ) : null}
           </button>
         ))}
+      </div>
+
+      <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+        <HelpHint label="Ayuda de esta pestaña" className="mt-0.5 shrink-0">
+          <p>{TAB_HELP[tab]}</p>
+        </HelpHint>
+        <p className="text-xs leading-relaxed text-subtle">{TAB_HELP[tab]}</p>
       </div>
 
       {tab === 'estado' ? (

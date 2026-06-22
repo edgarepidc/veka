@@ -11,8 +11,10 @@ import {
 
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
 import { createClient } from '@/lib/supabase/client';
 import { DEMO_CONDO_ID } from '@/lib/constants';
+import { HELP } from '@/lib/help-content';
 import type {
   AmenityOption,
   MaintenanceScheduleRow,
@@ -161,7 +163,7 @@ export function MaintenanceManager({
       {tab === 'calendarios' ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Publicar calendario</h2>
+            <SectionHeading help={HELP.mantenimiento}>Publicar calendario</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Mantenimiento programado de alberca, gimnasio y otras áreas comunes.
             </p>
@@ -199,7 +201,7 @@ export function MaintenanceManager({
           </GlassCard>
 
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Calendarios publicados</h2>
+            <SectionHeading help={HELP.mantenimiento}>Calendarios publicados</SectionHeading>
             <ul className="mt-4 space-y-3">
               {schedules.length === 0 ? (
                 <li className="text-sm text-subtle">Sin calendarios todavía.</li>
@@ -230,7 +232,7 @@ export function MaintenanceManager({
       {tab === 'evidencia' ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Registrar evidencia</h2>
+            <SectionHeading help={HELP.mantenimiento}>Registrar evidencia</SectionHeading>
             <p className="mt-1 text-sm text-muted">Trabajos realizados en áreas comunes con foto o documento.</p>
             <form action={(fd) => run(createWorkLog, fd, 'Evidencia registrada.')} className="mt-4 space-y-3">
               <input name="title" required placeholder="Ej. Limpieza profunda alberca" className="glass-input" />
@@ -283,7 +285,7 @@ export function MaintenanceManager({
           </GlassCard>
 
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Historial de trabajos</h2>
+            <SectionHeading help={HELP.mantenimiento}>Historial de trabajos</SectionHeading>
             <ul className="mt-4 space-y-3">
               {workLogs.length === 0 ? (
                 <li className="text-sm text-subtle">Sin evidencia registrada.</li>

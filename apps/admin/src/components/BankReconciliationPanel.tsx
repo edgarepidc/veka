@@ -10,6 +10,8 @@ import {
   saveBankAccount,
 } from '@/app/(panel)/finanzas/bank-actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface BankAccountRow {
   id: string;
@@ -182,7 +184,7 @@ export function BankReconciliationPanel({
   return (
     <div className="space-y-6">
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Conciliación bancaria</h2>
+        <SectionHeading help={HELP.banco.cuentas}>Conciliación bancaria</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Importa movimientos del banco (OFX o CSV) y concílialos con pagos, ingresos o egresos del libro.
         </p>
@@ -220,7 +222,9 @@ export function BankReconciliationPanel({
       </GlassCard>
 
       <GlassCard>
-        <h3 className="text-base font-semibold text-[var(--text)]">Importar feed bancario</h3>
+        <SectionHeading as="h3" className="text-base font-semibold text-[var(--text)]" help={HELP.banco.import}>
+          Importar feed bancario
+        </SectionHeading>
         <p className="mt-1 text-xs text-subtle">
           Sube un archivo <strong className="font-semibold text-muted">.ofx</strong> /{' '}
           <strong className="font-semibold text-muted">.qfx</strong> del banco o pega un{' '}
@@ -291,9 +295,13 @@ export function BankReconciliationPanel({
       ) : null}
 
       <GlassCard>
-        <h3 className="text-base font-semibold text-[var(--text)]">
+        <SectionHeading
+          as="h3"
+          className="text-base font-semibold text-[var(--text)]"
+          help={HELP.banco.conciliar}
+        >
           Pendientes de conciliar ({unmatched.length})
-        </h3>
+        </SectionHeading>
         {unmatched.length === 0 ? (
           <p className="mt-3 text-sm text-subtle">No hay movimientos bancarios sin conciliar.</p>
         ) : (

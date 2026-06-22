@@ -1,5 +1,6 @@
 import { ConfigNav } from '@/components/ConfigNav';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { HELP } from '@/lib/help-content';
 import { loadCondominium } from '@/lib/load-condominium';
 import { requireAdminSession } from '@/lib/require-admin';
 
@@ -25,6 +26,7 @@ export default async function CondominioConfigPage() {
         title="Configuración"
         highlight="del condominio"
         subtitle="Nombre, dirección y zona horaria del residencial."
+        help={<p>{HELP.condominio}</p>}
       />
       <ConfigNav />
       <CondominiumForm condo={condo} />

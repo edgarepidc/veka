@@ -16,6 +16,8 @@ import {
 
 import { saveAnnualBudget } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface BudgetLineRow {
   id?: string;
@@ -239,7 +241,7 @@ export function BudgetPanel({
       <GlassCard>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Presupuesto anual</h2>
+            <SectionHeading help={HELP.presupuesto}>Presupuesto anual</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Define montos anuales por categoría. En el estado financiero se comparan con lo real del
               periodo.

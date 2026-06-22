@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 import type { CommunityPostRow } from '@/lib/load-community';
 
 import { createAnnouncement, createPoll } from './actions';
@@ -114,7 +116,7 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Publicaciones recientes</h2>
+        <SectionHeading help={HELP.comunidad.avisos}>Publicaciones recientes</SectionHeading>
         <ul className="mt-4 space-y-3">
           {posts.length === 0 ? (
             <li className="text-sm text-subtle">No hay publicaciones todavía.</li>

@@ -13,6 +13,8 @@ import {
 
 import { cancelPaymentPlan, createPaymentPlan } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface UnitOption {
   id: string;
@@ -158,7 +160,7 @@ export function PaymentPlansPanel({
   return (
     <div className="space-y-6">
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Planes de pago</h2>
+        <SectionHeading help={HELP.planes}>Planes de pago</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Acuerda pagos en parcialidades sobre cargos vencidos. Los abonos se aplican a los cargos
           vinculados en orden de antigüedad.

@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from 'react';
 import { formatUnitLabel, UNIT_KIND_LABELS, UNIT_RELATIONSHIP_CHIP_LABELS, UNIT_RELATIONSHIP_LABELS, type UnitKind } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 import type { ClusterRow, UnitOccupant, UnitRow as UnitData } from '@/lib/load-condominium';
 
 import { createCluster, createUnit, deleteCluster, deleteUnit, inviteUnitOccupant } from './actions';
@@ -120,7 +122,7 @@ export function UnitsManager({
   return (
     <div className="space-y-6">
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Nuevo cluster / torre / villa</h2>
+        <SectionHeading help={HELP.unidades}>Nuevo cluster / torre / villa</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Ej. Torre A, Marbella, Sector Norte. Dentro de cada cluster agregas casas o deptos.
         </p>

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { ResidentAccountPanel } from '@/components/ResidentAccountPanel';
 import { PageHeader } from '@/components/ui/PageHeader';
 import type { ActivePaymentPlan, ChargeSettlementStatus } from '@veka/shared';
+import { HELP } from '@/lib/help-content';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { createClient } from '@/lib/supabase/server';
 
@@ -65,7 +66,8 @@ export default async function MiCuentaPage() {
       <PageHeader
         title="Mi cuenta"
         highlight="financiera"
-        subtitle="Consulta tus cargos y paga en línea con tarjeta (modo prueba Stripe)."
+        subtitle="Consulta tus cargos y paga en línea con tarjeta, Oxxo o SPEI."
+        help={<p>{HELP.residente}</p>}
       />
       <ResidentAccountPanel
         unitLabel={session.membership?.unit_identifier ?? '—'}

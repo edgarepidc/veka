@@ -19,6 +19,8 @@ import {
   seedDefaultAccountingMaps,
 } from '@/app/(panel)/finanzas/fiscal-actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface UnitOption {
   id: string;
@@ -130,7 +132,7 @@ export function FinanceCompliancePanel({
   return (
     <div className="space-y-6">
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Maker-checker en aprobaciones</h2>
+        <SectionHeading help={HELP.contabilidad.makerChecker}>Maker-checker en aprobaciones</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Para transferencias con comprobante, exige dos personas distintas cuando el monto supera el umbral.
           Los pagos en línea (tarjeta/Oxxo/SPEI) se aprueban automáticamente al confirmarse.
@@ -177,7 +179,7 @@ export function FinanceCompliancePanel({
 
       {cfdiEnabled ? (
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">CFDI / facturación MX</h2>
+        <SectionHeading help={HELP.contabilidad.cfdiPausa}>CFDI / facturación MX</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Emisor del condominio vía Facturapi. Configura <code className="text-xs">FACTURAPI_API_KEY</code> en el
           servidor. Uso CFDI recomendado para cuotas: <strong>D10</strong>.
@@ -294,7 +296,7 @@ export function FinanceCompliancePanel({
       </GlassCard>
       ) : (
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">CFDI / facturación MX</h2>
+          <SectionHeading help={HELP.contabilidad.cfdiPausa}>CFDI / facturación MX</SectionHeading>
           <p className="mt-2 text-sm text-muted">
             Facturación pausada hasta tener datos fiscales del condominio y de los residentes. Maker-checker, export
             contable y pagos Oxxo/SPEI siguen disponibles abajo.
@@ -303,7 +305,7 @@ export function FinanceCompliancePanel({
       )}
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Export contable avanzado</h2>
+        <SectionHeading help={HELP.contabilidad.export}>Export contable avanzado</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Mapea categorías Veka a cuentas contables. El CSV de póliza (debe/haber) se exporta desde Ingresos y
           egresos.
@@ -371,7 +373,7 @@ export function FinanceCompliancePanel({
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">SPEI / Oxxo (Stripe México)</h2>
+        <SectionHeading help={HELP.contabilidad.speiOxxo}>SPEI / Oxxo (Stripe México)</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Los residentes pueden elegir tarjeta, Oxxo o SPEI al pagar en línea. Oxxo y SPEI generan una referencia y
           quedan en estado <em>Esperando pago</em> hasta que Stripe confirme el abono.

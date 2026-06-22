@@ -1,5 +1,6 @@
 import { MaintenanceManager } from '@/app/(panel)/mantenimiento/MaintenanceManager';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { HELP } from '@/lib/help-content';
 import { loadMaintenanceData } from '@/lib/load-maintenance';
 
 export default async function MantenimientoPage() {
@@ -11,6 +12,7 @@ export default async function MantenimientoPage() {
         title="Mantenimiento"
         highlight="y tickets"
         subtitle="Reportes de residentes, calendarios de áreas comunes y evidencia de trabajos."
+        help={<p>{HELP.mantenimiento}</p>}
       />
       <MaintenanceManager {...data} />
     </div>

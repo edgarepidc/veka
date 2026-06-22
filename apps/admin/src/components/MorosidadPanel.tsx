@@ -26,6 +26,9 @@ import {
   sendPaymentReminder,
 } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { HelpHint } from '@/components/ui/HelpHint';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface ChargeRow {
   id: string;
@@ -201,7 +204,7 @@ export function MorosidadPanel({
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Recargos por mora</h2>
+          <SectionHeading help={HELP.morosidad.recargos}>Recargos por mora</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Opcional. Si lo activas, se generan cargos adicionales cuando una cuota supera los días de
             gracia configurados.
@@ -325,7 +328,7 @@ export function MorosidadPanel({
         </GlassCard>
 
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Recordatorios de cobro</h2>
+          <SectionHeading help={HELP.morosidad.recordatorios}>Recordatorios de cobro</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Envía recordatorios manuales por unidad o configura la regla automática diaria (push y
             correo).
@@ -399,10 +402,13 @@ export function MorosidadPanel({
       </div>
 
       <GlassCard className="!p-4">
-        <p className="text-sm text-muted">
-          Unidades con cuotas vencidas, agrupadas por torre. Los recargos por mora aparecen como cargos
-          separados cuando están activos.
-        </p>
+        <div className="flex items-start gap-2">
+          <p className="flex-1 text-sm text-muted">
+            Unidades con cuotas vencidas, agrupadas por torre. Los recargos por mora aparecen como cargos
+            separados cuando están activos.
+          </p>
+          <HelpHint label="Ayuda: cartera vencida">{HELP.morosidad.cartera}</HelpHint>
+        </div>
         <p className="mt-2 text-lg font-bold text-amber-200">
           Total morosidad: {formatCurrency(totalReceivable)}
         </p>

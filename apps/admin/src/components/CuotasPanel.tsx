@@ -25,6 +25,8 @@ import {
   updateRecurringFee,
 } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 interface ClusterRow {
   id: string;
@@ -317,7 +319,7 @@ export function CuotasPanel({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Cuota periódica</h2>
+          <SectionHeading help={HELP.cuotas.periodica}>Cuota periódica</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Regístrala una vez: se repite cada mes en el día que elijas. El monto base se multiplica por el
             coeficiente de cada unidad.
@@ -615,7 +617,7 @@ export function CuotasPanel({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Cuota extraordinaria</h2>
+          <SectionHeading help={HELP.cuotas.extraordinaria}>Cuota extraordinaria</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Emisión única para todo el condominio o una torre, con fecha de vencimiento específica.
           </p>

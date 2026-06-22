@@ -5,6 +5,8 @@ import type { PaymentStatus } from '@veka/shared';
 import { formatCurrency, paymentStatusLabel } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 
 export interface ResidentPaymentRow {
   id: string;
@@ -75,7 +77,7 @@ export function ResidentPaymentsReview({
       <GlassCard className={pending.length > 0 ? 'ring-1 ring-amber-400/30' : ''}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Pagos de residentes por validar</h2>
+            <SectionHeading help={HELP.pagos.validar}>Pagos de residentes por validar</SectionHeading>
             <p className="mt-1 text-sm text-muted">
               Transferencias con comprobante y primera aprobación del flujo maker-checker.
             </p>
@@ -107,7 +109,7 @@ export function ResidentPaymentsReview({
 
       {secondReview.length > 0 ? (
         <GlassCard className="ring-1 ring-sky-400/30">
-          <h2 className="text-lg font-semibold text-[var(--text)]">Segunda aprobación requerida</h2>
+          <SectionHeading help={HELP.pagos.segunda}>Segunda aprobación requerida</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Un administrador distinto debe confirmar estos pagos para liquidar cargos.
           </p>
@@ -128,7 +130,7 @@ export function ResidentPaymentsReview({
 
       {awaiting.length > 0 ? (
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Esperando Oxxo / SPEI</h2>
+          <SectionHeading help={HELP.pagos.oxxoSpei}>Esperando Oxxo / SPEI</SectionHeading>
           <p className="mt-1 text-sm text-muted">Referencias abiertas en Stripe. Se aprobarán al recibir el abono.</p>
           <div className="mt-4 space-y-3">
             {awaiting.map((payment) => (
@@ -147,7 +149,9 @@ export function ResidentPaymentsReview({
       ) : null}
 
       <GlassCard>
-        <h3 className="text-base font-semibold text-[var(--text)]">Historial de validaciones</h3>
+        <SectionHeading as="h3" className="text-base font-semibold text-[var(--text)]" help={HELP.pagos.historial}>
+          Historial de validaciones
+        </SectionHeading>
         <div className="mt-4 space-y-2">
           {history.length === 0 ? (
             <p className="text-sm text-subtle">Aún no hay pagos validados.</p>
