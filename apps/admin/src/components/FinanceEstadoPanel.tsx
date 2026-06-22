@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import type { ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
 import {
   EXPENSE_CHART_COLORS,
@@ -44,6 +44,7 @@ import {
 interface FundBalanceRow {
   fund_type: FundType;
   balance: number;
+  opening_balance: number;
   as_of_date: string;
 }
 
@@ -118,6 +119,7 @@ export function FinanceEstadoPanel({
   clusterUnitCount,
   totalReceivable,
   totalPayables,
+  onSaveOpeningBalance,
 }: {
   condominiumName: string;
   clusters: ClusterOption[];
@@ -133,6 +135,7 @@ export function FinanceEstadoPanel({
   clusterUnitCount: number;
   totalReceivable: number;
   totalPayables: number;
+  onSaveOpeningBalance: (fundType: FundType, amount: number) => Promise<{ error?: string }>;
 }) {
   const now = new Date();
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
@@ -263,7 +266,9 @@ export function FinanceEstadoPanel({
       approved.filter((p) => inPeriod(paymentPeriodDate(p.paid_at, p.created_at))),
       scopeIncomeEntries.filter((income) => inPeriod(income.income_date)),
     );
-    const collectionBars = collectionRateByCluster(scopeCharges, clusters);
+    const collectionBars = collectionRateByCluster(scopeCharges, clusters, {
+      dueInPeriod: (dueDate) => inPeriod(dueDate),
+    });
     const agingBars = delinquencyAgingBars(
       scopeCharges.filter((c) => c.status === 'overdue' || c.status === 'pending'),
     );
@@ -305,6 +310,7 @@ export function FinanceEstadoPanel({
   const scoped = Boolean(clusterId);
   const prorate = budgetProrateRatio(clusterUnitCount, totalUnitCount, scoped);
   const operatingBudget = budgets.find((budget) => budget.fiscal_year === year && budget.fund_type === 'operating');
+  const reserveBudget = budgets.find((budget) => budget.fiscal_year === year && budget.fund_type === 'reserve');
   const budgetSummary = useMemo(
     () =>
       buildBudgetSummary({
@@ -324,6 +330,33 @@ export function FinanceEstadoPanel({
       operatingBudget?.lines,
       periodMode,
       prorate,
+      scopeExpenses,
+      scopeIncomeEntries,
+      scopePayments,
+      scoped,
+      year,
+    ],
+  );
+
+  const reserveBudgetSummary = useMemo(
+    () =>
+      buildBudgetSummary({
+        fiscalYear: year,
+        periodMode,
+        month,
+        fundType: 'reserve',
+        budgetLines: reserveBudget?.lines ?? [],
+        expenses: scopeExpenses,
+        incomeEntries: scopeIncomeEntries,
+        payments: scopePayments,
+        prorateRatio: prorate,
+        scoped,
+      }),
+    [
+      month,
+      periodMode,
+      prorate,
+      reserveBudget?.lines,
       scopeExpenses,
       scopeIncomeEntries,
       scopePayments,
@@ -528,7 +561,9 @@ export function FinanceEstadoPanel({
 
         <GlassCard>
           <h3 className="text-base font-semibold text-[var(--text)]">Cobranza por torre</h3>
-          <p className="mt-1 text-sm text-muted">Porcentaje de cuotas pagadas en el alcance seleccionado.</p>
+          <p className="mt-1 text-sm text-muted">
+            Porcentaje de cuotas con vencimiento en {analytics.periodLabel}.
+          </p>
           <div className="mt-4">
             <HorizontalBarChart bars={analytics.collectionBars} />
           </div>
@@ -630,6 +665,41 @@ export function FinanceEstadoPanel({
             </div>
           </GlassCard>
         ) : null}
+
+        {(reserveBudgetSummary.expenseRows.length > 0 || reserveBudgetSummary.incomeRows.length > 0) ? (
+          <GlassCard className="lg:col-span-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (fondo de reserva)</h3>
+                <p className="mt-1 text-sm text-muted">
+                  {fundTypeLabel('reserve')} · {analytics.periodLabel}
+                  {reserveBudgetSummary.proratedNote ? ` · ${reserveBudgetSummary.proratedNote}` : ''}
+                </p>
+              </div>
+              {reserveBudgetSummary.expensePercentUsed !== null ? (
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-wide text-subtle">Ejecución egresos</p>
+                  <p
+                    className={`text-xl font-bold ${
+                      reserveBudgetSummary.expensePercentUsed > 100 ? 'text-red-300' : 'text-accent'
+                    }`}
+                  >
+                    {reserveBudgetSummary.expensePercentUsed}%
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4">
+              <BudgetVsActualChart
+                rows={reserveBudgetSummary.expenseRows.map((row) => ({
+                  label: row.label,
+                  budget: row.budget,
+                  actual: row.actual,
+                }))}
+              />
+            </div>
+          </GlassCard>
+        ) : null}
       </div>
 
       <GlassCard>
@@ -642,19 +712,20 @@ export function FinanceEstadoPanel({
 
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Saldos por fondo</h2>
-        <p className="mt-1 text-sm text-muted">Posición actual de caja (no filtrada por periodo ni torre).</p>
+        <p className="mt-1 text-sm text-muted">
+          Posición actual de caja (no filtrada por periodo ni torre). El saldo inicial se suma a movimientos
+          conciliados.
+        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {funds.length === 0 ? (
             <p className="text-sm text-subtle">Sin saldos registrados.</p>
           ) : (
             funds.map((fund) => (
-              <div key={fund.fund_type} className="glass-card-deep p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-                  {fundTypeLabel(fund.fund_type)}
-                </p>
-                <p className="mt-1 text-2xl font-bold text-accent">{formatCurrency(Number(fund.balance))}</p>
-                <p className="mt-1 text-xs text-subtle">Al {fund.as_of_date}</p>
-              </div>
+              <FundBalanceCard
+                key={fund.fund_type}
+                fund={fund}
+                onSaveOpeningBalance={onSaveOpeningBalance}
+              />
             ))
           )}
         </div>
@@ -709,6 +780,91 @@ function SummaryCard({
         </p>
       ) : null}
       {sub ? <p className="mt-1 text-xs text-subtle">{sub}</p> : null}
+    </div>
+  );
+}
+
+function FundBalanceCard({
+  fund,
+  onSaveOpeningBalance,
+}: {
+  fund: FundBalanceRow;
+  onSaveOpeningBalance: (fundType: FundType, amount: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [openingInput, setOpeningInput] = useState(String(Number(fund.opening_balance)));
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handleSave() {
+    const amount = Number(openingInput.replace(/,/g, ''));
+    if (!Number.isFinite(amount)) {
+      setMessage('Monto inválido.');
+      return;
+    }
+    setMessage(null);
+    startTransition(async () => {
+      const result = await onSaveOpeningBalance(fund.fund_type, amount);
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      setEditing(false);
+      setMessage('Saldo inicial actualizado.');
+    });
+  }
+
+  return (
+    <div className="glass-card-deep p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+        {fundTypeLabel(fund.fund_type)}
+      </p>
+      <p className="mt-1 text-2xl font-bold text-accent">{formatCurrency(Number(fund.balance))}</p>
+      <p className="mt-1 text-xs text-subtle">
+        Saldo inicial: {formatCurrency(Number(fund.opening_balance))} · Al {fund.as_of_date}
+      </p>
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <input
+            type="number"
+            step="0.01"
+            value={openingInput}
+            onChange={(e) => setOpeningInput(e.target.value)}
+            className="glass-input text-sm"
+            placeholder="Saldo inicial"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={handleSave}
+              className="glass-btn-primary text-xs"
+            >
+              {pending ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setOpeningInput(String(Number(fund.opening_balance)));
+                setMessage(null);
+              }}
+              className="text-xs text-muted hover:underline"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="mt-2 text-xs text-accent hover:underline"
+        >
+          Editar saldo inicial
+        </button>
+      )}
+      {message ? <p className="mt-2 text-xs text-subtle">{message}</p> : null}
     </div>
   );
 }

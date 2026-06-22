@@ -19,6 +19,7 @@ import {
 } from '@veka/shared';
 
 import {
+  forgiveCharge,
   saveLateFeeSettings,
   saveOverdueReminderRule,
   sendPaymentReminder,
@@ -100,6 +101,7 @@ export function MorosidadPanel({
   const [settingsPending, startSettingsSave] = useTransition();
   const [reminderPending, startReminderSave] = useTransition();
   const [reminderPendingId, setReminderPendingId] = useState<string | null>(null);
+  const [forgivePendingId, setForgivePendingId] = useState<string | null>(null);
 
   const lastReminderByCharge = useMemo(() => {
     const map = new Map<string, string>();
@@ -174,6 +176,19 @@ export function MorosidadPanel({
     setChargeMessage((prev) => ({
       ...prev,
       [chargeId]: result.error ?? result.message ?? 'Recordatorio enviado.',
+    }));
+    if (result.success) onReload();
+  }
+
+  async function handleForgiveCharge(chargeId: string) {
+    if (!confirm('¿Condonar este cargo? Dejará de aparecer en morosidad y no se podrá cobrar.')) return;
+    setChargeMessage((prev) => ({ ...prev, [chargeId]: '' }));
+    setForgivePendingId(chargeId);
+    const result = await forgiveCharge(chargeId);
+    setForgivePendingId(null);
+    setChargeMessage((prev) => ({
+      ...prev,
+      [chargeId]: result.error ?? 'Cargo condonado.',
     }));
     if (result.success) onReload();
   }
@@ -456,10 +471,18 @@ export function MorosidadPanel({
                           <button
                             type="button"
                             onClick={() => void handleSendReminder(charge.id)}
-                            disabled={reminderPendingId === charge.id}
+                            disabled={reminderPendingId === charge.id || forgivePendingId === charge.id}
                             className="glass-btn px-2.5 py-1 text-xs font-semibold disabled:opacity-60"
                           >
                             {reminderPendingId === charge.id ? 'Enviando…' : 'Recordar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleForgiveCharge(charge.id)}
+                            disabled={forgivePendingId === charge.id || reminderPendingId === charge.id}
+                            className="glass-btn px-2.5 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
+                          >
+                            {forgivePendingId === charge.id ? 'Condonando…' : 'Condonar'}
                           </button>
                           {onOpenUnitStatement && charge.unit ? (
                             <button

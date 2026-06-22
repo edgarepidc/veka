@@ -79,6 +79,7 @@ export function daysPastDue(dueDate: string, reference = new Date()): number {
 }
 
 export function isDelinquentCharge(charge: { due_date: string; status: string }, reference = new Date()): boolean {
+  if (charge.status === 'forgiven' || charge.status === 'cancelled' || charge.status === 'paid') return false;
   if (charge.status === 'overdue') return true;
   if (charge.status === 'pending' && daysPastDue(charge.due_date, reference) > 0) return true;
   return false;
@@ -106,6 +107,7 @@ export function delinquencyAgingBars(
 export function collectionRateByCluster(
   charges: ChargeForAnalytics[],
   clusters: { id: string; name: string }[],
+  options?: { dueInPeriod?: (dueDate: string) => boolean },
 ): ChartBar[] {
   const stats = new Map<string, { label: string; total: number; paid: number }>();
 
@@ -115,7 +117,8 @@ export function collectionRateByCluster(
   stats.set('sin-cluster', { label: 'Sin torre', total: 0, paid: 0 });
 
   for (const charge of charges) {
-    if (charge.status === 'cancelled') continue;
+    if (charge.status === 'cancelled' || charge.status === 'forgiven') continue;
+    if (options?.dueInPeriod && !options.dueInPeriod(charge.due_date)) continue;
     const clusterId = charge.unit?.cluster_id ?? 'sin-cluster';
     const row = stats.get(clusterId) ?? stats.get('sin-cluster')!;
     row.total += 1;
@@ -224,6 +227,13 @@ export function delinquentBalance(
       .filter((charge) => isDelinquentCharge(charge, reference))
       .reduce((sum, charge) => sum + Number(charge.amount), 0),
   );
+}
+
+export function unitDelinquentDue(
+  charges: Pick<UnitStatementCharge, 'amount' | 'due_date' | 'status'>[],
+  reference = new Date(),
+): number {
+  return delinquentBalance(charges, reference);
 }
 
 export type UnitStatementLineWithBalance = UnitStatementLine & { runningBalance: number };

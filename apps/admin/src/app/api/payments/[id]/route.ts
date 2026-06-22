@@ -45,6 +45,17 @@ export async function PATCH(
     return NextResponse.json({ ok: true, settledChargeIds: result.settledChargeIds });
   }
 
+  if (payment.status === 'approved') {
+    return NextResponse.json(
+      { error: 'No se puede rechazar un pago ya aprobado. Contacta soporte si necesitas revertirlo.' },
+      { status: 400 },
+    );
+  }
+
+  if (payment.status === 'rejected') {
+    return NextResponse.json({ error: 'Este pago ya fue rechazado.' }, { status: 400 });
+  }
+
   const { error: rejectError } = await supabase
     .from('payments')
     .update({

@@ -694,3 +694,76 @@ export async function sendPaymentReminder(chargeId: string) {
     message: `Recordatorio enviado (${parts.join(', ')}).`,
   };
 }
+
+export async function saveFundOpeningBalance(
+  condominiumId: string,
+  fundType: FundType,
+  openingBalance: number,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (!Number.isFinite(openingBalance)) return { error: 'Monto inválido.' };
+
+  const condoId = resolveCondoId(condominiumId);
+
+  const { error: upsertError } = await supabase.from('fund_balances').upsert(
+    {
+      condominium_id: condoId,
+      fund_type: fundType,
+      opening_balance: openingBalance,
+      as_of_date: new Date().toISOString().slice(0, 10),
+    },
+    { onConflict: 'condominium_id,fund_type' },
+  );
+
+  if (upsertError) return { error: upsertError.message };
+
+  await reconcileCondominiumFundBalances(supabase, condoId);
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function forgiveCharge(chargeId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+  if (!chargeId) return { error: 'Cargo inválido.' };
+
+  const { data: charge, error: chargeError } = await supabase
+    .from('charges')
+    .select('id, status, charge_kind, condominium_id')
+    .eq('id', chargeId)
+    .single();
+
+  if (chargeError || !charge) return { error: 'Cargo no encontrado.' };
+  if (charge.status === 'paid') return { error: 'Este cargo ya está pagado.' };
+  if (charge.status === 'forgiven') return { error: 'Este cargo ya fue condonado.' };
+  if (charge.status === 'cancelled') return { error: 'Este cargo está cancelado.' };
+
+  const { error: updateError } = await supabase
+    .from('charges')
+    .update({ status: 'forgiven', updated_at: new Date().toISOString() })
+    .eq('id', chargeId);
+
+  if (updateError) return { error: updateError.message };
+
+  if (charge.charge_kind === 'principal') {
+    await supabase
+      .from('charges')
+      .update({ status: 'forgiven', updated_at: new Date().toISOString() })
+      .eq('parent_charge_id', chargeId)
+      .in('status', ['pending', 'overdue']);
+  }
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}

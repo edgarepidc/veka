@@ -33,7 +33,7 @@ import {
 } from '@veka/shared';
 import type { RecurringFeeStatus } from '@veka/shared';
 
-import { createExpense, createIncome, ensureMonthlyRecurringCharges } from '@/app/(panel)/finanzas/actions';
+import { createExpense, createIncome, ensureMonthlyRecurringCharges, saveFundOpeningBalance } from '@/app/(panel)/finanzas/actions';
 import { BankReconciliationPanel } from '@/components/BankReconciliationPanel';
 import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
@@ -81,6 +81,7 @@ interface CondominiumRow {
 interface FundBalanceRow {
   fund_type: FundType;
   balance: number;
+  opening_balance: number;
   as_of_date: string;
 }
 
@@ -343,7 +344,7 @@ export function FinanceDashboard() {
         .order('name'),
       supabase
         .from('fund_balances')
-        .select('fund_type, balance, as_of_date')
+        .select('fund_type, balance, opening_balance, as_of_date')
         .eq('condominium_id', condoId),
       supabase
         .from('charges')
@@ -424,7 +425,12 @@ export function FinanceDashboard() {
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
     setClusters((clustersRes.data as ClusterRow[]) ?? []);
-    setFunds((fundsRes.data as FundBalanceRow[]) ?? []);
+    setFunds(
+      ((fundsRes.data as FundBalanceRow[]) ?? []).map((row) => ({
+        ...row,
+        opening_balance: Number(row.opening_balance ?? 0),
+      })),
+    );
     setCharges((chargesRes.data as unknown as ChargeRow[]) ?? []);
     setFeeCampaigns((campaignsRes.data as unknown as FeeCampaignRow[]) ?? []);
     setRecurringFees((recurringRes.data as unknown as RecurringFeeRow[]) ?? []);
@@ -787,6 +793,12 @@ export function FinanceDashboard() {
           clusterUnitCount={clusterUnitCount}
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
+          onSaveOpeningBalance={async (fundType, amount) => {
+            const result = await saveFundOpeningBalance(selectedCondoId || DEMO_CONDO_ID, fundType, amount);
+            if (result.error) return { error: result.error };
+            await load();
+            return {};
+          }}
         />
       ) : null}
 

@@ -13,6 +13,7 @@ export function chargeStatusLabel(status: ChargeStatus): string {
     paid: 'Pagada',
     overdue: 'Vencida',
     cancelled: 'Cancelada',
+    forgiven: 'Condonada',
   };
   return labels[status];
 }
@@ -23,6 +24,7 @@ export function chargeStatusTone(status: ChargeStatus): 'default' | 'success' | 
     paid: 'success',
     overdue: 'danger',
     cancelled: 'default',
+    forgiven: 'default',
   };
   return tones[status];
 }

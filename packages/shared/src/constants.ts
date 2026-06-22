@@ -12,7 +12,7 @@ export const MOBILE_TABS = [
 export const VISIT_TYPES = ['visit', 'service', 'rental'] as const;
 export type VisitType = (typeof VISIT_TYPES)[number];
 
-export const CHARGE_STATUSES = ['pending', 'paid', 'overdue', 'cancelled'] as const;
+export const CHARGE_STATUSES = ['pending', 'paid', 'overdue', 'cancelled', 'forgiven'] as const;
 export type ChargeStatus = (typeof CHARGE_STATUSES)[number];
 
 export const PAYMENT_STATUSES = ['pending_review', 'approved', 'rejected'] as const;

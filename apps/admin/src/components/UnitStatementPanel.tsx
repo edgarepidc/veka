@@ -5,6 +5,7 @@ import type { ChargeStatus, PaymentStatus } from '@veka/shared';
 import {
   buildUnitStatementWithBalance,
   chargeStatusLabel,
+  delinquentBalance,
   formatCurrency,
   formatExportDate,
   paymentStatusLabel,
@@ -110,6 +111,18 @@ export function UnitStatementPanel({
     return buildUnitStatementWithBalance(filteredCharges, unitPayments);
   }, [activeUnitId, charges, payments]);
 
+  const delinquentDue = useMemo(() => {
+    if (!activeUnitId) return 0;
+    const filteredCharges = charges
+      .filter((charge) => charge.unit_id === activeUnitId)
+      .map((charge) => ({
+        amount: Number(charge.amount),
+        due_date: charge.due_date,
+        status: charge.status,
+      }));
+    return delinquentBalance(filteredCharges);
+  }, [activeUnitId, charges]);
+
   const activeUnit = units.find((u) => u.id === activeUnitId);
 
   const exportStatement = useMemo<UnitStatementExport | null>(() => {
@@ -170,7 +183,7 @@ export function UnitStatementPanel({
         </div>
 
         {activeUnit ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatBox label="Unidad" value={activeUnit.identifier} />
             <StatBox
               label="Torre"
@@ -181,9 +194,14 @@ export function UnitStatementPanel({
               }
             />
             <StatBox
-              label="Saldo pendiente"
+              label="Saldo total pendiente"
               value={formatCurrency(statement.balanceDue)}
               highlight={statement.balanceDue > 0}
+            />
+            <StatBox
+              label="Saldo vencido"
+              value={formatCurrency(delinquentDue)}
+              highlight={delinquentDue > 0}
             />
           </div>
         ) : null}
