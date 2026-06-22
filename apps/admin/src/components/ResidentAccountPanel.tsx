@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import type { ChargeStatus } from '@veka/shared';
+import type { ActivePaymentPlan, ChargeStatus } from '@veka/shared';
 import {
-  buildNextPaymentGroup,
   chargeBalanceDue,
   chargeStatusLabel,
   formatCurrency,
+  installmentBalanceDue,
+  installmentStatusLabel,
+  planInstallmentsProgress,
+  resolveNextPaymentTarget,
   unitTotalBalanceDue,
   type ChargeForSettlement,
 } from '@veka/shared';
@@ -19,11 +22,13 @@ interface ChargeRow extends ChargeForSettlement {
 
 export function ResidentPayOnlineButton({
   chargeId,
+  installmentId,
   amount,
   maxAmount,
   disabled,
 }: {
   chargeId: string;
+  installmentId?: string;
   amount: number;
   maxAmount: number;
   disabled?: boolean;
@@ -47,7 +52,9 @@ export function ResidentPayOnlineButton({
         const response = await fetch('/api/payments/checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chargeId, amount }),
+          body: JSON.stringify(
+            installmentId ? { installmentId, chargeId, amount } : { chargeId, amount },
+          ),
         });
         const payload = (await response.json()) as { url?: string; error?: string };
         if (!response.ok || !payload.url) {
@@ -85,21 +92,23 @@ export function ResidentAccountPanel({
   unitLabel,
   condominiumName,
   charges,
+  activePlan,
 }: {
   unitLabel: string;
   condominiumName: string;
   charges: ChargeRow[];
+  activePlan?: ActivePaymentPlan | null;
 }) {
-  const paymentGroup = buildNextPaymentGroup(charges);
-  const nextCharge = paymentGroup?.primaryCharge ?? null;
-  const groupMax = paymentGroup?.totalAmount ?? 0;
+  const paymentTarget = resolveNextPaymentTarget(charges, activePlan ?? null);
+  const groupMax = paymentTarget?.maxAmount ?? 0;
   const balanceDue = unitTotalBalanceDue(charges);
+  const planProgress = activePlan ? planInstallmentsProgress(activePlan.installments) : null;
 
   const [payAmount, setPayAmount] = useState('');
 
   useEffect(() => {
     setPayAmount(groupMax > 0 ? String(groupMax) : '');
-  }, [groupMax, nextCharge?.id]);
+  }, [groupMax, paymentTarget?.chargeId, paymentTarget?.installmentId]);
 
   const parsedAmount = useMemo(() => Number(payAmount.replace(/,/g, '')), [payAmount]);
   const isPartial =
@@ -115,20 +124,60 @@ export function ResidentAccountPanel({
         <p className="text-sm text-subtle">Saldo pendiente total</p>
       </GlassCard>
 
-      {nextCharge ? (
+      {activePlan ? (
         <GlassCard>
-          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Próximo pago</p>
-          <p className="mt-2 text-3xl font-bold text-accent">{formatCurrency(groupMax)}</p>
-          {paymentGroup && paymentGroup.relatedCharges.length > 0 ? (
-            <p className="mt-1 text-sm text-amber-200">
-              Incluye {paymentGroup.relatedCharges.length} recargo(s) por mora
+          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Plan de pago activo</p>
+          <p className="mt-2 text-lg font-semibold text-[var(--text)]">{activePlan.title}</p>
+          {planProgress ? (
+            <p className="mt-1 text-sm text-muted">
+              {planProgress.paidCount} de {planProgress.totalCount} parcialidades pagadas
+              {planProgress.percent !== null ? ` · ${planProgress.percent}% cubierto` : ''}
             </p>
           ) : null}
-          <p className="mt-2 text-sm text-muted">
-            {(charges.find((c) => c.id === nextCharge.id) as ChargeRow | undefined)?.concept}
+          <ul className="mt-4 space-y-2">
+            {[...activePlan.installments]
+              .sort((a, b) => a.installment_number - b.installment_number)
+              .map((installment) => {
+                const balance = installmentBalanceDue(installment);
+                return (
+                  <li
+                    key={installment.id}
+                    className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 text-sm last:border-0"
+                  >
+                    <span className="text-[var(--text)]">
+                      Parcialidad {installment.installment_number} · vence {installment.due_date}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold">
+                        {balance > 0 ? formatCurrency(balance) : formatCurrency(Number(installment.amount))}
+                      </span>
+                      <span className="text-xs text-subtle">{installmentStatusLabel(installment.status)}</span>
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        </GlassCard>
+      ) : null}
+
+      {paymentTarget ? (
+        <GlassCard>
+          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+            {paymentTarget.kind === 'installment' ? 'Próxima parcialidad' : 'Próximo pago'}
           </p>
+          <p className="mt-2 text-3xl font-bold text-accent">{formatCurrency(groupMax)}</p>
+          <p className="mt-2 text-sm text-muted">{paymentTarget.label}</p>
           <p className="text-sm text-subtle">
-            Vence {nextCharge.due_date} · {chargeStatusLabel(nextCharge.status as ChargeStatus)}
+            Vence {paymentTarget.dueDate}
+            {paymentTarget.kind === 'charges' ? (
+              <>
+                {' '}
+                ·{' '}
+                {chargeStatusLabel(
+                  (charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending') as ChargeStatus,
+                )}
+              </>
+            ) : null}
           </p>
 
           <div className="mt-4 space-y-3">
@@ -145,11 +194,12 @@ export function ResidentAccountPanel({
               />
             </label>
             <p className="text-xs text-subtle">
-              Máximo para este grupo: {formatCurrency(groupMax)}
+              Máximo: {formatCurrency(groupMax)}
               {isPartial ? ` · Abono parcial de ${formatCurrency(parsedAmount)}` : ''}
             </p>
             <ResidentPayOnlineButton
-              chargeId={nextCharge.id}
+              chargeId={paymentTarget.chargeId}
+              installmentId={paymentTarget.installmentId}
               amount={parsedAmount}
               maxAmount={groupMax}
               disabled={!Number.isFinite(parsedAmount) || parsedAmount <= 0}

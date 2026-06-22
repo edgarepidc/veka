@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 
 interface PaymentProofUploaderProps {
   chargeId: string;
+  installmentId?: string;
   condominiumId: string;
   unitId: string;
   amount: number;
@@ -17,6 +18,7 @@ interface PaymentProofUploaderProps {
 
 export function PaymentProofUploader({
   chargeId,
+  installmentId,
   condominiumId,
   unitId,
   amount,
@@ -65,6 +67,7 @@ export function PaymentProofUploader({
         proof_url: path,
         payment_method: 'transfer',
         paid_at: new Date().toISOString(),
+        ...(installmentId ? { payment_plan_installment_id: installmentId } : {}),
       });
 
       if (paymentError) throw paymentError;

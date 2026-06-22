@@ -11,6 +11,8 @@ import {
   LATE_FEE_APPLY_MODES,
   LATE_FEE_TYPES,
   applyCoefficient,
+  buildInstallmentSchedule,
+  chargeBalanceDue,
   currentPeriodMonth,
   nextPeriodMonth,
   parseBudgetAmount,
@@ -765,5 +767,167 @@ export async function forgiveCharge(chargeId: string) {
   }
 
   revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function createPaymentPlan(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const unitId = String(formData.get('unit_id') ?? '').trim();
+  const chargeIds = formData.getAll('charge_id').map((value) => String(value)).filter(Boolean);
+  const installmentCount = Number(formData.get('installment_count'));
+  const firstDueDate = String(formData.get('first_due_date') ?? '').trim();
+  const intervalMonths = Number(formData.get('interval_months') || 1);
+  const title = String(formData.get('title') ?? 'Plan de pago').trim() || 'Plan de pago';
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!unitId) return { error: 'Selecciona una unidad.' };
+  if (!chargeIds.length) return { error: 'Selecciona al menos un cargo.' };
+  if (!Number.isInteger(installmentCount) || installmentCount < 2 || installmentCount > 36) {
+    return { error: 'El plan debe tener entre 2 y 36 parcialidades.' };
+  }
+  if (!firstDueDate) return { error: 'Indica la fecha de la primera parcialidad.' };
+  if (!Number.isInteger(intervalMonths) || intervalMonths < 1 || intervalMonths > 12) {
+    return { error: 'El intervalo entre parcialidades debe ser de 1 a 12 meses.' };
+  }
+
+  const { data: existingPlan } = await supabase
+    .from('payment_plans')
+    .select('id')
+    .eq('unit_id', unitId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (existingPlan) {
+    return { error: 'Esta unidad ya tiene un plan de pago activo. Cancélalo antes de crear otro.' };
+  }
+
+  const { data: charges, error: chargesError } = await supabase
+    .from('charges')
+    .select('id, unit_id, amount, amount_paid, status')
+    .eq('unit_id', unitId)
+    .in('id', chargeIds);
+
+  if (chargesError) return { error: chargesError.message };
+  if (!charges?.length || charges.length !== chargeIds.length) {
+    return { error: 'Uno o más cargos no pertenecen a la unidad seleccionada.' };
+  }
+
+  let totalAmount = 0;
+  const linkRows: { charge_id: string; balance_at_start: number }[] = [];
+
+  for (const charge of charges) {
+    const balance = chargeBalanceDue({
+      amount: Number(charge.amount),
+      amount_paid: Number(charge.amount_paid ?? 0),
+      status: charge.status,
+    });
+    if (balance <= 0) {
+      return { error: 'Solo puedes incluir cargos con saldo pendiente.' };
+    }
+    totalAmount += balance;
+    linkRows.push({ charge_id: charge.id, balance_at_start: balance });
+  }
+
+  totalAmount = Math.round(totalAmount * 100) / 100;
+  let schedule;
+  try {
+    schedule = buildInstallmentSchedule(totalAmount, installmentCount, firstDueDate, intervalMonths);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'No se pudo calcular el plan.' };
+  }
+
+  const { data: plan, error: planError } = await supabase
+    .from('payment_plans')
+    .insert({
+      condominium_id: condoId,
+      unit_id: unitId,
+      title,
+      notes: notes || null,
+      total_amount: totalAmount,
+      status: 'active',
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+
+  if (planError || !plan) {
+    return { error: planError?.message ?? 'No se pudo crear el plan de pago.' };
+  }
+
+  const { error: installmentsError } = await supabase.from('payment_plan_installments').insert(
+    schedule.map((row) => ({
+      plan_id: plan.id,
+      installment_number: row.installmentNumber,
+      due_date: row.dueDate,
+      amount: row.amount,
+    })),
+  );
+
+  if (installmentsError) {
+    await supabase.from('payment_plans').delete().eq('id', plan.id);
+    return { error: installmentsError.message };
+  }
+
+  const { error: linksError } = await supabase.from('payment_plan_charges').insert(
+    linkRows.map((row) => ({
+      plan_id: plan.id,
+      charge_id: row.charge_id,
+      balance_at_start: row.balance_at_start,
+    })),
+  );
+
+  if (linksError) {
+    await supabase.from('payment_plans').delete().eq('id', plan.id);
+    return { error: linksError.message };
+  }
+
+  revalidatePath('/finanzas');
+  revalidatePath('/mi-cuenta');
+  return { success: true };
+}
+
+export async function cancelPaymentPlan(planId: string, condominiumId?: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+  if (!planId) return { error: 'Plan inválido.' };
+
+  const condoId = resolveCondoId(condominiumId);
+
+  const { data: plan, error: planError } = await supabase
+    .from('payment_plans')
+    .select('id, status')
+    .eq('id', planId)
+    .eq('condominium_id', condoId)
+    .single();
+
+  if (planError || !plan) return { error: 'Plan no encontrado.' };
+  if (plan.status !== 'active') return { error: 'Solo se pueden cancelar planes activos.' };
+
+  const { error: updatePlanError } = await supabase
+    .from('payment_plans')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', planId);
+
+  if (updatePlanError) return { error: updatePlanError.message };
+
+  await supabase
+    .from('payment_plan_installments')
+    .update({ status: 'cancelled' })
+    .eq('plan_id', planId)
+    .neq('status', 'paid');
+
+  revalidatePath('/finanzas');
+  revalidatePath('/mi-cuenta');
   return { success: true };
 }

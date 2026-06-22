@@ -40,6 +40,7 @@ import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
 import { ExportMenu } from '@/components/ExportMenu';
 import { MorosidadPanel } from '@/components/MorosidadPanel';
+import { PaymentPlansPanel, type PaymentPlanRow } from '@/components/PaymentPlansPanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
 import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
@@ -296,6 +297,7 @@ export function FinanceDashboard() {
   const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransactionRow[]>([]);
+  const [paymentPlans, setPaymentPlans] = useState<PaymentPlanRow[]>([]);
   const [statementUnitId, setStatementUnitId] = useState('');
 
   const loadCondominiums = useCallback(async () => {
@@ -332,7 +334,7 @@ export function FinanceDashboard() {
 
     const condoId = selectedCondoId || DEMO_CONDO_ID;
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -423,6 +425,13 @@ export function FinanceDashboard() {
         .eq('bank_account.condominium_id', condoId)
         .order('transaction_date', { ascending: false })
         .limit(500),
+      supabase
+        .from('payment_plans')
+        .select(
+          'id, title, status, total_amount, notes, created_at, unit_id, unit:units(identifier, cluster_id), installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status)',
+        )
+        .eq('condominium_id', condoId)
+        .order('created_at', { ascending: false }),
     ]);
 
     setUnits((unitsRes.data as UnitOption[]) ?? []);
@@ -465,6 +474,7 @@ export function FinanceDashboard() {
     setReminderLog((reminderLogRes.data as { charge_id: string | null; sent_at: string }[]) ?? []);
     setBankAccounts((bankAccountsRes.data as BankAccountRow[]) ?? []);
     setBankTransactions((bankTransactionsRes.data as BankTransactionRow[]) ?? []);
+    setPaymentPlans((paymentPlansRes.data as unknown as PaymentPlanRow[]) ?? []);
     setLoading(false);
   }, [selectedCondoId, supabase]);
 
@@ -1227,23 +1237,33 @@ export function FinanceDashboard() {
       ) : null}
 
       {tab === 'morosidad' ? (
-        <MorosidadPanel
-          condominiumId={selectedCondoId}
-          lateFeeSettings={lateFeeSettings}
-          overdueReminderRule={overdueReminderRule}
-          reminderLog={reminderLog}
-          morosityByCluster={morosityByCluster}
-          totalReceivable={totalReceivable}
-          expandedClusters={expandedClusters}
-          onToggleCluster={(clusterId) =>
-            setExpandedClusters((prev) => ({ ...prev, [clusterId]: !(prev[clusterId] ?? true) }))
-          }
-          onReload={() => void load()}
-          onOpenUnitStatement={(unitId) => {
-            setStatementUnitId(unitId);
-            setTab('cuentas');
-          }}
-        />
+        <>
+          <PaymentPlansPanel
+            condominiumId={selectedCondoId}
+            units={units}
+            charges={charges}
+            plans={paymentPlans}
+            onReload={() => void load()}
+          />
+          <MorosidadPanel
+            condominiumId={selectedCondoId}
+            lateFeeSettings={lateFeeSettings}
+            overdueReminderRule={overdueReminderRule}
+            reminderLog={reminderLog}
+            morosityByCluster={morosityByCluster}
+            totalReceivable={totalReceivable}
+            activePlanUnitIds={new Set(paymentPlans.filter((plan) => plan.status === 'active').map((plan) => plan.unit_id))}
+            expandedClusters={expandedClusters}
+            onToggleCluster={(clusterId) =>
+              setExpandedClusters((prev) => ({ ...prev, [clusterId]: !(prev[clusterId] ?? true) }))
+            }
+            onReload={() => void load()}
+            onOpenUnitStatement={(unitId) => {
+              setStatementUnitId(unitId);
+              setTab('cuentas');
+            }}
+          />
+        </>
       ) : null}
     </div>
   );

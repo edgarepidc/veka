@@ -8,6 +8,7 @@ import {
 } from '@veka/shared';
 
 import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
+import { settleInstallmentPayment } from '@/lib/payment-plan-settlement';
 
 function nextChargeStatus(
   charge: ChargeForSettlement,
@@ -73,7 +74,7 @@ export async function approvePayment(
 ): Promise<{ ok: true; settledChargeIds: string[] } | { error: string }> {
   const { data: payment, error: fetchError } = await supabase
     .from('payments')
-    .select('id, charge_id, condominium_id, unit_id, amount, status')
+    .select('id, charge_id, condominium_id, unit_id, amount, status, payment_plan_installment_id')
     .eq('id', paymentId)
     .single();
 
@@ -92,13 +93,21 @@ export async function approvePayment(
   if (updateError) return { error: updateError.message };
 
   try {
-    const settledChargeIds = await settleChargesForPayment(
-      supabase,
-      paymentId,
-      payment.charge_id,
-      payment.unit_id,
-      Number(payment.amount),
-    );
+    const settledChargeIds = payment.payment_plan_installment_id
+      ? await settleInstallmentPayment(
+          supabase,
+          paymentId,
+          payment.payment_plan_installment_id,
+          payment.unit_id,
+          Number(payment.amount),
+        )
+      : await settleChargesForPayment(
+          supabase,
+          paymentId,
+          payment.charge_id,
+          payment.unit_id,
+          Number(payment.amount),
+        );
     await reconcileCondominiumFundBalances(supabase, payment.condominium_id);
     return { ok: true, settledChargeIds };
   } catch (error) {

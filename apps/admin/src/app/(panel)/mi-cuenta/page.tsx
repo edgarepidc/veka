@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { ResidentAccountPanel } from '@/components/ResidentAccountPanel';
 import { PageHeader } from '@/components/ui/PageHeader';
-import type { ChargeSettlementStatus } from '@veka/shared';
+import type { ActivePaymentPlan, ChargeSettlementStatus } from '@veka/shared';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { createClient } from '@/lib/supabase/server';
 
@@ -24,11 +24,41 @@ export default async function MiCuentaPage() {
   }
 
   const supabase = await createClient();
-  const { data: charges } = await supabase
-    .from('charges')
-    .select('id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
-    .eq('unit_id', unitId)
-    .order('due_date', { ascending: true });
+  const [chargesRes, planRes] = await Promise.all([
+    supabase
+      .from('charges')
+      .select('id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id')
+      .eq('unit_id', unitId)
+      .order('due_date', { ascending: true }),
+    supabase
+      .from('payment_plans')
+      .select(
+        'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
+      )
+      .eq('unit_id', unitId)
+      .eq('status', 'active')
+      .maybeSingle(),
+  ]);
+
+  const charges = chargesRes.data;
+  const planRow = planRes.data;
+  const activePlan: ActivePaymentPlan | null = planRow
+    ? {
+        id: planRow.id,
+        title: planRow.title,
+        status: planRow.status,
+        total_amount: Number(planRow.total_amount),
+        installments: (planRow.installments ?? []).map((row) => ({
+          id: row.id,
+          installment_number: row.installment_number,
+          due_date: row.due_date,
+          amount: Number(row.amount),
+          amount_paid: Number(row.amount_paid ?? 0),
+          status: row.status,
+        })),
+        linked_charge_ids: (planRow.charge_links ?? []).map((link) => link.charge_id),
+      }
+    : null;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -40,6 +70,7 @@ export default async function MiCuentaPage() {
       <ResidentAccountPanel
         unitLabel={session.membership?.unit_identifier ?? '—'}
         condominiumName={session.membership?.condominium_name ?? 'Condominio'}
+        activePlan={activePlan}
         charges={(charges ?? []).map((charge) => ({
           id: charge.id,
           concept: charge.concept,

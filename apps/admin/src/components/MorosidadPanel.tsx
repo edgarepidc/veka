@@ -70,6 +70,7 @@ export function MorosidadPanel({
   reminderLog,
   morosityByCluster,
   totalReceivable,
+  activePlanUnitIds,
   expandedClusters,
   onToggleCluster,
   onReload,
@@ -81,6 +82,7 @@ export function MorosidadPanel({
   reminderLog: ReminderLogRow[];
   morosityByCluster: [string, { clusterName: string; items: ChargeRow[]; total: number }][];
   totalReceivable: number;
+  activePlanUnitIds?: Set<string>;
   expandedClusters: Record<string, boolean>;
   onToggleCluster: (clusterId: string) => void;
   onReload: () => void;
@@ -441,6 +443,11 @@ export function MorosidadPanel({
                         <div className="min-w-0">
                           <p className="font-medium text-[var(--text)]">
                             {charge.unit?.identifier}
+                            {activePlanUnitIds?.has(charge.unit_id) ? (
+                              <span className="ml-2 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-100">
+                                Plan activo
+                              </span>
+                            ) : null}
                             {charge.charge_kind === 'late_fee' ? (
                               <span className="ml-2 rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-100">
                                 {chargeKindLabel(charge.charge_kind)}

@@ -14,6 +14,7 @@ export interface DailyFinanceMaintenanceResult {
   remindersProcessed: number;
   reminderDeliveries: number;
   fundBalancesReconciled: number;
+  installmentsMarkedOverdue: number;
 }
 
 function daysPastDue(dueDate: string, reference = new Date()): number {
@@ -96,6 +97,8 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
   const admin = createAdminClient();
 
   await admin.rpc('refresh_charge_statuses');
+  const { data: installmentRefresh } = await admin.rpc('refresh_payment_plan_installment_statuses');
+  const installmentsMarkedOverdue = Number(installmentRefresh ?? 0);
 
   const { data: condominiums } = await admin.from('condominiums').select('id');
   const condoIds = (condominiums ?? []).map((row) => row.id as string);
@@ -119,6 +122,7 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
     remindersProcessed,
     reminderDeliveries,
     fundBalancesReconciled,
+    installmentsMarkedOverdue,
   };
 }
 

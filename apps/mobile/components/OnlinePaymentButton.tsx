@@ -10,6 +10,7 @@ const ADMIN_URL = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'http://localhost:3000';
 
 interface OnlinePaymentButtonProps {
   chargeId: string;
+  installmentId?: string;
   amount: number;
   maxAmount: number;
   disabled?: boolean;
@@ -18,6 +19,7 @@ interface OnlinePaymentButtonProps {
 
 export function OnlinePaymentButton({
   chargeId,
+  installmentId,
   amount,
   maxAmount,
   disabled,
@@ -51,7 +53,9 @@ export function OnlinePaymentButton({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ chargeId, amount }),
+        body: JSON.stringify(
+          installmentId ? { installmentId, chargeId, amount } : { chargeId, amount },
+        ),
       });
 
       const payload = (await response.json()) as { url?: string; error?: string };
@@ -66,7 +70,7 @@ export function OnlinePaymentButton({
     } finally {
       setLoading(false);
     }
-  }, [amount, chargeId, maxAmount, onStarted]);
+  }, [amount, chargeId, installmentId, maxAmount, onStarted]);
 
   const isPartial = amount < maxAmount - 0.01;
   const label = isPartial ? `Pagar abono ${formatCurrency(amount)}` : 'Pagar en línea';

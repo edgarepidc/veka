@@ -1,3 +1,4 @@
+export * from './payment-plans';
 export * from './payments';
 export * from './budget';
 export * from './constants';

@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  buildNextPaymentGroup,
   buildUnitStatementWithBalance,
   chargeDisplaySubtitle,
   chargeDisplayTitle,
@@ -18,8 +17,13 @@ import {
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
+  installmentBalanceDue,
+  installmentStatusLabel,
   paymentStatusLabel,
+  planInstallmentsProgress,
+  resolveNextPaymentTarget,
   unitBalanceDue,
+  type ActivePaymentPlan,
 } from '@veka/shared';
 import type { FeeSourceRef } from '@veka/shared';
 
@@ -84,6 +88,7 @@ export default function FinanceScreen() {
   const { primary, loading: membershipLoading } = useMembership();
 
   const [charges, setCharges] = useState<ChargeRow[]>([]);
+  const [activePlan, setActivePlan] = useState<ActivePaymentPlan | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [funds, setFunds] = useState<FundBalance[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -96,7 +101,7 @@ export default function FinanceScreen() {
       return;
     }
 
-    const [chargesRes, paymentsRes, fundsRes, expensesRes] = await Promise.all([
+    const [chargesRes, paymentsRes, fundsRes, expensesRes, planRes] = await Promise.all([
       supabase
         .from('charges')
         .select(
@@ -119,6 +124,14 @@ export default function FinanceScreen() {
         .eq('condominium_id', primary.condominium_id)
         .order('expense_date', { ascending: false })
         .limit(5),
+      supabase
+        .from('payment_plans')
+        .select(
+          'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
+        )
+        .eq('unit_id', primary.unit_id)
+        .eq('status', 'active')
+        .maybeSingle(),
     ]);
 
     setCharges(
@@ -135,6 +148,30 @@ export default function FinanceScreen() {
           ),
         }),
       ),
+    );
+    const planRow = planRes.data as {
+      id: string;
+      title: string;
+      status: string;
+      total_amount: number;
+      installments: ActivePaymentPlan['installments'];
+      charge_links: { charge_id: string }[];
+    } | null;
+    setActivePlan(
+      planRow
+        ? {
+            id: planRow.id,
+            title: planRow.title,
+            status: planRow.status,
+            total_amount: Number(planRow.total_amount),
+            installments: (planRow.installments ?? []).map((row) => ({
+              ...row,
+              amount: Number(row.amount),
+              amount_paid: Number(row.amount_paid ?? 0),
+            })),
+            linked_charge_ids: (planRow.charge_links ?? []).map((link) => link.charge_id),
+          }
+        : null,
     );
     setPayments((paymentsRes.data as PaymentRow[]) ?? []);
     setFunds((fundsRes.data as FundBalance[]) ?? []);
@@ -190,14 +227,31 @@ export default function FinanceScreen() {
     [charges],
   );
 
-  const paymentGroup = useMemo(() => buildNextPaymentGroup(charges), [charges]);
-  const nextCharge = paymentGroup?.primaryCharge ?? null;
-  const paymentTotal = paymentGroup?.totalAmount ?? 0;
+  const settlementCharges = useMemo(
+    () =>
+      charges.map((charge) => ({
+        id: charge.id,
+        amount: charge.amount,
+        amount_paid: charge.amount_paid,
+        due_date: charge.due_date,
+        status: charge.status,
+        charge_kind: charge.charge_kind ?? 'principal',
+        parent_charge_id: charge.parent_charge_id ?? null,
+      })),
+    [charges],
+  );
+
+  const paymentTarget = useMemo(
+    () => resolveNextPaymentTarget(settlementCharges, activePlan),
+    [settlementCharges, activePlan],
+  );
+  const paymentTotal = paymentTarget?.maxAmount ?? 0;
+  const planProgress = activePlan ? planInstallmentsProgress(activePlan.installments) : null;
   const [payAmountInput, setPayAmountInput] = useState('');
 
   useEffect(() => {
     setPayAmountInput(paymentTotal > 0 ? String(paymentTotal) : '');
-  }, [paymentTotal, nextCharge?.id]);
+  }, [paymentTotal, paymentTarget?.chargeId, paymentTarget?.installmentId]);
 
   const payAmount = useMemo(() => Number(payAmountInput.replace(/,/g, '')), [payAmountInput]);
 
@@ -240,9 +294,9 @@ export default function FinanceScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
           <StatPill
             label="Próximo pago"
-            value={nextCharge ? formatCurrency(paymentTotal) : '—'}
-            sub={nextCharge ? `Vence ${nextCharge.due_date}` : 'Al día'}
-            valueColor={nextCharge?.status === 'overdue' ? theme.danger : theme.accent}
+            value={paymentTarget ? formatCurrency(paymentTotal) : '—'}
+            sub={paymentTarget ? `Vence ${paymentTarget.dueDate}` : 'Al día'}
+            valueColor={paymentTarget?.kind === 'installment' ? theme.accent2 : theme.accent}
           />
           <StatPill
             label="Cargos"
@@ -264,25 +318,69 @@ export default function FinanceScreen() {
           />
         </ScrollView>
 
-        {nextCharge ? (
+        {activePlan ? (
+          <View style={styles.section}>
+            <GlassCard>
+              <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>PLAN DE PAGO ACTIVO</Text>
+              <Text style={[styles.cardTitle, { color: theme.text, marginTop: 6 }]}>{activePlan.title}</Text>
+              {planProgress ? (
+                <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 4 }}>
+                  {planProgress.paidCount} de {planProgress.totalCount} parcialidades
+                  {planProgress.percent !== null ? ` · ${planProgress.percent}%` : ''}
+                </Text>
+              ) : null}
+              {[...activePlan.installments]
+                .sort((a, b) => a.installment_number - b.installment_number)
+                .map((installment) => {
+                  const balance = installmentBalanceDue(installment);
+                  return (
+                    <View key={installment.id} style={styles.ledgerRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>
+                          Parcialidad {installment.installment_number}
+                        </Text>
+                        <Text style={{ color: theme.textMuted, fontSize: 12 }}>Vence {installment.due_date}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ color: theme.accent, fontWeight: '700', fontSize: 13 }}>
+                          {formatCurrency(balance > 0 ? balance : Number(installment.amount))}
+                        </Text>
+                        <Text style={{ color: theme.textSubtle, fontSize: 11 }}>
+                          {installmentStatusLabel(installment.status)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+            </GlassCard>
+          </View>
+        ) : null}
+
+        {paymentTarget ? (
           <View style={styles.section}>
             <GlassCard>
               <View style={styles.cardTop}>
-                <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>PRÓXIMO PAGO</Text>
-                <Tag label={chargeStatusLabel(nextCharge.status)} tone={mapChargeTone(chargeStatusTone(nextCharge.status))} />
+                <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>
+                  {paymentTarget.kind === 'installment' ? 'PRÓXIMA PARCIALIDAD' : 'PRÓXIMO PAGO'}
+                </Text>
+                {paymentTarget.kind === 'charges' ? (
+                  <Tag
+                    label={chargeStatusLabel(
+                      charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending',
+                    )}
+                    tone={mapChargeTone(
+                      chargeStatusTone(
+                        charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending',
+                      ),
+                    )}
+                  />
+                ) : null}
               </View>
               <Text style={[styles.amount, { color: theme.accent, fontFamily: theme.serifFamily }]}>
                 {formatCurrency(paymentTotal)}
               </Text>
-              {paymentGroup && paymentGroup.relatedCharges.length > 0 ? (
-                <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 8 }}>
-                  Incluye {paymentGroup.relatedCharges.length} recargo(s) por mora
-                </Text>
-              ) : null}
               <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>
-                {chargeDisplayTitle(nextCharge)}
-                {chargeDisplaySubtitle(nextCharge) ? ` · ${chargeDisplaySubtitle(nextCharge)}` : ''}
-                {' · '}Vence {nextCharge.due_date}
+                {paymentTarget.label} · Vence {paymentTarget.dueDate}
               </Text>
               <Text style={{ color: theme.textSubtle, fontSize: 12, marginBottom: 6 }}>
                 Monto a pagar (abono parcial permitido)
@@ -300,7 +398,7 @@ export default function FinanceScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   color: theme.text,
-                  backgroundColor: theme.card,
+                  backgroundColor: theme.input,
                   marginBottom: 8,
                 }}
               />
@@ -308,7 +406,8 @@ export default function FinanceScreen() {
                 Máximo {formatCurrency(paymentTotal)}
               </Text>
               <PaymentProofUploader
-                chargeId={nextCharge.id}
+                chargeId={paymentTarget.chargeId}
+                installmentId={paymentTarget.installmentId}
                 condominiumId={primary.condominium_id}
                 unitId={primary.unit_id}
                 amount={payAmount}
@@ -317,7 +416,8 @@ export default function FinanceScreen() {
               />
               <View style={{ height: 10 }} />
               <OnlinePaymentButton
-                chargeId={nextCharge.id}
+                chargeId={paymentTarget.chargeId}
+                installmentId={paymentTarget.installmentId}
                 amount={payAmount}
                 maxAmount={paymentTotal}
                 disabled={!Number.isFinite(payAmount) || payAmount <= 0}
