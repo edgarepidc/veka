@@ -133,7 +133,7 @@ async function sendExpoPush(
 
 async function sendReminderEmail(to: string, subject: string, html: string): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? 'Veka <recordatorios@veka.app>';
+  const from = process.env.RESEND_FROM_EMAIL ?? 'Veka <recordatorios@vekacondo.com>';
 
   if (!apiKey) return false;
 
