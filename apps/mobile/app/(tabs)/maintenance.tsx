@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,6 +32,7 @@ import { Tag } from '@/components/ui/Tag';
 import { useMaintenance } from '@/hooks/useMaintenance';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
+import { pickImageFromLibrary } from '@/lib/pick-image';
 
 function statusTone(status: string): 'green' | 'blue' | 'orange' | 'gray' {
   if (status === 'resolved' || status === 'closed') return 'green';
@@ -57,13 +57,9 @@ export default function MaintenanceScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   async function pickPhoto() {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['image/*'],
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    setPhoto({ uri: asset.uri, mimeType: asset.mimeType ?? undefined, name: asset.name });
+    const picked = await pickImageFromLibrary();
+    if (!picked) return;
+    setPhoto({ uri: picked.uri, mimeType: picked.mimeType, name: picked.name });
   }
 
   async function handleCreateTicket() {

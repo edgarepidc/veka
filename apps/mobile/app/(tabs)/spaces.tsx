@@ -57,6 +57,7 @@ export default function SpacesScreen() {
     loading,
     refreshing,
     actionError,
+    clearActionError,
     refresh,
     fetchBookedSlots,
     createReservation,
@@ -93,7 +94,16 @@ export default function SpacesScreen() {
       <ScreenBackground>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                clearActionError();
+                void refresh();
+              }}
+              tintColor={theme.accent}
+            />
+          }
           showsVerticalScrollIndicator={false}
         >
           <ScreenHeader
@@ -118,7 +128,14 @@ export default function SpacesScreen() {
                     <Text style={[styles.tileMeta, { color: theme.textSubtle }]}>
                       {amenity.open_time.slice(0, 5)}–{amenity.close_time.slice(0, 5)}
                     </Text>
-                    <PrimaryButton label="Reservar" onPress={() => setSelectedAmenity(amenity)} style={styles.reserveBtn} />
+                    <PrimaryButton
+                      label="Reservar"
+                      onPress={() => {
+                        clearActionError();
+                        setSelectedAmenity(amenity);
+                      }}
+                      style={styles.reserveBtn}
+                    />
                 </GlassCard>
               ))
             )}

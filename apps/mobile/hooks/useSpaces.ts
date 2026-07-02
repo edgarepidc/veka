@@ -112,8 +112,9 @@ export function useSpaces(primary: ActiveMembership | null) {
         .from('reservations')
         .select('id, amenity_id, starts_at, ends_at, status, amenity:amenities (name)')
         .eq('unit_id', primary.unit_id)
+        .eq('user_id', user.id)
         .eq('status', 'confirmed')
-        .gte('starts_at', now)
+        .gte('ends_at', now)
         .order('starts_at', { ascending: true }),
     ]);
 
@@ -264,12 +265,15 @@ export function useSpaces(primary: ActiveMembership | null) {
     [refresh],
   );
 
+  const clearActionError = useCallback(() => setActionError(null), []);
+
   return {
     amenities,
     reservations,
     loading,
     refreshing,
     actionError,
+    clearActionError,
     refresh,
     fetchBookedSlots,
     createReservation,

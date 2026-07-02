@@ -1,9 +1,9 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { formatCurrency } from '@veka/shared';
+import { pickImageFromLibrary } from '@/lib/pick-image';
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { supabase } from '@/lib/supabase';
 
@@ -38,24 +38,19 @@ export function PaymentProofUploader({
       return;
     }
 
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['image/*', 'application/pdf'],
-      copyToCacheDirectory: true,
-    });
+    const picked = await pickImageFromLibrary();
+    if (!picked) return;
 
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
     setUploading(true);
 
     try {
-      const bytes = await readUriAsArrayBuffer(asset.uri);
-      const ext = asset.name?.split('.').pop() ?? 'jpg';
+      const bytes = await readUriAsArrayBuffer(picked.uri);
+      const ext = picked.name.split('.').pop() ?? 'jpg';
       const path = `${condominiumId}/${unitId}/${chargeId}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('payment-proofs')
-        .upload(path, bytes, { contentType: asset.mimeType ?? 'application/octet-stream', upsert: false });
+        .upload(path, bytes, { contentType: picked.mimeType, upsert: false });
 
       if (uploadError) throw uploadError;
 

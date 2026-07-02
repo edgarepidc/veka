@@ -120,7 +120,7 @@ export function useDashboard(primary: ActiveMembership | null) {
         .select('id, starts_at, ends_at, amenity:amenities (name)')
         .eq('unit_id', primary.unit_id)
         .eq('status', 'confirmed')
-        .gte('starts_at', now)
+        .gte('ends_at', now)
         .order('starts_at', { ascending: true })
         .limit(1),
       supabase

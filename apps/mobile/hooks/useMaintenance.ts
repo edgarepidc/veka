@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
 import { STORAGE_BUCKETS, maintenanceFilePath } from '@veka/shared';
 
+import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
@@ -113,11 +114,10 @@ export function useMaintenance(primary: ActiveMembership | null) {
         const ext = input.photoName?.split('.').pop() ?? 'jpg';
         const fileId = `${Date.now()}`;
         const path = maintenanceFilePath(primary.condominium_id, 'tickets', fileId, ext);
-        const response = await fetch(input.photoUri);
-        const blob = await response.blob();
+        const bytes = await readUriAsArrayBuffer(input.photoUri);
         const { error: uploadError } = await supabase.storage
           .from(STORAGE_BUCKETS.MAINTENANCE_FILES)
-          .upload(path, blob, {
+          .upload(path, bytes, {
             contentType: input.photoMime ?? 'image/jpeg',
             upsert: false,
           });
