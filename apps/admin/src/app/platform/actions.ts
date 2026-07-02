@@ -4,6 +4,11 @@ import { revalidatePath } from 'next/cache';
 import type { MembershipRole } from '@veka/shared';
 
 import { createCondominiumWithOrganization } from '@/lib/create-condominium';
+import {
+  DEFAULT_BRANDING,
+  parseCondominiumSettings,
+  type CondominiumSettings,
+} from '@/lib/condominium-settings';
 import { sendInvitationEmail } from '@/lib/invitation-email';
 import { assertPlatformAdminAction } from '@/lib/require-platform-admin';
 import { createClient } from '@/lib/supabase/server';
@@ -55,6 +60,61 @@ async function upsertStaffMembership(
   });
 
   return error;
+}
+
+export async function platformUpdateCondominium(formData: FormData) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  const condominiumId = String(formData.get('condominium_id') ?? '').trim();
+  if (!condominiumId) return { error: 'Condominio inválido.' };
+
+  const name = String(formData.get('name') ?? '').trim();
+  const slug = String(formData.get('slug') ?? '').trim().toLowerCase();
+  const address = String(formData.get('address') ?? '').trim();
+  const timezone = String(formData.get('timezone') ?? 'America/Mexico_City');
+  const logoUrl = String(formData.get('logo_url') ?? '').trim();
+  const primaryColor = String(formData.get('primary_color') ?? '').trim();
+  const accentColor = String(formData.get('accent_color') ?? '').trim();
+
+  if (!name || !slug) return { error: 'Nombre y slug son obligatorios.' };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from('condominiums')
+    .select('settings')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  if (!existing) return { error: 'Condominio no encontrado.' };
+
+  const currentSettings = parseCondominiumSettings(existing.settings);
+  const settings: CondominiumSettings = {
+    ...currentSettings,
+    branding: {
+      logo_url: logoUrl || undefined,
+      primary_color: primaryColor || DEFAULT_BRANDING.primary_color,
+      accent_color: accentColor || DEFAULT_BRANDING.accent_color,
+    },
+  };
+
+  const { error } = await admin
+    .from('condominiums')
+    .update({
+      name,
+      slug,
+      address: address || null,
+      timezone,
+      settings,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', condominiumId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/platform/condominios/${condominiumId}`);
+  revalidatePath('/platform/condominios');
+  return { success: true };
 }
 
 export async function platformCreateCondominium(formData: FormData) {

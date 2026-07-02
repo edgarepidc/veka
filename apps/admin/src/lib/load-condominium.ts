@@ -66,7 +66,7 @@ function mapOccupant(
   };
 }
 
-function attachOccupancy(
+export function attachOccupancy(
   units: Omit<UnitRow, 'owner' | 'tenant' | 'resident'>[],
   memberships: {
     unit_id: string | null;

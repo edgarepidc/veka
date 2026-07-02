@@ -4,7 +4,6 @@ const ADMIN_ONLY_PREFIXES = [
   '/espacios',
   '/seguridad',
   '/mantenimiento',
-  '/configuracion/condominio',
   '/configuracion/unidades',
   '/configuracion/equipo',
   '/configuracion/invitaciones',

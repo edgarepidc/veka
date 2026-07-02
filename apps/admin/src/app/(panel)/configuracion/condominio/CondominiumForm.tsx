@@ -21,8 +21,11 @@ const TIMEZONES = [
   'America/Chihuahua',
 ];
 
+type UpdateResult = { error: string } | { success: boolean };
+
 export function CondominiumForm({
   condo,
+  updateAction,
 }: {
   condo: {
     id: string;
@@ -32,7 +35,9 @@ export function CondominiumForm({
     timezone: string;
     settings: CondominiumSettings;
   };
+  updateAction?: (formData: FormData) => Promise<UpdateResult>;
 }) {
+  const save = updateAction ?? updateCondominium;
   const branding = condo.settings.branding ?? {};
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -52,7 +57,7 @@ export function CondominiumForm({
           action={(formData) => {
             setMessage(null);
             start(async () => {
-              const result = await updateCondominium(formData);
+              const result = await save(formData);
               setMessage('error' in result ? result.error : 'Marca actualizada correctamente.');
             });
           }}
@@ -124,7 +129,7 @@ export function CondominiumForm({
           action={(formData) => {
             setMessage(null);
             start(async () => {
-              const result = await updateCondominium(formData);
+              const result = await save(formData);
               setMessage('error' in result ? result.error : 'Condominio actualizado correctamente.');
             });
           }}

@@ -1,35 +1,5 @@
-import { ConfigNav } from '@/components/ConfigNav';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { HELP } from '@/lib/help-content';
-import { loadCondominium } from '@/lib/load-condominium';
-import { requireAdminSession } from '@/lib/require-admin';
+import { redirect } from 'next/navigation';
 
-import { CondominiumForm } from './CondominiumForm';
-
-export default async function CondominioConfigPage() {
-  await requireAdminSession();
-  const condo = await loadCondominium();
-
-  if (!condo) {
-    return (
-      <div className="mx-auto max-w-2xl">
-        <PageHeader title="Configuración" highlight="del condominio" />
-        <ConfigNav />
-        <p className="text-muted">No se encontró el condominio.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title="Configuración"
-        highlight="del condominio"
-        subtitle="Nombre, dirección y zona horaria del residencial."
-        help={<p>{HELP.condominio}</p>}
-      />
-      <ConfigNav />
-      <CondominiumForm condo={condo} />
-    </div>
-  );
+export default function CondominioConfigRedirectPage() {
+  redirect('/configuracion/perfil');
 }

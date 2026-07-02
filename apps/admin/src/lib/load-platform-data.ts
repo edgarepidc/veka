@@ -1,5 +1,8 @@
 import type { MembershipRole } from '@veka/shared';
+import { TEAM_STAFF_ROLES } from '@veka/shared';
 
+import { parseCondominiumSettings, type CondominiumSettings } from '@/lib/condominium-settings';
+import type { ClusterRow, UnitRow } from '@/lib/load-condominium';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export interface PlatformStats {
@@ -83,6 +86,150 @@ export async function loadPlatformCondominiums(): Promise<PlatformCondominiumRow
       memberCount: counts[index] ?? 0,
     };
   });
+}
+
+export interface PlatformInvitationRow {
+  id: string;
+  email: string;
+  role: MembershipRole;
+  status: string;
+  created_at: string;
+  unit_identifier: string | null;
+}
+
+export async function loadPlatformCondominiumSummary(condominiumId: string) {
+  const admin = createAdminClient();
+
+  const { data: condo } = await admin
+    .from('condominiums')
+    .select('id, name, slug, address, timezone, created_at, organization:organizations(id, name)')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  if (!condo) return null;
+
+  const organization = Array.isArray(condo.organization) ? condo.organization[0] : condo.organization;
+
+  return {
+    id: condo.id,
+    name: condo.name,
+    slug: condo.slug,
+    address: condo.address,
+    timezone: condo.timezone,
+    created_at: condo.created_at,
+    organization: organization ?? null,
+  };
+}
+
+export async function loadPlatformCondominiumForConfig(condominiumId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from('condominiums')
+    .select('id, name, slug, address, timezone, settings')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  return {
+    ...data,
+    settings: parseCondominiumSettings(data.settings),
+  } as {
+    id: string;
+    name: string;
+    slug: string;
+    address: string | null;
+    timezone: string;
+    settings: CondominiumSettings;
+  };
+}
+
+export async function loadPlatformInvitations(condominiumId: string): Promise<PlatformInvitationRow[]> {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from('invitations')
+    .select('id, email, role, status, created_at, unit:units(identifier)')
+    .eq('condominium_id', condominiumId)
+    .order('created_at', { ascending: false });
+
+  return (data ?? []).map((row) => {
+    const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+    return {
+      id: row.id,
+      email: row.email,
+      role: row.role as MembershipRole,
+      status: row.status,
+      created_at: row.created_at,
+      unit_identifier: unit?.identifier ?? null,
+    };
+  });
+}
+
+export async function loadPlatformClustersAndUnits(condominiumId: string): Promise<{
+  clusters: ClusterRow[];
+  units: UnitRow[];
+}> {
+  const admin = createAdminClient();
+
+  const [clustersRes, unitsRes, membershipsRes, invitationsRes] = await Promise.all([
+    admin.from('clusters').select('id, name').eq('condominium_id', condominiumId).order('name'),
+    admin
+      .from('units')
+      .select('id, identifier, coefficient, cluster_id, unit_kind, unit_number, cluster:clusters(name)')
+      .eq('condominium_id', condominiumId)
+      .order('identifier'),
+    admin
+      .from('memberships')
+      .select('unit_id, unit_relationship, profile:profiles(full_name)')
+      .eq('condominium_id', condominiumId)
+      .eq('status', 'active')
+      .not('unit_id', 'is', null),
+    admin
+      .from('invitations')
+      .select('unit_id, email, unit_relationship')
+      .eq('condominium_id', condominiumId)
+      .eq('status', 'pending')
+      .not('unit_id', 'is', null),
+  ]);
+
+  const rawUnits = unitsRes.data ?? [];
+  const baseUnits = rawUnits.map((row) => {
+    const cluster = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+    return {
+      id: row.id,
+      identifier: row.identifier,
+      coefficient: Number(row.coefficient),
+      cluster_id: row.cluster_id,
+      cluster: cluster ? { name: cluster.name } : null,
+      unit_kind: row.unit_kind as import('@veka/shared').UnitKind | null,
+      unit_number: row.unit_number ?? null,
+    };
+  });
+
+  const { attachOccupancy } = await import('@/lib/load-condominium');
+  const units = attachOccupancy(
+    baseUnits,
+    membershipsRes.data ?? [],
+    invitationsRes.data ?? [],
+  );
+
+  return {
+    clusters: (clustersRes.data as ClusterRow[]) ?? [],
+    units,
+  };
+}
+
+export async function loadPlatformStaffTeam(condominiumId: string) {
+  const members = (await loadPlatformMembers(condominiumId)).filter((row) =>
+    TEAM_STAFF_ROLES.includes(row.role),
+  );
+  const invitations = (await loadPlatformInvitations(condominiumId)).filter(
+    (row) => row.status === 'pending' && TEAM_STAFF_ROLES.includes(row.role) && !row.unit_identifier,
+  );
+
+  return { members, invitations };
 }
 
 export async function loadPlatformCondominium(condominiumId: string) {
