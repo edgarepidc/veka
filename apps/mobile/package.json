@@ -10,7 +10,6 @@
     "expo": "~54.0.0",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
-    "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.12",
@@ -41,6 +40,7 @@
   "scripts": {
     "dev": "expo start --go",
     "dev:go": "expo start --go",
+    "dev:url": "node scripts/print-expo-go-url.mjs",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
