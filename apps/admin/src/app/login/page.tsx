@@ -33,7 +33,9 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/');
+    const redirectRes = await fetch('/api/auth/redirect');
+    const redirectData = (await redirectRes.json()) as { path?: string };
+    router.push(redirectData.path ?? '/');
     router.refresh();
   }
 

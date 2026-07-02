@@ -32,6 +32,11 @@ export async function updateSession(request: NextRequest) {
   const isLogin = request.nextUrl.pathname.startsWith('/login');
   const isApi = request.nextUrl.pathname.startsWith('/api');
 
+  const platformEmails = (process.env.PLATFORM_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
   if (!user && !isLogin && !isApi) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -40,7 +45,8 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isLogin) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    const email = user.email?.trim().toLowerCase();
+    url.pathname = email && platformEmails.includes(email) ? '/platform' : '/';
     return NextResponse.redirect(url);
   }
 

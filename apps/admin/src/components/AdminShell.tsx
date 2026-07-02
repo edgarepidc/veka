@@ -26,10 +26,12 @@ function roleLabel(role: string): string {
 export function AdminShell({
   session,
   branding,
+  isPlatformAdmin = false,
   children,
 }: {
   session: AdminSession;
   branding?: CondominiumBranding;
+  isPlatformAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const displayName = session.profile.full_name ?? session.email.split('@')[0] ?? 'Usuario';
@@ -89,6 +91,14 @@ export function AdminShell({
                 <p className="serif-title text-lg text-[var(--text)]">Veka</p>
               </div>
               <div className="flex items-center gap-3 sm:ml-auto">
+                {isPlatformAdmin ? (
+                  <Link
+                    href="/platform"
+                    className="hidden rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-200 sm:inline-block"
+                  >
+                    Veka Platform
+                  </Link>
+                ) : null}
                 {session.isAdmin ? (
                   <CondominiumSwitcher
                     condominiums={session.condominiums}

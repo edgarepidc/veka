@@ -24,7 +24,11 @@ export default async function PanelLayout({ children }: { children: React.ReactN
 
   return (
     <SessionProvider session={session}>
-      <AdminShell session={session} branding={condo?.settings.branding}>
+      <AdminShell
+        session={session}
+        branding={condo?.settings.branding}
+        isPlatformAdmin={await isPlatformAdminUser(session.userId, session.email)}
+      >
         <AdminRouteGuard>{children}</AdminRouteGuard>
       </AdminShell>
     </SessionProvider>
