@@ -5,12 +5,15 @@ import { AdminRouteGuard } from '@/components/AdminRouteGuard';
 import { SessionProvider } from '@/components/SessionProvider';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadCondominium } from '@/lib/load-condominium';
+import { isPlatformAdminUser } from '@/lib/platform-admin';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const session = await loadAdminSession();
   if (!session) redirect('/login');
 
   if (session.condominiums.length === 0) {
+    const isPlatform = await isPlatformAdminUser(session.userId, session.email);
+    if (isPlatform) redirect('/platform');
     redirect('/onboarding');
   }
 
