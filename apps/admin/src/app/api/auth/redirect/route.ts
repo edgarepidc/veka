@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 
+import { acceptPendingInvitations } from '@/lib/accept-invitations';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadPlatformSession } from '@/lib/platform-admin';
 
 export async function GET() {
+  await acceptPendingInvitations();
+
   const platform = await loadPlatformSession();
   if (platform) {
     return NextResponse.json({ path: '/platform' });

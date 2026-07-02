@@ -3,5 +3,11 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build --workspace=@veka/admin",
   "outputDirectory": "apps/admin/.next",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/finance",
+      "schedule": "0 14 * * *"
+    }
+  ]
 }

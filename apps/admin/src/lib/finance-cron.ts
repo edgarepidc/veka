@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { reconcileAllFundBalances, reconcileCondominiumFundBalances } from '@/lib/fund-balances';
 import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import { deliverChargeReminder } from '@/lib/notifications';
+import { ensureRecurringChargesForCondo } from '@/lib/recurring-fees';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Minimum days between automatic reminders for the same charge. */
@@ -10,6 +11,7 @@ const REMINDER_COOLDOWN_DAYS = 7;
 
 export interface DailyFinanceMaintenanceResult {
   condominiums: number;
+  recurringChargesGenerated: number;
   lateFeesCreated: number;
   remindersProcessed: number;
   reminderDeliveries: number;
@@ -100,14 +102,23 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
   const { data: installmentRefresh } = await admin.rpc('refresh_payment_plan_installment_statuses');
   const installmentsMarkedOverdue = Number(installmentRefresh ?? 0);
 
-  const { data: condominiums } = await admin.from('condominiums').select('id');
+  const { data: condominiums } = await admin
+    .from('condominiums')
+    .select('id')
+    .eq('status', 'active');
   const condoIds = (condominiums ?? []).map((row) => row.id as string);
 
+  let recurringChargesGenerated = 0;
   let lateFeesCreated = 0;
   let remindersProcessed = 0;
   let reminderDeliveries = 0;
 
   for (const condoId of condoIds) {
+    try {
+      recurringChargesGenerated += await ensureRecurringChargesForCondo(admin, condoId, null);
+    } catch {
+      // Skip condos that fail charge generation; cron continues for others.
+    }
     lateFeesCreated += await ensureLateFeesForCondo(admin, condoId, null);
     const reminderResult = await processAutomaticReminders(admin, condoId);
     remindersProcessed += reminderResult.processed;
@@ -118,6 +129,7 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
 
   return {
     condominiums: condoIds.length,
+    recurringChargesGenerated,
     lateFeesCreated,
     remindersProcessed,
     reminderDeliveries,
