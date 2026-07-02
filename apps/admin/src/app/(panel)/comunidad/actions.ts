@@ -2,10 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
 export async function createAnnouncement(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -20,7 +24,7 @@ export async function createAnnouncement(formData: FormData) {
   if (!title) return { error: 'Título obligatorio.' };
 
   const { error } = await supabase.from('posts').insert({
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     author_id: user.id,
     post_type: 'announcement',
     title,
@@ -37,6 +41,10 @@ export async function createAnnouncement(formData: FormData) {
 }
 
 export async function createPoll(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -61,7 +69,7 @@ export async function createPoll(formData: FormData) {
   const { data: post, error: postError } = await supabase
     .from('posts')
     .insert({
-      condominium_id: DEMO_CONDO_ID,
+      condominium_id: condominiumId,
       author_id: user.id,
       post_type: 'poll',
       title,

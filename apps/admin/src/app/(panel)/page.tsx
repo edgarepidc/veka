@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { APP_NAME } from '@veka/shared';
 
 import { loadAdminSession } from '@/lib/load-admin-session';
+import { formatHomeStatMoney, loadHomeStats } from '@/lib/load-home-stats';
 import { residentHomePath } from '@/lib/route-access';
 
 const modules = [
@@ -33,15 +34,28 @@ export default async function AdminHomePage() {
   if (!session.isAdmin) redirect(residentHomePath());
 
   const condoName = session.membership?.condominium_name ?? 'Condominio';
+  const stats =
+    session.activeCondominiumId != null
+      ? await loadHomeStats(session.activeCondominiumId)
+      : null;
 
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title={APP_NAME} highlight="admin" subtitle={condoName} />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatPill label="Fondo operativo" value="—" />
-        <StatPill label="Fondo reserva" value="—" />
-        <StatPill label="Unidades al día" value="—" />
+        <StatPill
+          label="Fondo operativo"
+          value={stats ? formatHomeStatMoney(stats.operatingBalance) : '—'}
+        />
+        <StatPill
+          label="Fondo reserva"
+          value={stats ? formatHomeStatMoney(stats.reserveBalance) : '—'}
+        />
+        <StatPill
+          label="Unidades al día"
+          value={stats?.unitsOnTimePercent != null ? `${stats.unitsOnTimePercent}%` : '—'}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

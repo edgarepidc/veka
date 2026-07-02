@@ -4,15 +4,29 @@ import { revalidatePath } from 'next/cache';
 
 import { isStaffRole, TEAM_STAFF_ROLES, type MembershipRole } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import { sendInvitationEmail } from '@/lib/invitation-email';
 import { createClient } from '@/lib/supabase/server';
 
 const STAFF_ASSIGNABLE: MembershipRole[] = ['admin', 'board_member', 'guard', 'staff'];
+
+const ROLE_LABELS: Record<MembershipRole, string> = {
+  super_admin: 'Super admin',
+  admin: 'Administrador',
+  board_member: 'Mesa directiva',
+  resident: 'Residente',
+  guard: 'Guardia',
+  staff: 'Personal',
+};
 
 export async function updateMemberRole(membershipId: string, role: MembershipRole) {
   if (!STAFF_ASSIGNABLE.includes(role)) {
     return { error: 'Rol no permitido para equipo operativo.' };
   }
+
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
 
   const supabase = await createClient();
   const {
@@ -24,7 +38,7 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
     .from('memberships')
     .select('id, user_id, role, condominium_id')
     .eq('id', membershipId)
-    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('condominium_id', condominiumId)
     .maybeSingle();
 
   if (!target) return { error: 'Miembro no encontrado.' };
@@ -48,6 +62,10 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
 }
 
 export async function inviteStaffMember(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -67,7 +85,7 @@ export async function inviteStaffMember(formData: FormData) {
     .from('memberships')
     .select('role')
     .eq('user_id', user.id)
-    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('condominium_id', condominiumId)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -75,9 +93,15 @@ export async function inviteStaffMember(formData: FormData) {
     return { error: 'Sin permisos de administrador' };
   }
 
+  const { data: condo } = await supabase
+    .from('condominiums')
+    .select('name')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
   const { error } = await supabase.from('invitations').insert({
     email,
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     unit_id: null,
     role,
     unit_relationship: null,
@@ -85,6 +109,12 @@ export async function inviteStaffMember(formData: FormData) {
   });
 
   if (error) return { error: error.message };
+
+  await sendInvitationEmail({
+    to: email,
+    condominiumName: condo?.name ?? 'tu condominio',
+    roleLabel: ROLE_LABELS[role] ?? role,
+  });
 
   revalidatePath('/configuracion/equipo');
   return { success: true };

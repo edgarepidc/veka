@@ -1,4 +1,4 @@
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 import type { MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
 
@@ -46,12 +46,14 @@ export interface AmenityOption {
   name: string;
 }
 
-export async function loadMaintenanceData(): Promise<{
+export async function loadMaintenanceData(condominiumId?: string): Promise<{
   tickets: MaintenanceTicketRow[];
   schedules: MaintenanceScheduleRow[];
   workLogs: MaintenanceWorkLogRow[];
   amenities: AmenityOption[];
+  condominiumId: string;
 }> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
   const [ticketsRes, schedulesRes, workLogsRes, amenitiesRes] = await Promise.all([
@@ -60,31 +62,32 @@ export async function loadMaintenanceData(): Promise<{
       .select(
         'id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at, unit:units(identifier), amenity:amenities(name)',
       )
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .order('created_at', { ascending: false }),
     supabase
       .from('maintenance_schedules')
       .select(
         'id, title, description, period_start, period_end, file_url, file_name, created_at, amenity:amenities(name)',
       )
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .order('created_at', { ascending: false }),
     supabase
       .from('maintenance_work_logs')
       .select(
         'id, title, description, work_date, photo_url, file_url, file_name, created_at, amenity:amenities(name), ticket:maintenance_tickets(title)',
       )
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .order('work_date', { ascending: false }),
     supabase
       .from('amenities')
       .select('id, name')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .eq('is_active', true)
       .order('name'),
   ]);
 
   return {
+    condominiumId: condoId,
     tickets: (ticketsRes.data ?? []) as unknown as MaintenanceTicketRow[],
     schedules: (schedulesRes.data ?? []) as unknown as MaintenanceScheduleRow[],
     workLogs: (workLogsRes.data ?? []) as unknown as MaintenanceWorkLogRow[],

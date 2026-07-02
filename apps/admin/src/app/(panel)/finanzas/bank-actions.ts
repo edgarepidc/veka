@@ -8,22 +8,20 @@ import {
   parseOfxAccountInfo,
 } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
-function resolveCondoId(value?: string | null): string {
-  const id = value?.trim();
-  return id || DEMO_CONDO_ID;
-}
-
 export async function saveBankAccount(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
   const name = String(formData.get('name') ?? '').trim();
   const bankName = String(formData.get('bank_name') ?? '').trim();
   const accountLast4 = String(formData.get('account_last4') ?? '').trim();

@@ -4,7 +4,7 @@ import { HELP } from '@/lib/help-content';
 import { requireAdminSession } from '@/lib/require-admin';
 
 export default async function FinanzasPage() {
-  await requireAdminSession();
+  const session = await requireAdminSession();
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -19,7 +19,7 @@ export default async function FinanzasPage() {
           </>
         }
       />
-      <FinanceDashboard />
+      <FinanceDashboard initialCondominiumId={session.activeCondominiumId} />
     </div>
   );
 }

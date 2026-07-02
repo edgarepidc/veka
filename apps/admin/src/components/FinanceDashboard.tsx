@@ -54,7 +54,6 @@ import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { HelpHint } from '@/components/ui/HelpHint';
 import { createClient } from '@/lib/supabase/client';
-import { DEMO_CONDO_ID } from '@/lib/constants';
 import { HELP } from '@/lib/help-content';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
 import {
@@ -281,7 +280,11 @@ function normalizePaymentRow(row: PaymentRow): PaymentRow {
   return { ...row, charge, unit: { ...row.unit, cluster: normalizedCluster } };
 }
 
-export function FinanceDashboard() {
+export function FinanceDashboard({
+  initialCondominiumId = null,
+}: {
+  initialCondominiumId?: string | null;
+}) {
   const supabase = createClient();
   const expenseFileId = useId().replace(/:/g, '');
   const [tab, setTab] = useState<FinanceTab>('estado');
@@ -293,7 +296,7 @@ export function FinanceDashboard() {
   const [incomePending, startIncome] = useTransition();
 
   const [condominiums, setCondominiums] = useState<CondominiumRow[]>([]);
-  const [selectedCondoId, setSelectedCondoId] = useState(DEMO_CONDO_ID);
+  const [selectedCondoId, setSelectedCondoId] = useState(initialCondominiumId ?? '');
   const [selectedClusterId, setSelectedClusterId] = useState('');
 
   const [units, setUnits] = useState<UnitOption[]>([]);
@@ -393,16 +396,24 @@ export function FinanceDashboard() {
 
     if (options.length > 0) {
       setCondominiums(options);
-      setSelectedCondoId((current) =>
-        options.some((option) => option.id === current) ? current : options[0]!.id,
-      );
+      setSelectedCondoId((current) => {
+        if (current && options.some((option) => option.id === current)) return current;
+        if (initialCondominiumId && options.some((option) => option.id === initialCondominiumId)) {
+          return initialCondominiumId;
+        }
+        return options[0]!.id;
+      });
     }
-  }, [supabase]);
+  }, [initialCondominiumId, supabase]);
 
   const load = useCallback(async () => {
     setLoading(true);
 
-    const condoId = selectedCondoId || DEMO_CONDO_ID;
+    const condoId = selectedCondoId;
+    if (!condoId) {
+      setLoading(false);
+      return;
+    }
 
     const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes, condoSettingsRes, fiscalProfileRes, unitTaxRes, accountingMapsRes, cfdiInvoicesRes] =
       await Promise.all([
@@ -984,7 +995,7 @@ export function FinanceDashboard() {
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
           onSaveOpeningBalance={async (fundType, amount) => {
-            const result = await saveFundOpeningBalance(selectedCondoId || DEMO_CONDO_ID, fundType, amount);
+            const result = await saveFundOpeningBalance(selectedCondoId, fundType, amount);
             if (result.error) return { error: result.error };
             await load();
             return {};
@@ -1009,7 +1020,7 @@ export function FinanceDashboard() {
 
       {tab === 'cuotas' ? (
         <CuotasPanel
-          condominiumId={selectedCondoId || DEMO_CONDO_ID}
+          condominiumId={selectedCondoId}
           clusters={clusters}
           units={units}
           recurringFees={recurringFees}

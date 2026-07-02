@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 import { AdminNav } from '@/components/AdminNav';
+import { CondominiumSwitcher } from '@/components/CondominiumSwitcher';
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { CondominiumBranding } from '@/lib/condominium-settings';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
@@ -88,6 +89,12 @@ export function AdminShell({
                 <p className="serif-title text-lg text-[var(--text)]">Veka</p>
               </div>
               <div className="flex items-center gap-3 sm:ml-auto">
+                {session.isAdmin ? (
+                  <CondominiumSwitcher
+                    condominiums={session.condominiums}
+                    activeCondominiumId={session.activeCondominiumId}
+                  />
+                ) : null}
                 <Link
                   href="/configuracion/perfil"
                   className="flex items-center gap-3 rounded-xl px-2 py-1 transition hover:bg-white/10"

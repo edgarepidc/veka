@@ -4,10 +4,14 @@ import { revalidatePath } from 'next/cache';
 import type { MaintenanceTicketStatus } from '@veka/shared';
 import { MAINTENANCE_TICKET_STATUSES } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
 export async function updateTicketStatus(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -29,7 +33,7 @@ export async function updateTicketStatus(formData: FormData) {
       resolved_at: status === 'resolved' || status === 'closed' ? new Date().toISOString() : null,
     })
     .eq('id', ticketId)
-    .eq('condominium_id', DEMO_CONDO_ID);
+    .eq('condominium_id', condominiumId);
 
   if (error) return { error: error.message };
 
@@ -38,6 +42,10 @@ export async function updateTicketStatus(formData: FormData) {
 }
 
 export async function createMaintenanceSchedule(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -56,7 +64,7 @@ export async function createMaintenanceSchedule(formData: FormData) {
   if (!fileUrl) return { error: 'Sube el calendario o documento.' };
 
   const { error } = await supabase.from('maintenance_schedules').insert({
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     amenity_id: amenityId || null,
     title,
     description: description || null,
@@ -74,6 +82,10 @@ export async function createMaintenanceSchedule(formData: FormData) {
 }
 
 export async function createWorkLog(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -94,7 +106,7 @@ export async function createWorkLog(formData: FormData) {
   if (!photoUrl && !fileUrl) return { error: 'Adjunta al menos una foto o documento.' };
 
   const { error } = await supabase.from('maintenance_work_logs').insert({
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     amenity_id: amenityId || null,
     ticket_id: ticketId || null,
     title,

@@ -9,6 +9,7 @@ const ADMIN_TABS = [
   { href: '/configuracion/perfil', label: 'Mi perfil' },
   { href: '/configuracion/condominio', label: 'Condominio' },
   { href: '/configuracion/unidades', label: 'Unidades' },
+  { href: '/configuracion/invitaciones', label: 'Invitaciones' },
   { href: '/configuracion/equipo', label: 'Equipo' },
 ];
 

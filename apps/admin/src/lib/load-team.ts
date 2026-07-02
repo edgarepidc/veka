@@ -1,4 +1,4 @@
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 import { isStaffRole, TEAM_STAFF_ROLES, type MembershipRole } from '@veka/shared';
 
@@ -18,24 +18,25 @@ export interface StaffInvitation {
   created_at: string;
 }
 
-export async function loadStaffTeam(): Promise<{
+export async function loadStaffTeam(condominiumId?: string): Promise<{
   members: TeamMember[];
   invitations: StaffInvitation[];
 }> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
   const [membersRes, invitationsRes] = await Promise.all([
     supabase
       .from('memberships')
       .select('id, user_id, role, status, profile:profiles(full_name)')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .eq('status', 'active')
       .in('role', TEAM_STAFF_ROLES)
       .order('role'),
     supabase
       .from('invitations')
       .select('id, email, role, status, created_at')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .eq('status', 'pending')
       .is('unit_id', null)
       .in('role', TEAM_STAFF_ROLES)

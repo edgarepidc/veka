@@ -3,20 +3,26 @@
 import { revalidatePath } from 'next/cache';
 import { buildUnitIdentifier, type UnitKind, type UnitRelationship } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import { sendInvitationEmail } from '@/lib/invitation-email';
 import { createClient } from '@/lib/supabase/server';
 
 function revalidateUnits() {
   revalidatePath('/configuracion/unidades');
+  revalidatePath('/configuracion/invitaciones');
 }
 
 export async function createCluster(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const name = String(formData.get('name') ?? '').trim();
   if (!name) return { error: 'Nombre requerido.' };
 
   const { error } = await supabase.from('clusters').insert({
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     name,
   });
 
@@ -26,17 +32,29 @@ export async function createCluster(formData: FormData) {
 }
 
 export async function deleteCluster(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const id = String(formData.get('id') ?? '');
   if (!id) return { error: 'ID inválido.' };
 
-  const { error } = await supabase.from('clusters').delete().eq('id', id).eq('condominium_id', DEMO_CONDO_ID);
+  const { error } = await supabase
+    .from('clusters')
+    .delete()
+    .eq('id', id)
+    .eq('condominium_id', condominiumId);
   if (error) return { error: error.message };
   revalidateUnits();
   return { success: true };
 }
 
 export async function createUnit(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const unitKind = String(formData.get('unit_kind') ?? '') as UnitKind;
@@ -52,7 +70,7 @@ export async function createUnit(formData: FormData) {
     .from('clusters')
     .select('name')
     .eq('id', clusterId)
-    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('condominium_id', condominiumId)
     .maybeSingle();
 
   if (!cluster) return { error: 'Cluster no encontrado.' };
@@ -60,7 +78,7 @@ export async function createUnit(formData: FormData) {
   const identifier = buildUnitIdentifier(cluster.name, unitKind, unitNumber);
 
   const { error } = await supabase.from('units').insert({
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     cluster_id: clusterId,
     identifier,
     unit_kind: unitKind,
@@ -74,17 +92,25 @@ export async function createUnit(formData: FormData) {
 }
 
 export async function deleteUnit(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const id = String(formData.get('id') ?? '');
   if (!id) return { error: 'ID inválido.' };
 
-  const { error } = await supabase.from('units').delete().eq('id', id).eq('condominium_id', DEMO_CONDO_ID);
+  const { error } = await supabase.from('units').delete().eq('id', id).eq('condominium_id', condominiumId);
   if (error) return { error: error.message };
   revalidateUnits();
   return { success: true };
 }
 
 export async function inviteUnitOccupant(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -108,7 +134,7 @@ export async function inviteUnitOccupant(formData: FormData) {
     .from('memberships')
     .select('role')
     .eq('user_id', user.id)
-    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('condominium_id', condominiumId)
     .eq('status', 'active')
     .maybeSingle();
 
@@ -116,9 +142,14 @@ export async function inviteUnitOccupant(formData: FormData) {
     return { error: 'Sin permisos de administrador' };
   }
 
+  const [{ data: condo }, { data: unit }] = await Promise.all([
+    supabase.from('condominiums').select('name').eq('id', condominiumId).maybeSingle(),
+    supabase.from('units').select('identifier').eq('id', unitId).maybeSingle(),
+  ]);
+
   const { error } = await supabase.from('invitations').insert({
     email,
-    condominium_id: DEMO_CONDO_ID,
+    condominium_id: condominiumId,
     unit_id: unitId,
     role: 'resident',
     unit_relationship: relationship,
@@ -126,6 +157,13 @@ export async function inviteUnitOccupant(formData: FormData) {
   });
 
   if (error) return { error: error.message };
+
+  await sendInvitationEmail({
+    to: email,
+    condominiumName: condo?.name ?? 'tu condominio',
+    unitLabel: unit?.identifier,
+    roleLabel: relationship === 'tenant' ? 'inquilino' : 'propietario',
+  });
 
   revalidateUnits();
   return { success: true };

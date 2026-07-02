@@ -11,12 +11,11 @@ import {
 
 import { issueCfdiForPaymentManual } from '@/lib/cfdi';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
-function resolveCondoId(value?: string | null): string {
-  const id = value?.trim();
-  return id || DEMO_CONDO_ID;
+async function resolveCondoId(value?: string | null): Promise<string | { error: string }> {
+  return requireActiveCondominiumId(value);
 }
 
 export async function saveApprovalSettings(formData: FormData) {
@@ -186,7 +185,9 @@ export async function seedDefaultAccountingMaps(condominiumId: string) {
   } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
   const rows = [...DEFAULT_INCOME_ACCOUNT_MAPS, ...DEFAULT_EXPENSE_ACCOUNT_MAPS].map((row) => ({
     condominium_id: condoId,
     movement_type: row.movement_type,

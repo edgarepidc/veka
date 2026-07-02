@@ -13,7 +13,6 @@ import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { createClient } from '@/lib/supabase/client';
-import { DEMO_CONDO_ID } from '@/lib/constants';
 import { HELP } from '@/lib/help-content';
 import type {
   AmenityOption,
@@ -41,11 +40,13 @@ export function MaintenanceManager({
   schedules,
   workLogs,
   amenities,
+  condominiumId,
 }: {
   tickets: MaintenanceTicketRow[];
   schedules: MaintenanceScheduleRow[];
   workLogs: MaintenanceWorkLogRow[];
   amenities: AmenityOption[];
+  condominiumId: string;
 }) {
   const supabase = createClient();
   const scheduleFileId = useId().replace(/:/g, '');
@@ -192,7 +193,7 @@ export function MaintenanceManager({
                 inputName="file_url"
                 label="Calendario o aviso"
                 hint="Imagen o PDF del calendario de mantenimiento."
-                buildPath={(ext) => maintenanceFilePath(DEMO_CONDO_ID, 'schedules', scheduleFileId, ext)}
+                buildPath={(ext) => maintenanceFilePath(condominiumId, 'schedules', scheduleFileId, ext)}
               />
               <button type="submit" disabled={pending} className="glass-btn-primary">
                 Publicar calendario
@@ -269,14 +270,14 @@ export function MaintenanceManager({
                 inputName="photo_url"
                 label="Foto del trabajo"
                 hint="Opcional si adjuntas documento."
-                buildPath={(ext) => maintenanceFilePath(DEMO_CONDO_ID, 'evidence', evidencePhotoId, ext)}
+                buildPath={(ext) => maintenanceFilePath(condominiumId, 'evidence', evidencePhotoId, ext)}
               />
               <FileUpload
                 bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
                 inputName="file_url"
                 label="Documento adicional"
                 hint="PDF o imagen complementaria."
-                buildPath={(ext) => maintenanceFilePath(DEMO_CONDO_ID, 'evidence', evidenceDocId, ext)}
+                buildPath={(ext) => maintenanceFilePath(condominiumId, 'evidence', evidenceDocId, ext)}
               />
               <button type="submit" disabled={pending} className="glass-btn-primary">
                 Guardar evidencia

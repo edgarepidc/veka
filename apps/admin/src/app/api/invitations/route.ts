@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 
+import { sendInvitationEmail } from '@/lib/invitation-email';
 import { createClient } from '@/lib/supabase/server';
+
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super admin',
+  admin: 'Administrador',
+  board_member: 'Mesa directiva',
+  resident: 'Residente',
+  guard: 'Guardia',
+  staff: 'Personal',
+};
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -37,6 +47,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Sin permisos de administrador' }, { status: 403 });
   }
 
+  const [{ data: condo }, { data: unit }] = await Promise.all([
+    supabase.from('condominiums').select('name').eq('id', condominiumId).maybeSingle(),
+    unitId
+      ? supabase.from('units').select('identifier').eq('id', unitId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
   const { data, error } = await supabase
     .from('invitations')
     .insert({
@@ -55,7 +72,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ invitation: data });
+  const emailed = await sendInvitationEmail({
+    to: data.email,
+    condominiumName: condo?.name ?? 'tu condominio',
+    unitLabel: unit?.identifier,
+    roleLabel: ROLE_LABELS[role] ?? role,
+  });
+
+  return NextResponse.json({ invitation: data, emailSent: emailed });
 }
 
 export async function GET(request: Request) {
@@ -73,6 +97,18 @@ export async function GET(request: Request) {
 
   if (!condominiumId) {
     return NextResponse.json({ error: 'condominiumId requerido' }, { status: 400 });
+  }
+
+  const { data: membership } = await supabase
+    .from('memberships')
+    .select('role')
+    .eq('user_id', user.id)
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!membership || !['admin', 'super_admin'].includes(membership.role as string)) {
+    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 });
   }
 
   const { data, error } = await supabase

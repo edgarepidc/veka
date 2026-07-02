@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import {
   DEFAULT_BRANDING,
   parseCondominiumSettings,
@@ -14,6 +14,10 @@ import { createClient } from '@/lib/supabase/server';
 export async function updateCondominium(formData: FormData) {
   const denied = await assertAdminAction();
   if (denied) return denied;
+
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
 
   const supabase = await createClient();
   const {
@@ -36,7 +40,7 @@ export async function updateCondominium(formData: FormData) {
   const { data: existing } = await supabase
     .from('condominiums')
     .select('settings')
-    .eq('id', DEMO_CONDO_ID)
+    .eq('id', condominiumId)
     .maybeSingle();
 
   const currentSettings = parseCondominiumSettings(existing?.settings);
@@ -61,7 +65,7 @@ export async function updateCondominium(formData: FormData) {
       settings,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', DEMO_CONDO_ID);
+    .eq('id', condominiumId);
 
   if (error) return { error: error.message };
 

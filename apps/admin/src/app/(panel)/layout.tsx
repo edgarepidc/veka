@@ -10,7 +10,14 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   const session = await loadAdminSession();
   if (!session) redirect('/login');
 
-  const condo = session.isAdmin ? await loadCondominium() : null;
+  if (session.condominiums.length === 0) {
+    redirect('/onboarding');
+  }
+
+  const condo =
+    session.isAdmin && session.activeCondominiumId
+      ? await loadCondominium(session.activeCondominiumId)
+      : null;
 
   return (
     <SessionProvider session={session}>

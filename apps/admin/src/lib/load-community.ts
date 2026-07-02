@@ -1,4 +1,4 @@
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
 export interface CommunityPostRow {
@@ -12,13 +12,14 @@ export interface CommunityPostRow {
   poll_options: { id: string; label: string }[];
 }
 
-export async function loadCommunityPosts(): Promise<CommunityPostRow[]> {
+export async function loadCommunityPosts(condominiumId?: string): Promise<CommunityPostRow[]> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
   const { data } = await supabase
     .from('posts')
     .select('id, title, body, post_type, is_pinned, is_formal, created_at, poll_options(id, label)')
-    .eq('condominium_id', DEMO_CONDO_ID)
+    .eq('condominium_id', condoId)
     .order('created_at', { ascending: false })
     .limit(30);
 

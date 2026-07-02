@@ -1,4 +1,4 @@
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { parseCondominiumSettings, type CondominiumSettings } from '@/lib/condominium-settings';
 import { createClient } from '@/lib/supabase/server';
 import type { UnitKind, UnitRelationship } from '@veka/shared';
@@ -36,12 +36,13 @@ export interface UnitRow {
   resident: UnitOccupant | null;
 }
 
-export async function loadCondominium(): Promise<CondominiumData | null> {
+export async function loadCondominium(condominiumId?: string): Promise<CondominiumData | null> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
   const { data } = await supabase
     .from('condominiums')
     .select('id, name, slug, address, timezone, settings')
-    .eq('id', DEMO_CONDO_ID)
+    .eq('id', condoId)
     .maybeSingle();
 
   if (!data) return null;
@@ -124,33 +125,30 @@ function attachOccupancy(
   });
 }
 
-export async function loadClustersAndUnits(): Promise<{
+export async function loadClustersAndUnits(condominiumId?: string): Promise<{
   clusters: ClusterRow[];
   units: UnitRow[];
 }> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
   const [clustersRes, unitsRes, membershipsRes, invitationsRes] = await Promise.all([
-    supabase
-      .from('clusters')
-      .select('id, name')
-      .eq('condominium_id', DEMO_CONDO_ID)
-      .order('name'),
+    supabase.from('clusters').select('id, name').eq('condominium_id', condoId).order('name'),
     supabase
       .from('units')
       .select('id, identifier, coefficient, cluster_id, unit_kind, unit_number, cluster:clusters(name)')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .order('identifier'),
     supabase
       .from('memberships')
       .select('unit_id, unit_relationship, profile:profiles(full_name)')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .eq('status', 'active')
       .not('unit_id', 'is', null),
     supabase
       .from('invitations')
       .select('unit_id, email, unit_relationship')
-      .eq('condominium_id', DEMO_CONDO_ID)
+      .eq('condominium_id', condoId)
       .eq('status', 'pending')
       .not('unit_id', 'is', null),
   ]);

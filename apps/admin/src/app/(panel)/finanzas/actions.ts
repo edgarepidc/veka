@@ -18,7 +18,7 @@ import {
   parseBudgetAmount,
 } from '@veka/shared';
 
-import { DEMO_CONDO_ID } from '@/lib/constants';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
 import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import { deliverChargeReminder } from '@/lib/notifications';
@@ -28,9 +28,8 @@ import {
 } from '@/lib/recurring-fees';
 import { createClient } from '@/lib/supabase/server';
 
-function resolveCondoId(value?: string | null): string {
-  const id = value?.trim();
-  return id || DEMO_CONDO_ID;
+async function resolveCondoId(value?: string | null): Promise<string | { error: string }> {
+  return requireActiveCondominiumId(value);
 }
 
 export async function ensureMonthlyRecurringCharges(condominiumId?: string) {
@@ -41,7 +40,9 @@ export async function ensureMonthlyRecurringCharges(condominiumId?: string) {
 
   if (!user) return { error: 'No autorizado' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   try {
     await supabase.rpc('refresh_charge_statuses');
@@ -77,7 +78,9 @@ export async function createRecurringFee(formData: FormData) {
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
   if (scope === 'cluster' && !clusterId) return { error: 'Selecciona la torre o cluster.' };
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { data: fee, error: feeError } = await supabase
     .from('recurring_fees')
@@ -139,7 +142,9 @@ export async function updateRecurringFee(formData: FormData) {
     effectiveFrom = hasCurrent ? nextPeriodMonth(currentPeriod) : currentPeriod;
   }
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error: updateError } = await supabase
     .from('recurring_fees')
@@ -193,7 +198,9 @@ export async function setRecurringFeeStatus(
   if (!user) return { error: 'No autorizado' };
   if (!feeId) return { error: 'Cuota inválida.' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error } = await supabase
     .from('recurring_fees')
@@ -234,7 +241,9 @@ export async function createExtraordinaryFee(formData: FormData) {
   if (!dueDate) return { error: 'Fecha de vencimiento obligatoria.' };
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   let unitsQuery = supabase
     .from('units')
@@ -302,7 +311,9 @@ export async function cancelFeeCampaign(campaignId: string, condominiumId?: stri
   if (!user) return { error: 'No autorizado' };
   if (!campaignId) return { error: 'Cuota inválida.' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error: campaignError } = await supabase
     .from('fee_campaigns')
@@ -332,7 +343,9 @@ export async function createIncome(formData: FormData) {
 
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = String(formData.get('condominium_id') ?? DEMO_CONDO_ID);
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
   const amount = Number(formData.get('amount'));
@@ -375,7 +388,9 @@ export async function createExpense(formData: FormData) {
 
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = String(formData.get('condominium_id') ?? DEMO_CONDO_ID);
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
   const amount = Number(formData.get('amount'));
@@ -456,6 +471,10 @@ export async function saveAnnualBudget(formData: FormData) {
   }
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
 
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
   const lines: { line_kind: 'expense' | 'income'; category: string; annual_amount: number }[] = [];
 
   for (const category of EXPENSE_CATEGORIES) {
@@ -476,7 +495,7 @@ export async function saveAnnualBudget(formData: FormData) {
     .from('annual_budgets')
     .upsert(
       {
-        condominium_id: resolveCondoId(String(formData.get('condominium_id') ?? '')),
+        condominium_id: condominiumId,
         fiscal_year: fiscalYear,
         fund_type: fundType,
         notes: notes || null,
@@ -546,7 +565,9 @@ export async function saveLateFeeSettings(formData: FormData) {
     }
   }
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error } = await supabase.from('late_fee_settings').upsert(
     {
@@ -596,7 +617,9 @@ export async function saveOverdueReminderRule(formData: FormData) {
     return { error: 'Activa al menos un canal: push o correo.' };
   }
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error } = await supabase.from('notification_rules').upsert(
     {
@@ -711,7 +734,9 @@ export async function saveFundOpeningBalance(
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
   if (!Number.isFinite(openingBalance)) return { error: 'Monto inválido.' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { error: upsertError } = await supabase.from('fund_balances').upsert(
     {
@@ -778,7 +803,9 @@ export async function createPaymentPlan(formData: FormData) {
 
   if (!user) return { error: 'No autorizado' };
 
-  const condoId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
   const unitId = String(formData.get('unit_id') ?? '').trim();
   const chargeIds = formData.getAll('charge_id').map((value) => String(value)).filter(Boolean);
   const installmentCount = Number(formData.get('installment_count'));
@@ -902,7 +929,9 @@ export async function cancelPaymentPlan(planId: string, condominiumId?: string) 
   if (!user) return { error: 'No autorizado' };
   if (!planId) return { error: 'Plan inválido.' };
 
-  const condoId = resolveCondoId(condominiumId);
+  const condoResult = await resolveCondoId(condominiumId);
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
 
   const { data: plan, error: planError } = await supabase
     .from('payment_plans')
