@@ -47,8 +47,8 @@ export function PrimaryButton({
           backgroundColor: bg,
           borderColor: variant === 'secondary' ? theme.border : 'transparent',
           opacity: disabled ? 0.5 : pressed ? 0.88 : 1,
-          transform: pressed ? [{ scale: 0.98 }] : undefined,
         },
+        pressed ? { transform: [{ scale: 0.98 }] } : null,
         style,
       ]}
       {...props}
