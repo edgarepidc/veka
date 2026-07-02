@@ -32,7 +32,7 @@ export async function startGatewayPayment(
     productDescription: context.productDescription,
     metadata: context.metadata,
     successUrl: `${baseUrl}/api/payments/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${baseUrl}/api/payments/checkout/cancel`,
+    cancelUrl: `${baseUrl}/api/payments/checkout/cancel?session_id={CHECKOUT_SESSION_ID}`,
     method: context.method,
     customerEmail: context.userEmail,
   });

@@ -235,8 +235,13 @@ function PaymentReviewCard({
         >
           Ver comprobante (imagen o PDF)
         </button>
+      ) : payment.payment_method === 'gateway' ? (
+        <p className="mt-3 text-xs text-amber-200/80">
+          Intento de pago en línea sin completar. Si el residente no terminó en Stripe, recházalo; los pagos
+          exitosos por pasarela se aprueban solos.
+        </p>
       ) : (
-        <p className="mt-3 text-xs text-subtle">Pago en línea sin comprobante adjunto.</p>
+        <p className="mt-3 text-xs text-subtle">Sin comprobante adjunto.</p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
