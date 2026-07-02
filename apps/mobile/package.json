@@ -39,8 +39,8 @@
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "dev": "expo start",
-    "dev:client": "expo start --dev-client",
+    "dev": "expo start --go",
+    "dev:go": "expo start --go",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
