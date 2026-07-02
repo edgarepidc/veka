@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
-import { platformCreateCondominium } from '@/app/(platform)/actions';
+import { platformCreateCondominium } from '@/app/platform/actions';
 
 export function PlatformCreateCondominiumForm() {
   const router = useRouter();

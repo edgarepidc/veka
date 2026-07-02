@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
-import { platformRevokeMembership } from '@/app/(platform)/actions';
+import { platformRevokeMembership } from '@/app/platform/actions';
 
 export function PlatformRevokeButton({
   membershipId,

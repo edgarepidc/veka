@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import type { MembershipRole } from '@veka/shared';
 
-import { platformAssignMembership } from '@/app/(platform)/actions';
+import { platformAssignMembership } from '@/app/platform/actions';
 
 const ROLES: { value: MembershipRole; label: string }[] = [
   { value: 'super_admin', label: 'Super admin' },
