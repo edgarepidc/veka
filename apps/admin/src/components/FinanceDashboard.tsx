@@ -412,8 +412,10 @@ export function FinanceDashboard({
     }
   }, [initialCondominiumId, supabase]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    }
 
     const condoId = selectedCondoId;
     if (!condoId) {
@@ -1470,7 +1472,7 @@ export function FinanceDashboard({
             onToggleCluster={(clusterId) =>
               setExpandedClusters((prev) => ({ ...prev, [clusterId]: !(prev[clusterId] ?? true) }))
             }
-            onReload={() => void load()}
+            onReload={(options) => void load(options)}
             onOpenUnitStatement={(unitId) => {
               setStatementUnitId(unitId);
               setTab('cuentas');

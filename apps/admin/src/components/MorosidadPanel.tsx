@@ -93,7 +93,7 @@ export function MorosidadPanel({
   activePlanUnitIds?: Set<string>;
   expandedClusters: Record<string, boolean>;
   onToggleCluster: (clusterId: string) => void;
-  onReload: () => void;
+  onReload: (options?: { silent?: boolean }) => void;
   onOpenUnitStatement?: (unitId: string) => void;
 }) {
   const [enabled, setEnabled] = useState(lateFeeSettings.enabled);
@@ -160,7 +160,7 @@ export function MorosidadPanel({
         return;
       }
       setSettingsMessage('Configuración de recargos guardada.');
-      onReload();
+      onReload({ silent: true });
     });
   }
 
@@ -190,27 +190,31 @@ export function MorosidadPanel({
         return;
       }
       setReminderMessage('Reglas de recordatorio guardadas.');
-      onReload();
+      onReload({ silent: true });
     });
   }
 
   function handleRunMaintenance() {
     setMaintenanceMessage(null);
     startMaintenance(async () => {
-      const result = await runFinanceMaintenanceNow();
-      if ('error' in result && result.error) {
-        setMaintenanceMessage(result.error);
-        return;
+      try {
+        const result = await runFinanceMaintenanceNow();
+        if ('error' in result && result.error) {
+          setMaintenanceMessage(result.error);
+          return;
+        }
+        if ('result' in result && result.result) {
+          const r = result.result;
+          setMaintenanceMessage(
+            `Mantenimiento completado: ${r.lateFeesCreated} recargo(s), ${r.dueSoonReminders} pre-vencimiento, ${r.overdueNotices} aviso(s) de mora (día 1), ${r.remindersProcessed} recordatorio(s) de mora, ${r.recurringChargesGenerated} cuota(s) recurrente(s) generada(s).`,
+          );
+        } else {
+          setMaintenanceMessage('Mantenimiento ejecutado correctamente.');
+        }
+        onReload({ silent: true });
+      } catch {
+        setMaintenanceMessage('Error inesperado al ejecutar el mantenimiento.');
       }
-      if ('result' in result && result.result) {
-        const r = result.result;
-        setMaintenanceMessage(
-          `Listo: ${r.lateFeesCreated} recargo(s), ${r.dueSoonReminders} pre-vencimiento, ${r.overdueNotices} aviso(s) de mora, ${r.remindersProcessed} recordatorio(s) de mora.`,
-        );
-      } else {
-        setMaintenanceMessage('Mantenimiento ejecutado.');
-      }
-      onReload();
     });
   }
 
@@ -450,6 +454,19 @@ export function MorosidadPanel({
             </p>
           ) : null}
 
+          {maintenanceMessage ? (
+            <p
+              className={`mt-4 rounded-lg border px-3 py-2 text-sm ${
+                maintenanceMessage.includes('Error') || maintenanceMessage.includes('error')
+                  ? 'border-red-400/30 bg-red-400/10 text-red-200'
+                  : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+              }`}
+              role="status"
+            >
+              {maintenanceMessage}
+            </p>
+          ) : null}
+
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             <button
               type="button"
@@ -468,10 +485,6 @@ export function MorosidadPanel({
               {reminderPending ? 'Guardando…' : 'Guardar recordatorios'}
             </button>
           </div>
-
-          {maintenanceMessage ? (
-            <p className="mt-3 text-sm text-emerald-300">{maintenanceMessage}</p>
-          ) : null}
         </GlassCard>
       </div>
 
