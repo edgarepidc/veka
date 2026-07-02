@@ -2,13 +2,17 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -64,6 +68,7 @@ export default function MaintenanceScreen() {
 
   async function handleCreateTicket() {
     if (!title.trim()) return;
+    Keyboard.dismiss();
     setSubmitting(true);
     const result = await createTicket({
       title,
@@ -235,51 +240,85 @@ export default function MaintenanceScreen() {
         ) : null}
       </ScrollView>
 
-      <Modal visible={sheetOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Nuevo reporte</Text>
-            <GlassInput value={title} onChangeText={setTitle} placeholder="¿Qué necesita reparación?" />
-            <GlassInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Describe el desperfecto"
-              multiline
-              style={styles.textArea}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
-              {MAINTENANCE_TICKET_CATEGORIES.map((cat) => (
-                <Pressable
-                  key={cat}
-                  onPress={() => setCategory(cat)}
-                  style={[
-                    styles.chip,
-                    {
-                      borderColor: category === cat ? theme.accent : theme.border,
-                      backgroundColor: category === cat ? `${theme.accent}22` : 'transparent',
-                    },
-                  ]}
-                >
-                  <Text style={{ color: category === cat ? theme.accent : theme.textMuted, fontSize: 12 }}>
-                    {ticketCategoryLabel(cat)}
-                  </Text>
-                </Pressable>
-              ))}
+      <Modal visible={sheetOpen} animationType="slide" transparent onRequestClose={() => setSheetOpen(false)}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.modalDismissArea} onPress={Keyboard.dismiss} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 12 }]}>
+            <View style={[styles.modalHandle, { backgroundColor: theme.textSubtle }]} />
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScroll}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>Nuevo reporte</Text>
+                  <GlassInput
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="¿Qué necesita reparación?"
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                  />
+                  <GlassInput
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Describe el desperfecto"
+                    multiline
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={Keyboard.dismiss}
+                    style={styles.textArea}
+                  />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
+                    {MAINTENANCE_TICKET_CATEGORIES.map((cat) => (
+                      <Pressable
+                        key={cat}
+                        onPress={() => setCategory(cat)}
+                        style={[
+                          styles.chip,
+                          {
+                            borderColor: category === cat ? theme.accent : theme.border,
+                            backgroundColor: category === cat ? `${theme.accent}22` : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: category === cat ? theme.accent : theme.textMuted, fontSize: 12 }}>
+                          {ticketCategoryLabel(cat)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  <PrimaryButton
+                    label={photo ? 'Cambiar foto' : 'Adjuntar foto (opcional)'}
+                    variant="secondary"
+                    onPress={() => void pickPhoto()}
+                  />
+                  {photo?.name ? (
+                    <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 8 }}>{photo.name}</Text>
+                  ) : null}
+                  <View style={styles.modalActions}>
+                    <View style={styles.modalActionBtn}>
+                      <PrimaryButton label="Cancelar" variant="secondary" onPress={() => setSheetOpen(false)} />
+                    </View>
+                    <View style={styles.modalActionBtn}>
+                      <PrimaryButton
+                        label="Enviar reporte"
+                        loading={submitting}
+                        onPress={() => void handleCreateTicket()}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
             </ScrollView>
-            <PrimaryButton
-              label={photo ? 'Cambiar foto' : 'Adjuntar foto (opcional)'}
-              variant="secondary"
-              onPress={() => void pickPhoto()}
-            />
-            {photo?.name ? (
-              <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 8 }}>{photo.name}</Text>
-            ) : null}
-            <View style={styles.modalActions}>
-              <PrimaryButton label="Cancelar" variant="secondary" onPress={() => setSheetOpen(false)} />
-              <PrimaryButton label="Enviar reporte" loading={submitting} onPress={() => void handleCreateTicket()} />
-            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenBackground>
   );
@@ -301,10 +340,14 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyText: { marginTop: 8, fontSize: 14, lineHeight: 20 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12, maxHeight: '85%' },
+  modalDismissArea: { flex: 1 },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, maxHeight: '92%' },
+  modalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 12, opacity: 0.35 },
+  modalScroll: { paddingBottom: 8, gap: 12 },
   modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
   textArea: { minHeight: 88, textAlignVertical: 'top' },
   chips: { marginVertical: 4 },
   chip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  modalActionBtn: { flex: 1 },
 });
