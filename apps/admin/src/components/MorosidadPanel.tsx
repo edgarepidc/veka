@@ -205,9 +205,24 @@ export function MorosidadPanel({
         }
         if ('result' in result && result.result) {
           const r = result.result;
-          setMaintenanceMessage(
-            `Mantenimiento completado: ${r.lateFeesCreated} recargo(s), ${r.dueSoonReminders} pre-vencimiento, ${r.overdueNotices} aviso(s) de mora (día 1), ${r.remindersProcessed} recordatorio(s) de mora, ${r.recurringChargesGenerated} cuota(s) recurrente(s) generada(s).`,
-          );
+          const parts = [
+            `${r.lateFeesCreated} recargo(s)`,
+            `${r.dueSoonReminders} pre-vencimiento`,
+            `${r.overdueNotices} aviso(s) mora día 1`,
+            `${r.remindersProcessed} recordatorio(s) de mora`,
+            `${r.recurringChargesGenerated} cuota(s) recurrente(s)`,
+            `${r.reminderDeliveries} entrega(s) (push/correo)`,
+          ];
+          let message = `Mantenimiento completado: ${parts.join(', ')}.`;
+          if (
+            r.remindersProcessed === 0 &&
+            r.dueSoonReminders === 0 &&
+            r.overdueNotices === 0
+          ) {
+            message +=
+              ' Si todo es 0, puede que no haya cargos vencidos o por vencer que califiquen hoy (revisa la lista de morosos abajo).';
+          }
+          setMaintenanceMessage(message);
         } else {
           setMaintenanceMessage('Mantenimiento ejecutado correctamente.');
         }

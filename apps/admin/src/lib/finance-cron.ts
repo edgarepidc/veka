@@ -18,9 +18,15 @@ export interface DailyFinanceMaintenanceResult {
   dueSoonReminders: number;
   overdueNotices: number;
   remindersProcessed: number;
+  remindersSkippedCooldown: number;
   reminderDeliveries: number;
   fundBalancesReconciled: number;
   installmentsMarkedOverdue: number;
+}
+
+export interface FinanceMaintenanceOptions {
+  /** Manual admin runs bypass the 7-day reminder cooldown. */
+  skipReminderCooldown?: boolean;
 }
 
 function daysPastDue(dueDate: string, reference = new Date()): number {
@@ -59,7 +65,8 @@ async function processReminderRule(
   admin: SupabaseClient,
   condominiumId: string,
   ruleKey: ReminderRuleKey,
-): Promise<{ processed: number; deliveries: number }> {
+  options?: FinanceMaintenanceOptions,
+): Promise<{ processed: number; deliveries: number; skippedCooldown: number }> {
   const { data: rule } = await admin
     .from('notification_rules')
     .select('days_before, days_after, is_enabled, notify_push, notify_email')
@@ -68,7 +75,7 @@ async function processReminderRule(
     .maybeSingle();
 
   if (!rule?.is_enabled) {
-    return { processed: 0, deliveries: 0 };
+    return { processed: 0, deliveries: 0, skippedCooldown: 0 };
   }
 
   const statuses = ruleKey === 'charge_due_soon' ? (['pending'] as const) : (['pending', 'overdue'] as const);
@@ -81,6 +88,8 @@ async function processReminderRule(
 
   let processed = 0;
   let deliveries = 0;
+  let skippedCooldown = 0;
+  const skipCooldown = options?.skipReminderCooldown ?? false;
 
   for (const charge of charges ?? []) {
     let shouldSend = false;
@@ -111,7 +120,10 @@ async function processReminderRule(
     }
 
     if (!shouldSend) continue;
-    if (await wasRecentlyReminded(admin, charge.id)) continue;
+    if (!skipCooldown && (await wasRecentlyReminded(admin, charge.id))) {
+      skippedCooldown += 1;
+      continue;
+    }
 
     const result = await deliverChargeReminder({
       condominiumId,
@@ -122,7 +134,7 @@ async function processReminderRule(
       dueDate: charge.due_date,
       notifyPush: Boolean(rule.notify_push),
       notifyEmail: Boolean(rule.notify_email),
-      source: 'cron',
+      source: skipCooldown ? 'manual' : 'cron',
       kind,
     });
 
@@ -139,10 +151,12 @@ async function processReminderRule(
     });
   }
 
-  return { processed, deliveries };
+  return { processed, deliveries, skippedCooldown };
 }
 
-export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintenanceResult> {
+export async function runDailyFinanceMaintenance(
+  options?: FinanceMaintenanceOptions,
+): Promise<DailyFinanceMaintenanceResult> {
   const admin = createAdminClient();
 
   await admin.rpc('refresh_charge_statuses');
@@ -160,6 +174,7 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
   let dueSoonReminders = 0;
   let overdueNotices = 0;
   let remindersProcessed = 0;
+  let remindersSkippedCooldown = 0;
   let reminderDeliveries = 0;
 
   for (const condoId of condoIds) {
@@ -170,16 +185,19 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
     }
     lateFeesCreated += await ensureLateFeesForCondo(admin, condoId, null);
 
-    const dueSoonResult = await processReminderRule(admin, condoId, 'charge_due_soon');
+    const dueSoonResult = await processReminderRule(admin, condoId, 'charge_due_soon', options);
     dueSoonReminders += dueSoonResult.processed;
+    remindersSkippedCooldown += dueSoonResult.skippedCooldown;
     reminderDeliveries += dueSoonResult.deliveries;
 
-    const overdueResult = await processReminderRule(admin, condoId, 'charge_overdue');
+    const overdueResult = await processReminderRule(admin, condoId, 'charge_overdue', options);
     overdueNotices += overdueResult.processed;
+    remindersSkippedCooldown += overdueResult.skippedCooldown;
     reminderDeliveries += overdueResult.deliveries;
 
-    const reminderResult = await processReminderRule(admin, condoId, 'charge_overdue_reminder');
+    const reminderResult = await processReminderRule(admin, condoId, 'charge_overdue_reminder', options);
     remindersProcessed += reminderResult.processed;
+    remindersSkippedCooldown += reminderResult.skippedCooldown;
     reminderDeliveries += reminderResult.deliveries;
   }
 
@@ -192,6 +210,7 @@ export async function runDailyFinanceMaintenance(): Promise<DailyFinanceMaintena
     dueSoonReminders,
     overdueNotices,
     remindersProcessed,
+    remindersSkippedCooldown,
     reminderDeliveries,
     fundBalancesReconciled,
     installmentsMarkedOverdue,

@@ -1014,7 +1014,7 @@ export async function runFinanceMaintenanceNow() {
   if (denied) return denied;
 
   try {
-    const result = await runDailyFinanceMaintenance();
+    const result = await runDailyFinanceMaintenance({ skipReminderCooldown: true });
     revalidatePath('/finanzas');
     return { success: true, result };
   } catch (error) {
