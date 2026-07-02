@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import type { ActivePaymentPlan, ChargeStatus } from '@veka/shared';
 import {
   chargeBalanceDue,
@@ -15,9 +16,186 @@ import {
 } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { createClient } from '@/lib/supabase/client';
+
+type PaymentMode = 'transfer' | 'online';
 
 interface ChargeRow extends ChargeForSettlement {
   concept: string;
+}
+
+export function ResidentPayTransferForm({
+  chargeId,
+  installmentId,
+  condominiumId,
+  unitId,
+  amount,
+  maxAmount,
+  disabled,
+}: {
+  chargeId: string;
+  installmentId?: string;
+  condominiumId: string;
+  unitId: string;
+  amount: number;
+  maxAmount: number;
+  disabled?: boolean;
+}) {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit() {
+    setMessage(null);
+    setSuccess(null);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Indica un monto mayor a cero.');
+      return;
+    }
+    if (amount > maxAmount + 0.01) {
+      setMessage(`El monto no puede exceder ${formatCurrency(maxAmount)}.`);
+      return;
+    }
+
+    const file = fileRef.current?.files?.[0];
+    if (!file) {
+      setMessage('Selecciona el comprobante de transferencia (imagen o PDF).');
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const supabase = createClient();
+        const ext = file.name.split('.').pop() ?? 'jpg';
+        const path = `${condominiumId}/${unitId}/${chargeId}-${Date.now()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('payment-proofs')
+          .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+
+        if (uploadError) throw uploadError;
+
+        const { error: paymentError } = await supabase.from('payments').insert({
+          charge_id: chargeId,
+          condominium_id: condominiumId,
+          unit_id: unitId,
+          amount,
+          proof_url: path,
+          payment_method: 'transfer',
+          paid_at: new Date().toISOString(),
+          ...(installmentId ? { payment_plan_installment_id: installmentId } : {}),
+        });
+
+        if (paymentError) throw paymentError;
+
+        setSuccess(
+          amount < maxAmount - 0.01
+            ? `Abono de ${formatCurrency(amount)} enviado. La administración lo revisará pronto.`
+            : 'Comprobante enviado. La administración revisará tu pago pronto.',
+        );
+        if (fileRef.current) fileRef.current.value = '';
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'No se pudo subir el comprobante.');
+      }
+    });
+  }
+
+  const isPartial = amount < maxAmount - 0.01;
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm">
+        <span className="mb-1 block text-subtle">Comprobante de transferencia</span>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="glass-input w-full file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-sm file:text-[var(--text)]"
+        />
+      </label>
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={disabled || pending}
+        className="glass-btn-primary w-full px-5 py-2.5 text-sm font-semibold disabled:opacity-60"
+      >
+        {pending
+          ? 'Enviando…'
+          : isPartial
+            ? `Enviar abono ${formatCurrency(amount)}`
+            : 'Enviar comprobante'}
+      </button>
+      {success ? <p className="text-sm text-accent">{success}</p> : null}
+      {message ? <p className="text-sm text-red-300">{message}</p> : null}
+    </div>
+  );
+}
+
+export function ResidentPaymentForm({
+  chargeId,
+  installmentId,
+  condominiumId,
+  unitId,
+  amount,
+  maxAmount,
+  disabled,
+}: {
+  chargeId: string;
+  installmentId?: string;
+  condominiumId: string;
+  unitId: string;
+  amount: number;
+  maxAmount: number;
+  disabled?: boolean;
+}) {
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('transfer');
+  const [paymentMethod, setPaymentMethod] = useState<'all' | 'card' | 'oxxo' | 'spei'>('all');
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm">
+        <span className="mb-1 block text-subtle">Forma de pago</span>
+        <select
+          value={paymentMode}
+          onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
+          className="glass-input w-full"
+        >
+          <option value="transfer" className="bg-slate-900">
+            Transferencia bancaria (subir comprobante)
+          </option>
+          <option value="online" className="bg-slate-900">
+            Tarjeta, Oxxo o SPEI (en línea)
+          </option>
+        </select>
+      </label>
+
+      {paymentMode === 'transfer' ? (
+        <ResidentPayTransferForm
+          chargeId={chargeId}
+          installmentId={installmentId}
+          condominiumId={condominiumId}
+          unitId={unitId}
+          amount={amount}
+          maxAmount={maxAmount}
+          disabled={disabled}
+        />
+      ) : (
+        <ResidentPayOnlineButton
+          chargeId={chargeId}
+          installmentId={installmentId}
+          amount={amount}
+          maxAmount={maxAmount}
+          disabled={disabled}
+          paymentMethod={paymentMethod}
+          onPaymentMethodChange={setPaymentMethod}
+        />
+      )}
+    </div>
+  );
 }
 
 export function ResidentPayOnlineButton({
@@ -26,16 +204,19 @@ export function ResidentPayOnlineButton({
   amount,
   maxAmount,
   disabled,
+  paymentMethod,
+  onPaymentMethodChange,
 }: {
   chargeId: string;
   installmentId?: string;
   amount: number;
   maxAmount: number;
   disabled?: boolean;
+  paymentMethod: 'all' | 'card' | 'oxxo' | 'spei';
+  onPaymentMethodChange: (value: 'all' | 'card' | 'oxxo' | 'spei') => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [paymentMethod, setPaymentMethod] = useState<'all' | 'card' | 'oxxo' | 'spei'>('all');
 
   function handlePay() {
     setMessage(null);
@@ -83,10 +264,10 @@ export function ResidentPayOnlineButton({
   return (
     <div className="space-y-3">
       <label className="block text-sm">
-        <span className="mb-1 block text-subtle">Forma de pago</span>
+        <span className="mb-1 block text-subtle">Método en línea</span>
         <select
           value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
+          onChange={(e) => onPaymentMethodChange(e.target.value as typeof paymentMethod)}
           className="glass-input w-full"
         >
           <option value="all" className="bg-slate-900">Tarjeta, Oxxo o SPEI</option>
@@ -115,11 +296,15 @@ export function ResidentPayOnlineButton({
 export function ResidentAccountPanel({
   unitLabel,
   condominiumName,
+  condominiumId,
+  unitId,
   charges,
   activePlan,
 }: {
   unitLabel: string;
   condominiumName: string;
+  condominiumId: string;
+  unitId: string;
   charges: ChargeRow[];
   activePlan?: ActivePaymentPlan | null;
 }) {
@@ -221,18 +406,16 @@ export function ResidentAccountPanel({
               Máximo: {formatCurrency(groupMax)}
               {isPartial ? ` · Abono parcial de ${formatCurrency(parsedAmount)}` : ''}
             </p>
-            <ResidentPayOnlineButton
+            <ResidentPaymentForm
               chargeId={paymentTarget.chargeId}
               installmentId={paymentTarget.installmentId}
+              condominiumId={condominiumId}
+              unitId={unitId}
               amount={parsedAmount}
               maxAmount={groupMax}
               disabled={!Number.isFinite(parsedAmount) || parsedAmount <= 0}
             />
           </div>
-
-          <p className="mt-3 text-xs text-subtle">
-            También puedes pagar desde la app móvil subiendo tu comprobante de transferencia.
-          </p>
         </GlassCard>
       ) : (
         <GlassCard>

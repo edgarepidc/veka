@@ -66,12 +66,14 @@ export default async function MiCuentaPage() {
       <PageHeader
         title="Mi cuenta"
         highlight="financiera"
-        subtitle="Consulta tus cargos y paga en línea con tarjeta, Oxxo o SPEI."
+        subtitle="Consulta tus cargos y paga por transferencia o en línea (tarjeta, Oxxo, SPEI)."
         help={<p>{HELP.residente}</p>}
       />
       <ResidentAccountPanel
         unitLabel={session.membership?.unit_identifier ?? '—'}
         condominiumName={session.membership?.condominium_name ?? 'Condominio'}
+        condominiumId={session.membership!.condominium_id}
+        unitId={unitId}
         activePlan={activePlan}
         charges={(charges ?? []).map((charge) => ({
           id: charge.id,
