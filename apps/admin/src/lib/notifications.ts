@@ -12,6 +12,7 @@ export interface ChargeReminderInput {
   notifyPush?: boolean;
   notifyEmail?: boolean;
   source?: 'manual' | 'cron';
+  kind?: 'due_soon' | 'overdue' | 'overdue_reminder' | 'manual';
 }
 
 export interface ReminderDeliveryResult {
@@ -157,8 +158,19 @@ export async function deliverChargeReminder(
   const notifyEmail = input.notifyEmail ?? true;
   const skipCooldown = input.source === 'manual';
 
-  const message = `Recordatorio de pago: ${input.concept} por ${formatCurrency(input.amount)} (vence ${input.dueDate}).`;
-  const title = 'Recordatorio de pago — Veka';
+  const kind = input.kind ?? (input.source === 'manual' ? 'manual' : 'overdue_reminder');
+  const message =
+    kind === 'due_soon'
+      ? `Tu cuota vence pronto: ${input.concept} por ${formatCurrency(input.amount)} (vence ${input.dueDate}).`
+      : kind === 'overdue'
+        ? `Cuota vencida: ${input.concept} por ${formatCurrency(input.amount)} (venció ${input.dueDate}).`
+        : `Recordatorio de pago: ${input.concept} por ${formatCurrency(input.amount)} (vence ${input.dueDate}).`;
+  const title =
+    kind === 'due_soon'
+      ? 'Cuota por vencer — Veka'
+      : kind === 'overdue'
+        ? 'Cuota vencida — Veka'
+        : 'Recordatorio de pago — Veka';
   const userIds = await getUnitResidentUserIds(admin, input.unitId);
 
   let pushSent = 0;

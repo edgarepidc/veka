@@ -21,6 +21,8 @@ import {
 
 import {
   forgiveCharge,
+  runFinanceMaintenanceNow,
+  saveDueSoonReminderRule,
   saveLateFeeSettings,
   saveOverdueReminderRule,
   sendPaymentReminder,
@@ -44,7 +46,8 @@ interface ChargeRow {
 }
 
 interface NotificationRuleRow {
-  days_after: number | null;
+  days_before?: number | null;
+  days_after?: number | null;
   is_enabled: boolean;
   notify_push: boolean;
   notify_email: boolean;
@@ -69,6 +72,7 @@ function Chevron({ open }: { open: boolean }) {
 export function MorosidadPanel({
   condominiumId,
   lateFeeSettings,
+  dueSoonReminderRule,
   overdueReminderRule,
   reminderLog,
   morosityByCluster,
@@ -81,6 +85,7 @@ export function MorosidadPanel({
 }: {
   condominiumId: string;
   lateFeeSettings: LateFeeSettings;
+  dueSoonReminderRule: NotificationRuleRow | null;
   overdueReminderRule: NotificationRuleRow | null;
   reminderLog: ReminderLogRow[];
   morosityByCluster: [string, { clusterName: string; items: ChargeRow[]; total: number }][];
@@ -100,13 +105,17 @@ export function MorosidadPanel({
   const [notes, setNotes] = useState(lateFeeSettings.notes ?? '');
   const [reminderEnabled, setReminderEnabled] = useState(overdueReminderRule?.is_enabled ?? false);
   const [daysAfter, setDaysAfter] = useState(String(overdueReminderRule?.days_after ?? 7));
+  const [dueSoonEnabled, setDueSoonEnabled] = useState(dueSoonReminderRule?.is_enabled ?? false);
+  const [daysBefore, setDaysBefore] = useState(String(dueSoonReminderRule?.days_before ?? 3));
   const [notifyPush, setNotifyPush] = useState(overdueReminderRule?.notify_push ?? true);
   const [notifyEmail, setNotifyEmail] = useState(overdueReminderRule?.notify_email ?? true);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [reminderMessage, setReminderMessage] = useState<string | null>(null);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null);
   const [chargeMessage, setChargeMessage] = useState<Record<string, string>>({});
   const [settingsPending, startSettingsSave] = useTransition();
   const [reminderPending, startReminderSave] = useTransition();
+  const [maintenancePending, startMaintenance] = useTransition();
   const [reminderPendingId, setReminderPendingId] = useState<string | null>(null);
   const [forgivePendingId, setForgivePendingId] = useState<string | null>(null);
 
@@ -157,20 +166,50 @@ export function MorosidadPanel({
 
   function handleSaveReminderRule() {
     setReminderMessage(null);
-    const formData = new FormData();
-    if (reminderEnabled) formData.set('reminder_enabled', 'true');
-    if (notifyPush) formData.set('notify_push', 'true');
-    if (notifyEmail) formData.set('notify_email', 'true');
-    formData.set('condominium_id', condominiumId);
-    formData.set('days_after', daysAfter);
+    const overdueForm = new FormData();
+    if (reminderEnabled) overdueForm.set('reminder_enabled', 'true');
+    if (notifyPush) overdueForm.set('notify_push', 'true');
+    if (notifyEmail) overdueForm.set('notify_email', 'true');
+    overdueForm.set('condominium_id', condominiumId);
+    overdueForm.set('days_after', daysAfter);
+
+    const dueSoonForm = new FormData();
+    if (dueSoonEnabled) dueSoonForm.set('due_soon_enabled', 'true');
+    if (notifyPush) dueSoonForm.set('due_soon_notify_push', 'true');
+    if (notifyEmail) dueSoonForm.set('due_soon_notify_email', 'true');
+    dueSoonForm.set('condominium_id', condominiumId);
+    dueSoonForm.set('days_before', daysBefore);
 
     startReminderSave(async () => {
-      const result = await saveOverdueReminderRule(formData);
-      if (result.error) {
-        setReminderMessage(result.error);
+      const [overdueResult, dueSoonResult] = await Promise.all([
+        saveOverdueReminderRule(overdueForm),
+        saveDueSoonReminderRule(dueSoonForm),
+      ]);
+      if (overdueResult.error || dueSoonResult.error) {
+        setReminderMessage(overdueResult.error ?? dueSoonResult.error ?? 'Error al guardar.');
         return;
       }
-      setReminderMessage('Regla de recordatorio guardada.');
+      setReminderMessage('Reglas de recordatorio guardadas.');
+      onReload();
+    });
+  }
+
+  function handleRunMaintenance() {
+    setMaintenanceMessage(null);
+    startMaintenance(async () => {
+      const result = await runFinanceMaintenanceNow();
+      if ('error' in result && result.error) {
+        setMaintenanceMessage(result.error);
+        return;
+      }
+      if ('result' in result && result.result) {
+        const r = result.result;
+        setMaintenanceMessage(
+          `Listo: ${r.lateFeesCreated} recargo(s), ${r.dueSoonReminders} pre-vencimiento, ${r.overdueNotices} aviso(s) de mora, ${r.remindersProcessed} recordatorio(s) de mora.`,
+        );
+      } else {
+        setMaintenanceMessage('Mantenimiento ejecutado.');
+      }
       onReload();
     });
   }
@@ -330,9 +369,32 @@ export function MorosidadPanel({
         <GlassCard>
           <SectionHeading help={HELP.morosidad.recordatorios}>Recordatorios de cobro</SectionHeading>
           <p className="mt-1 text-sm text-muted">
-            Envía recordatorios manuales por unidad o configura la regla automática diaria (push y
-            correo).
+            Avisos automáticos antes y después del vencimiento (push y correo). El cron diario corre a
+            las 08:00 CDMX; también puedes ejecutarlo manualmente.
           </p>
+
+          <label className="mt-4 flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={dueSoonEnabled}
+              onChange={(event) => setDueSoonEnabled(event.target.checked)}
+              className="h-4 w-4 rounded border-white/20 bg-white/10"
+            />
+            <span className="font-medium text-[var(--text)]">Aviso antes del vencimiento</span>
+          </label>
+
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-subtle">Días antes del vencimiento</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={daysBefore}
+              onChange={(event) => setDaysBefore(event.target.value)}
+              disabled={!dueSoonEnabled}
+              className="glass-input w-40"
+            />
+          </label>
 
           <label className="mt-4 flex items-center gap-3 text-sm">
             <input
@@ -388,16 +450,28 @@ export function MorosidadPanel({
             </p>
           ) : null}
 
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleRunMaintenance}
+              disabled={maintenancePending}
+              className="glass-btn px-5 py-2 text-sm font-semibold disabled:opacity-60"
+            >
+              {maintenancePending ? 'Ejecutando…' : 'Ejecutar mantenimiento ahora'}
+            </button>
             <button
               type="button"
               onClick={handleSaveReminderRule}
               disabled={reminderPending}
-              className="glass-btn px-5 py-2 text-sm font-semibold disabled:opacity-60"
+              className="glass-btn-primary px-5 py-2 text-sm font-semibold disabled:opacity-60"
             >
               {reminderPending ? 'Guardando…' : 'Guardar recordatorios'}
             </button>
           </div>
+
+          {maintenanceMessage ? (
+            <p className="mt-3 text-sm text-emerald-300">{maintenanceMessage}</p>
+          ) : null}
         </GlassCard>
       </div>
 

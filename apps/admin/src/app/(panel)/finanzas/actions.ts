@@ -19,6 +19,7 @@ import {
 } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import { runDailyFinanceMaintenance } from '@/lib/finance-cron';
 import { reconcileCondominiumFundBalances } from '@/lib/fund-balances';
 import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import { deliverChargeReminder } from '@/lib/notifications';
@@ -27,6 +28,7 @@ import {
   recurringFeeHasChargesForPeriod,
 } from '@/lib/recurring-fees';
 import { createClient } from '@/lib/supabase/server';
+import { assertAdminAction } from '@/lib/require-admin';
 
 async function resolveCondoId(value?: string | null): Promise<string | { error: string }> {
   return requireActiveCondominiumId(value);
@@ -959,4 +961,63 @@ export async function cancelPaymentPlan(planId: string, condominiumId?: string) 
   revalidatePath('/finanzas');
   revalidatePath('/mi-cuenta');
   return { success: true };
+}
+
+export async function saveDueSoonReminderRule(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const enabled =
+    formData.get('due_soon_enabled') === 'on' || formData.get('due_soon_enabled') === 'true';
+  const daysBefore = Number(formData.get('days_before'));
+  const notifyPush =
+    formData.get('due_soon_notify_push') === 'on' || formData.get('due_soon_notify_push') === 'true';
+  const notifyEmail =
+    formData.get('due_soon_notify_email') === 'on' || formData.get('due_soon_notify_email') === 'true';
+
+  if (!Number.isInteger(daysBefore) || daysBefore < 1 || daysBefore > 60) {
+    return { error: 'Los días antes del vencimiento deben estar entre 1 y 60.' };
+  }
+  if (enabled && !notifyPush && !notifyEmail) {
+    return { error: 'Activa al menos un canal: push o correo.' };
+  }
+
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
+
+  const { error } = await supabase.from('notification_rules').upsert(
+    {
+      condominium_id: condoId,
+      rule_key: 'charge_due_soon',
+      days_before: daysBefore,
+      days_after: null,
+      is_enabled: enabled,
+      notify_push: notifyPush,
+      notify_email: notifyEmail,
+    },
+    { onConflict: 'condominium_id,rule_key' },
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function runFinanceMaintenanceNow() {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
+  try {
+    const result = await runDailyFinanceMaintenance();
+    revalidatePath('/finanzas');
+    return { success: true, result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'No se pudo ejecutar el mantenimiento.' };
+  }
 }

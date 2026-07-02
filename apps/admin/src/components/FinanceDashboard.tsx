@@ -323,6 +323,12 @@ export function FinanceDashboard({
     notify_push: boolean;
     notify_email: boolean;
   } | null>(null);
+  const [dueSoonReminderRule, setDueSoonReminderRule] = useState<{
+    days_before: number | null;
+    is_enabled: boolean;
+    notify_push: boolean;
+    notify_email: boolean;
+  } | null>(null);
   const [reminderLog, setReminderLog] = useState<{ charge_id: string | null; sent_at: string }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccountRow[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransactionRow[]>([]);
@@ -415,7 +421,7 @@ export function FinanceDashboard({
       return;
     }
 
-    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes, condoSettingsRes, fiscalProfileRes, unitTaxRes, accountingMapsRes, cfdiInvoicesRes] =
+    const [unitsRes, clustersRes, fundsRes, chargesRes, campaignsRes, recurringRes, paymentsRes, expensesRes, incomesRes, budgetsRes, lateFeeRes, reminderRuleRes, dueSoonRuleRes, reminderLogRes, bankAccountsRes, bankTransactionsRes, paymentPlansRes, condoSettingsRes, fiscalProfileRes, unitTaxRes, accountingMapsRes, cfdiInvoicesRes] =
       await Promise.all([
       supabase
         .from('units')
@@ -486,6 +492,12 @@ export function FinanceDashboard({
         .select('days_after, is_enabled, notify_push, notify_email')
         .eq('condominium_id', condoId)
         .eq('rule_key', 'charge_overdue_reminder')
+        .maybeSingle(),
+      supabase
+        .from('notification_rules')
+        .select('days_before, is_enabled, notify_push, notify_email')
+        .eq('condominium_id', condoId)
+        .eq('rule_key', 'charge_due_soon')
         .maybeSingle(),
       supabase
         .from('payment_reminder_log')
@@ -566,6 +578,16 @@ export function FinanceDashboard({
             is_enabled: Boolean(reminderRuleRes.data.is_enabled),
             notify_push: reminderRuleRes.data.notify_push ?? true,
             notify_email: reminderRuleRes.data.notify_email ?? true,
+          }
+        : null,
+    );
+    setDueSoonReminderRule(
+      dueSoonRuleRes.data
+        ? {
+            days_before: dueSoonRuleRes.data.days_before,
+            is_enabled: Boolean(dueSoonRuleRes.data.is_enabled),
+            notify_push: dueSoonRuleRes.data.notify_push ?? true,
+            notify_email: dueSoonRuleRes.data.notify_email ?? true,
           }
         : null,
     );
@@ -1438,6 +1460,7 @@ export function FinanceDashboard({
           <MorosidadPanel
             condominiumId={selectedCondoId}
             lateFeeSettings={lateFeeSettings}
+            dueSoonReminderRule={dueSoonReminderRule}
             overdueReminderRule={overdueReminderRule}
             reminderLog={reminderLog}
             morosityByCluster={morosityByCluster}
