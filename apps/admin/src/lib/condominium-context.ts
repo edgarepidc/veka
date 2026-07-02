@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
 import { isAdminRole, type MembershipRole } from '@veka/shared';
 
+import { readImpersonationCookie } from '@/lib/impersonation';
+import { isPlatformAdminUser } from '@/lib/platform-admin';
 import { createClient } from '@/lib/supabase/server';
 
 export const ACTIVE_CONDO_COOKIE = 'veka_active_condo_id';
@@ -110,6 +112,11 @@ export async function getLoaderCondominiumId(): Promise<string> {
   } = await supabase.auth.getUser();
 
   if (!user) throw new Error('No autorizado');
+
+  const impersonateId = await readImpersonationCookie();
+  if (impersonateId && (await isPlatformAdminUser(user.id, user.email))) {
+    return impersonateId;
+  }
 
   const condoId = await resolveActiveCondominiumId(user.id);
   if (!condoId) throw new Error('Sin condominio activo');

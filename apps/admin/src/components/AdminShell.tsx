@@ -8,6 +8,7 @@ import type { CondominiumBranding } from '@/lib/condominium-settings';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
 import type { AdminSession } from '@/lib/load-admin-session';
 import { SignOutButton } from '@/components/SignOutButton';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
@@ -137,6 +138,10 @@ export function AdminShell({
               </a>
               . La configuración del condominio es solo para administradores.
             </div>
+          ) : null}
+
+          {session.isImpersonating && session.membership ? (
+            <ImpersonationBanner condominiumName={session.membership.condominium_name} />
           ) : null}
 
           <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>

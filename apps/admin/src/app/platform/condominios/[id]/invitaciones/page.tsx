@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { PlatformInvitationActions } from '@/app/platform/condominios/[id]/PlatformInvitationActions';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { loadPlatformInvitations } from '@/lib/load-platform-data';
 
@@ -35,12 +36,13 @@ export default async function PlatformCondominioInvitacionesPage({
             <th className="px-4 py-2">Unidad</th>
             <th className="px-4 py-2">Estado</th>
             <th className="px-4 py-2">Fecha</th>
+            <th className="px-4 py-2" />
           </tr>
         </thead>
         <tbody>
           {invitations.length === 0 ? (
             <tr>
-              <td colSpan={5} className="px-4 py-8 text-center text-subtle">
+              <td colSpan={6} className="px-4 py-8 text-center text-subtle">
                 No hay invitaciones registradas.
               </td>
             </tr>
@@ -53,6 +55,13 @@ export default async function PlatformCondominioInvitacionesPage({
                 <td className="px-4 py-3 capitalize text-muted">{inv.status}</td>
                 <td className="px-4 py-3 text-muted">
                   {new Date(inv.created_at).toLocaleDateString('es-MX')}
+                </td>
+                <td className="px-4 py-3">
+                  <PlatformInvitationActions
+                    invitationId={inv.id}
+                    condominiumId={id}
+                    status={inv.status}
+                  />
                 </td>
               </tr>
             ))

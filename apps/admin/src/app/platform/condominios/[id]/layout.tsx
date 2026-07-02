@@ -5,6 +5,9 @@ import { PlatformCondoNav } from '@/components/PlatformCondoNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { loadPlatformCondominiumSummary } from '@/lib/load-platform-data';
 
+import { PlatformCondominiumStatusPanel } from './PlatformCondominiumStatusPanel';
+import { PlatformImpersonateButton } from './PlatformImpersonateButton';
+
 export default async function PlatformCondominioLayout({
   children,
   params,
@@ -24,12 +27,16 @@ export default async function PlatformCondominioLayout({
         </Link>
       </p>
 
-      <PageHeader
-        title={condo.name}
-        highlight="tenant"
-        subtitle={condo.organization?.name ?? 'Sin organización'}
-      />
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <PageHeader
+          title={condo.name}
+          highlight="tenant"
+          subtitle={condo.organization?.name ?? 'Sin organización'}
+        />
+        <PlatformImpersonateButton condominiumId={condo.id} />
+      </div>
 
+      <PlatformCondominiumStatusPanel condominiumId={condo.id} status={condo.status} />
       <PlatformCondoNav condominiumId={condo.id} />
       {children}
     </div>

@@ -219,6 +219,30 @@ body {
   color: var(--accent-2);
 }
 
+.glass-tag-amber {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.15);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.glass-tag-red {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.15);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #f87171;
+}
+
 .serif-title {
   font-family: var(--font-serif);
 }

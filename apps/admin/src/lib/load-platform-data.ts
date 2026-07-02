@@ -1,6 +1,7 @@
 import type { MembershipRole } from '@veka/shared';
 import { TEAM_STAFF_ROLES } from '@veka/shared';
 
+import type { CondominiumStatus } from '@/lib/condominium-status';
 import { parseCondominiumSettings, type CondominiumSettings } from '@/lib/condominium-settings';
 import type { ClusterRow, UnitRow } from '@/lib/load-condominium';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -18,9 +19,13 @@ export interface PlatformCondominiumRow {
   slug: string;
   address: string | null;
   timezone: string;
+  status: CondominiumStatus;
   created_at: string;
   organization: { id: string; name: string } | null;
   memberCount: number;
+  unitCount: number;
+  pendingInvitationCount: number;
+  hasStaffAdmin: boolean;
 }
 
 export interface PlatformMemberRow {
@@ -58,34 +63,56 @@ export async function loadPlatformCondominiums(): Promise<PlatformCondominiumRow
 
   const { data: condos } = await admin
     .from('condominiums')
-    .select('id, name, slug, address, timezone, created_at, organization:organizations(id, name)')
+    .select('id, name, slug, address, timezone, status, created_at, organization:organizations(id, name)')
     .order('created_at', { ascending: false });
 
   const rows = condos ?? [];
-  const counts = await Promise.all(
+
+  const enriched = await Promise.all(
     rows.map(async (condo) => {
-      const { count } = await admin
-        .from('memberships')
-        .select('id', { count: 'exact', head: true })
-        .eq('condominium_id', condo.id)
-        .eq('status', 'active');
-      return count ?? 0;
+      const [membershipsRes, unitsRes, invitationsRes, staffRes] = await Promise.all([
+        admin
+          .from('memberships')
+          .select('id', { count: 'exact', head: true })
+          .eq('condominium_id', condo.id)
+          .eq('status', 'active'),
+        admin
+          .from('units')
+          .select('id', { count: 'exact', head: true })
+          .eq('condominium_id', condo.id),
+        admin
+          .from('invitations')
+          .select('id', { count: 'exact', head: true })
+          .eq('condominium_id', condo.id)
+          .eq('status', 'pending'),
+        admin
+          .from('memberships')
+          .select('id', { count: 'exact', head: true })
+          .eq('condominium_id', condo.id)
+          .eq('status', 'active')
+          .in('role', ['super_admin', 'admin']),
+      ]);
+
+      const organization = Array.isArray(condo.organization) ? condo.organization[0] : condo.organization;
+
+      return {
+        id: condo.id,
+        name: condo.name,
+        slug: condo.slug,
+        address: condo.address,
+        timezone: condo.timezone,
+        status: (condo.status ?? 'active') as CondominiumStatus,
+        created_at: condo.created_at,
+        organization: organization ?? null,
+        memberCount: membershipsRes.count ?? 0,
+        unitCount: unitsRes.count ?? 0,
+        pendingInvitationCount: invitationsRes.count ?? 0,
+        hasStaffAdmin: (staffRes.count ?? 0) > 0,
+      };
     }),
   );
 
-  return rows.map((row, index) => {
-    const organization = Array.isArray(row.organization) ? row.organization[0] : row.organization;
-    return {
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      address: row.address,
-      timezone: row.timezone,
-      created_at: row.created_at,
-      organization: organization ?? null,
-      memberCount: counts[index] ?? 0,
-    };
-  });
+  return enriched;
 }
 
 export interface PlatformInvitationRow {
@@ -102,7 +129,7 @@ export async function loadPlatformCondominiumSummary(condominiumId: string) {
 
   const { data: condo } = await admin
     .from('condominiums')
-    .select('id, name, slug, address, timezone, created_at, organization:organizations(id, name)')
+    .select('id, name, slug, address, timezone, status, created_at, organization:organizations(id, name)')
     .eq('id', condominiumId)
     .maybeSingle();
 
@@ -116,6 +143,7 @@ export async function loadPlatformCondominiumSummary(condominiumId: string) {
     slug: condo.slug,
     address: condo.address,
     timezone: condo.timezone,
+    status: (condo.status ?? 'active') as CondominiumStatus,
     created_at: condo.created_at,
     organization: organization ?? null,
   };
@@ -237,7 +265,7 @@ export async function loadPlatformCondominium(condominiumId: string) {
 
   const { data: condo } = await admin
     .from('condominiums')
-    .select('id, name, slug, address, timezone, created_at, organization:organizations(id, name)')
+    .select('id, name, slug, address, timezone, status, created_at, organization:organizations(id, name)')
     .eq('id', condominiumId)
     .maybeSingle();
 
@@ -290,4 +318,34 @@ export async function loadPlatformMembers(condominiumId: string): Promise<Platfo
   );
 
   return enriched;
+}
+
+export interface PlatformAdminRow {
+  user_id: string;
+  email: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export async function loadPlatformAdmins(): Promise<PlatformAdminRow[]> {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from('platform_admins')
+    .select('user_id, notes, created_at')
+    .order('created_at', { ascending: true });
+
+  const rows = data ?? [];
+
+  return Promise.all(
+    rows.map(async (row) => {
+      const { data: authData } = await admin.auth.admin.getUserById(row.user_id);
+      return {
+        user_id: row.user_id,
+        email: authData.user?.email ?? null,
+        notes: row.notes,
+        created_at: row.created_at,
+      };
+    }),
+  );
 }

@@ -245,3 +245,128 @@ export async function platformRevokeMembership(membershipId: string, condominium
   revalidatePath(`/platform/condominios/${condominiumId}`);
   return { success: true };
 }
+
+export async function platformSetCondominiumStatus(condominiumId: string, status: string) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  const allowed = ['active', 'suspended', 'archived'];
+  if (!allowed.includes(status)) return { error: 'Estado inválido.' };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('condominiums')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', condominiumId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/platform/condominios/${condominiumId}`);
+  revalidatePath('/platform/condominios');
+  return { success: true };
+}
+
+export async function platformResendInvitation(invitationId: string, condominiumId: string) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  const admin = createAdminClient();
+  const { data: invitation } = await admin
+    .from('invitations')
+    .select('id, email, role, status, unit:units(identifier)')
+    .eq('id', invitationId)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!invitation) return { error: 'Invitación no encontrada.' };
+  if (invitation.status !== 'pending') return { error: 'Solo se pueden reenviar invitaciones pendientes.' };
+
+  const { data: condo } = await admin
+    .from('condominiums')
+    .select('name')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  if (!condo) return { error: 'Condominio no encontrado.' };
+
+  const unit = Array.isArray(invitation.unit) ? invitation.unit[0] : invitation.unit;
+  const role = invitation.role as MembershipRole;
+
+  const sent = await sendInvitationEmail({
+    to: invitation.email,
+    condominiumName: condo.name,
+    roleLabel: ROLE_LABELS[role],
+    unitLabel: unit?.identifier ?? null,
+  });
+
+  revalidatePath(`/platform/condominios/${condominiumId}/invitaciones`);
+  return sent ? { success: true } : { error: 'No se pudo enviar el correo. Revisa RESEND_API_KEY.' };
+}
+
+export async function platformRevokeInvitation(invitationId: string, condominiumId: string) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('invitations')
+    .update({ status: 'revoked' })
+    .eq('id', invitationId)
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'pending');
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/platform/condominios/${condominiumId}/invitaciones`);
+  revalidatePath(`/platform/condominios/${condominiumId}/equipo`);
+  return { success: true };
+}
+
+export async function platformAddPlatformAdmin(formData: FormData) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!email) return { error: 'Correo obligatorio.' };
+
+  const admin = createAdminClient();
+  const userId = await findUserIdByEmail(admin, email);
+  if (!userId) {
+    return { error: 'No hay usuario registrado con ese correo. Debe crear cuenta primero.' };
+  }
+
+  const { error } = await admin
+    .from('platform_admins')
+    .upsert({ user_id: userId, notes: notes || null }, { onConflict: 'user_id' });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/platform/admins');
+  return { success: true };
+}
+
+export async function platformRemovePlatformAdmin(userId: string) {
+  const denied = await assertPlatformAdminAction();
+  if (denied) return denied;
+
+  if (!userId) return { error: 'Usuario inválido.' };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const admin = createAdminClient();
+  const { count } = await admin.from('platform_admins').select('user_id', { count: 'exact', head: true });
+
+  if ((count ?? 0) <= 1) return { error: 'Debe quedar al menos un administrador de plataforma.' };
+  if (user?.id === userId) return { error: 'No puedes quitarte a ti mismo.' };
+
+  const { error } = await admin.from('platform_admins').delete().eq('user_id', userId);
+  if (error) return { error: error.message };
+
+  revalidatePath('/platform/admins');
+  return { success: true };
+}

@@ -5,6 +5,7 @@ import { AdminRouteGuard } from '@/components/AdminRouteGuard';
 import { SessionProvider } from '@/components/SessionProvider';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadCondominium } from '@/lib/load-condominium';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { isPlatformAdminUser } from '@/lib/platform-admin';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,20 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     const isPlatform = await isPlatformAdminUser(session.userId, session.email);
     if (isPlatform) redirect('/platform');
     redirect('/onboarding');
+  }
+
+  if (session.activeCondominiumId && !session.isImpersonating) {
+    const admin = createAdminClient();
+    const { data: condo } = await admin
+      .from('condominiums')
+      .select('status')
+      .eq('id', session.activeCondominiumId)
+      .maybeSingle();
+
+    const status = condo?.status ?? 'active';
+    if (status === 'suspended' || status === 'archived') {
+      redirect('/condominio-no-disponible');
+    }
   }
 
   const condo =

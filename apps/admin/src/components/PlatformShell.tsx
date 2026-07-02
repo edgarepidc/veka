@@ -8,6 +8,7 @@ import type { PlatformSession } from '@/lib/platform-admin';
 const NAV = [
   { href: '/platform', label: 'Resumen' },
   { href: '/platform/condominios', label: 'Condominios' },
+  { href: '/platform/admins', label: 'Equipo Veka' },
 ];
 
 export function PlatformShell({
