@@ -10,6 +10,7 @@
     "expo": "~56.0.12",
     "expo-blur": "^56.0.3",
     "expo-constants": "~56.0.18",
+    "expo-dev-client": "~56.0.21",
     "expo-device": "^56.0.4",
     "expo-document-picker": "~56.0.4",
     "expo-font": "~56.0.7",
@@ -38,12 +39,15 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "dev": "expo start",
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "dev": "expo start --dev-client",
+    "start": "expo start --dev-client",
+    "android": "expo start --dev-client --android",
+    "ios": "expo start --dev-client --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eas:init": "eas init",
+    "eas:build:dev:ios": "eas build --profile development --platform ios",
+    "eas:build:dev:android": "eas build --profile development --platform android"
   },
   "private": true
 }

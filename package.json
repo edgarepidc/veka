@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:mobile": "npm run dev --workspace=@veka/mobile",
+    "build:mobile:dev:ios": "npm run eas:build:dev:ios --workspace=@veka/mobile",
+    "build:mobile:dev:android": "npm run eas:build:dev:android --workspace=@veka/mobile",
     "dev:admin": "npm run dev --workspace=@veka/admin",
     "build": "turbo build",
     "lint": "turbo lint",

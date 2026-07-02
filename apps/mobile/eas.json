@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "node": "22.22.3",
+      "install": {
+        "workingDirectory": "../.."
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "node": "22.22.3",
+      "install": {
+        "workingDirectory": "../.."
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "node": "22.22.3",
+      "install": {
+        "workingDirectory": "../.."
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
