@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { formatCurrency } from '@veka/shared';
+import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { supabase } from '@/lib/supabase';
 
 interface PaymentProofUploaderProps {
@@ -48,14 +49,13 @@ export function PaymentProofUploader({
     setUploading(true);
 
     try {
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
+      const bytes = await readUriAsArrayBuffer(asset.uri);
       const ext = asset.name?.split('.').pop() ?? 'jpg';
       const path = `${condominiumId}/${unitId}/${chargeId}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('payment-proofs')
-        .upload(path, blob, { contentType: asset.mimeType ?? 'application/octet-stream', upsert: false });
+        .upload(path, bytes, { contentType: asset.mimeType ?? 'application/octet-stream', upsert: false });
 
       if (uploadError) throw uploadError;
 

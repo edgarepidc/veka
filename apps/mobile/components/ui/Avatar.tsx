@@ -21,7 +21,9 @@ export function Avatar({
           width: size,
           height: size,
           borderRadius: size / 2,
+          overflow: 'hidden',
         }}
+        resizeMode="cover"
       />
     );
   }

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -18,6 +19,7 @@ import { StatPill } from '@/components/ui/StatPill';
 import { Tag } from '@/components/ui/Tag';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useMembership } from '@/hooks/useMembership';
+import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { mapChargeTone } from '@/lib/tagTone';
 import { useAuth } from '@/providers/AuthProvider';
@@ -27,6 +29,7 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { primary, loading: membershipLoading } = useMembership();
+  const { profile } = useProfile();
   const {
     data,
     loading: dashboardLoading,
@@ -42,9 +45,16 @@ export default function DashboardScreen() {
   } = useDashboard(primary);
 
   const displayName =
+    profile?.full_name ??
     (user?.user_metadata?.full_name as string | undefined) ??
     user?.email?.split('@')[0] ??
     'Residente';
+
+  const avatarUri = resolveStorageImageUrl(
+    process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+    profile?.avatar_url,
+    STORAGE_BUCKETS.AVATARS,
+  );
 
   const loading = membershipLoading || dashboardLoading;
   const firstName = displayName.split(' ')[0];
@@ -71,7 +81,12 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <Pressable onPress={() => router.push('/account')} style={styles.accountBtn}>
-            <Avatar initials={firstName.slice(0, 2).toUpperCase()} color={theme.accent} size={40} />
+            <Avatar
+              initials={firstName.slice(0, 2).toUpperCase()}
+              color={theme.accent}
+              size={40}
+              imageUri={avatarUri}
+            />
           </Pressable>
         </View>
 

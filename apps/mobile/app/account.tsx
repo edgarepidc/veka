@@ -51,8 +51,7 @@ export default function AccountScreen() {
         <GlassCard>
           <Row label="Condominio" value={primary?.condominium?.name ?? 'Sin asignar'} theme={theme} />
           <Row label="Unidad" value={primary?.unit?.identifier ?? 'Sin asignar'} theme={theme} />
-          <Row label="Perfil" value={occupancyLabel ?? 'Residente'} theme={theme} />
-          <Row label="Rol en el condominio" value={primary?.role ?? '—'} theme={theme} last />
+          <Row label="Perfil" value={occupancyLabel ?? 'Residente'} theme={theme} last />
         </GlassCard>
 
         <SectionLabel title="Apariencia" />
