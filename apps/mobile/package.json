@@ -39,10 +39,11 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "dev": "expo start --dev-client",
-    "start": "expo start --dev-client",
-    "android": "expo start --dev-client --android",
-    "ios": "expo start --dev-client --ios",
+    "dev": "expo start",
+    "dev:client": "expo start --dev-client",
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "eas:init": "eas init",
