@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,62 +61,75 @@ export default function LoginScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
-          <Text style={[styles.brand, { color: theme.text, fontFamily: theme.serifFamily }]}>Veka</Text>
-          <Text style={[styles.tagline, { color: theme.textMuted }]}>
-            Gestión condominal para{' '}
-            <Text style={{ color: theme.accent, fontStyle: 'italic', fontFamily: theme.serifFamily }}>
-              residentes
-            </Text>
-          </Text>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View>
+              <Text style={[styles.brand, { color: theme.text, fontFamily: theme.serifFamily }]}>Veka</Text>
+              <Text style={[styles.tagline, { color: theme.textMuted }]}>
+                Gestión condominal para{' '}
+                <Text style={{ color: theme.accent, fontStyle: 'italic', fontFamily: theme.serifFamily }}>
+                  residentes
+                </Text>
+              </Text>
 
-          <GlassCard style={styles.formCard}>
-            <Text style={[styles.formTitle, { color: theme.text, fontFamily: theme.serifFamily }]}>
-              {mode === 'login' ? 'Bienvenido' : 'Crear cuenta'}
-            </Text>
+              <GlassCard style={styles.formCard}>
+                <Text style={[styles.formTitle, { color: theme.text, fontFamily: theme.serifFamily }]}>
+                  {mode === 'login' ? 'Bienvenido' : 'Crear cuenta'}
+                </Text>
 
-            {mode === 'signup' ? (
-              <GlassInput
-                placeholder="Nombre completo"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-              />
-            ) : null}
+                {mode === 'signup' ? (
+                  <GlassInput
+                    placeholder="Nombre completo"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                  />
+                ) : null}
 
-            <GlassInput
-              placeholder="Correo electrónico"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+                <GlassInput
+                  placeholder="Correo electrónico"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                />
 
-            <GlassInput
-              placeholder="Contraseña"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+                <GlassInput
+                  placeholder="Contraseña"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
 
-            {error ? <Text style={[styles.feedback, { color: theme.danger }]}>{error}</Text> : null}
-            {message ? <Text style={[styles.feedback, { color: theme.accent }]}>{message}</Text> : null}
+                {error ? <Text style={[styles.feedback, { color: theme.danger }]}>{error}</Text> : null}
+                {message ? <Text style={[styles.feedback, { color: theme.accent }]}>{message}</Text> : null}
 
-            <PrimaryButton
-              label={mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
-              loading={loading}
-              onPress={() => void handleSubmit()}
-            />
-          </GlassCard>
+                <PrimaryButton
+                  label={mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+                  loading={loading}
+                  onPress={() => void handleSubmit()}
+                />
+              </GlassCard>
 
-          <Pressable onPress={() => setMode(mode === 'login' ? 'signup' : 'login')} style={styles.switchWrap}>
-            <Text style={[styles.switch, { color: theme.accent2 }]}>
-              {mode === 'login'
-                ? '¿No tienes cuenta? Regístrate'
-                : '¿Ya tienes cuenta? Inicia sesión'}
-            </Text>
-          </Pressable>
-        </View>
+              <Pressable onPress={() => setMode(mode === 'login' ? 'signup' : 'login')} style={styles.switchWrap}>
+                <Text style={[styles.switch, { color: theme.accent2 }]}>
+                  {mode === 'login'
+                    ? '¿No tienes cuenta? Regístrate'
+                    : '¿Ya tienes cuenta? Inicia sesión'}
+                </Text>
+              </Pressable>
+            </View>
+          </TouchableWithoutFeedback>
+        </ScrollView>
       </KeyboardAvoidingView>
     </ScreenBackground>
   );
@@ -121,7 +137,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 16 },
+  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, gap: 16 },
   brand: { fontSize: 42, lineHeight: 48 },
   tagline: { fontSize: 15, marginBottom: 8 },
   formCard: { marginTop: 8 },

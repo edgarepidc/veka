@@ -84,9 +84,8 @@ function RootLayoutNav() {
         options={{
           presentation: 'modal',
           headerShown: true,
-          title: 'Configuración',
-          headerTransparent: true,
-          headerBlurEffect: 'regular',
+          title: 'Mi cuenta',
+          headerShadowVisible: false,
         }}
       />
       <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Info' }} />

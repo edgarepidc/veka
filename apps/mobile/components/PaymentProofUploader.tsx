@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { useTheme } from '@/hooks/useTheme';
 import { formatCurrency } from '@veka/shared';
-import { pickImageFromLibrary } from '@/lib/pick-image';
+import { type PickedImage, pickImageFromLibrary } from '@/lib/pick-image';
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { supabase } from '@/lib/supabase';
 
@@ -17,6 +18,16 @@ interface PaymentProofUploaderProps {
   onUploaded: () => void;
 }
 
+function validateAmount(amount: number, maxAmount: number): string | null {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 'Indica un monto mayor a cero.';
+  }
+  if (amount > maxAmount + 0.01) {
+    return `El abono no puede exceder ${formatCurrency(maxAmount)}.`;
+  }
+  return null;
+}
+
 export function PaymentProofUploader({
   chargeId,
   installmentId,
@@ -26,31 +37,41 @@ export function PaymentProofUploader({
   maxAmount,
   onUploaded,
 }: PaymentProofUploaderProps) {
+  const theme = useTheme();
+  const [pendingImage, setPendingImage] = useState<PickedImage | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const uploadProof = useCallback(async () => {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert('Monto inválido', 'Indica un monto mayor a cero.');
-      return;
-    }
-    if (amount > maxAmount + 0.01) {
-      Alert.alert('Monto inválido', `El abono no puede exceder ${formatCurrency(maxAmount)}.`);
+  const pickProof = useCallback(async () => {
+    const amountError = validateAmount(amount, maxAmount);
+    if (amountError) {
+      Alert.alert('Monto inválido', amountError);
       return;
     }
 
     const picked = await pickImageFromLibrary();
     if (!picked) return;
+    setPendingImage(picked);
+  }, [amount, maxAmount]);
+
+  const submitProof = useCallback(async () => {
+    if (!pendingImage) return;
+
+    const amountError = validateAmount(amount, maxAmount);
+    if (amountError) {
+      Alert.alert('Monto inválido', amountError);
+      return;
+    }
 
     setUploading(true);
 
     try {
-      const bytes = await readUriAsArrayBuffer(picked.uri);
-      const ext = picked.name.split('.').pop() ?? 'jpg';
+      const bytes = await readUriAsArrayBuffer(pendingImage.uri);
+      const ext = pendingImage.name.split('.').pop() ?? 'jpg';
       const path = `${condominiumId}/${unitId}/${chargeId}-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('payment-proofs')
-        .upload(path, bytes, { contentType: picked.mimeType, upsert: false });
+        .upload(path, bytes, { contentType: pendingImage.mimeType, upsert: false });
 
       if (uploadError) throw uploadError;
 
@@ -67,6 +88,7 @@ export function PaymentProofUploader({
 
       if (paymentError) throw paymentError;
 
+      setPendingImage(null);
       Alert.alert(
         'Comprobante enviado',
         amount < maxAmount - 0.01
@@ -79,9 +101,57 @@ export function PaymentProofUploader({
     } finally {
       setUploading(false);
     }
-  }, [amount, chargeId, condominiumId, maxAmount, onUploaded, unitId]);
+  }, [amount, chargeId, condominiumId, installmentId, maxAmount, onUploaded, pendingImage, unitId]);
+
+  if (pendingImage) {
+    return (
+      <View style={styles.previewBlock}>
+        <Text style={[styles.previewLabel, { color: theme.textSubtle }]}>Vista previa del comprobante</Text>
+        <View style={[styles.thumbnailFrame, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+          <Image source={{ uri: pendingImage.uri }} style={styles.thumbnail} resizeMode="contain" />
+        </View>
+        <Text style={[styles.amountHint, { color: theme.textMuted }]}>
+          Monto a reportar: {formatCurrency(amount)}
+        </Text>
+        <PrimaryButton
+          label="Enviar comprobante"
+          loading={uploading}
+          onPress={() => void submitProof()}
+          style={styles.actionBtn}
+        />
+        <PrimaryButton
+          label="Cambiar imagen"
+          variant="secondary"
+          disabled={uploading}
+          onPress={() => void pickProof()}
+          style={styles.actionBtn}
+        />
+        <PrimaryButton
+          label="Cancelar"
+          variant="secondary"
+          disabled={uploading}
+          onPress={() => setPendingImage(null)}
+        />
+      </View>
+    );
+  }
 
   return (
-    <PrimaryButton label="Subir comprobante" loading={uploading} onPress={() => void uploadProof()} />
+    <PrimaryButton label="Adjuntar comprobante" onPress={() => void pickProof()} />
   );
 }
+
+const styles = StyleSheet.create({
+  previewBlock: { gap: 0 },
+  previewLabel: { fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  thumbnailFrame: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 180,
+    marginBottom: 10,
+  },
+  thumbnail: { width: '100%', height: '100%' },
+  amountHint: { fontSize: 13, marginBottom: 12 },
+  actionBtn: { marginBottom: 8 },
+});

@@ -12,7 +12,7 @@ export interface ActiveMembership {
   role: string;
   unit_relationship: UnitRelationship | null;
   condominium: { id: string; name: string; slug: string } | null;
-  unit: { id: string; identifier: string } | null;
+  unit: { id: string; identifier: string; cluster: { id: string; name: string } | null } | null;
 }
 
 export function useMembership() {
@@ -38,18 +38,29 @@ export function useMembership() {
         role,
         unit_relationship,
         condominium:condominiums (id, name, slug),
-        unit:units (id, identifier)
+        unit:units (id, identifier, cluster:clusters (id, name))
       `,
       )
       .eq('user_id', user.id)
       .eq('status', 'active');
 
     if (!error && data) {
-      const normalized = data.map((row) => ({
-        ...row,
-        condominium: Array.isArray(row.condominium) ? row.condominium[0] : row.condominium,
-        unit: Array.isArray(row.unit) ? row.unit[0] : row.unit,
-      }));
+      const normalized = data.map((row) => {
+        const unitRaw = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+        const clusterRaw = unitRaw?.cluster;
+        const cluster = Array.isArray(clusterRaw) ? clusterRaw[0] : clusterRaw;
+        return {
+          ...row,
+          condominium: Array.isArray(row.condominium) ? row.condominium[0] : row.condominium,
+          unit: unitRaw
+            ? {
+                id: unitRaw.id,
+                identifier: unitRaw.identifier,
+                cluster: cluster ?? null,
+              }
+            : null,
+        };
+      });
       setMemberships(normalized as ActiveMembership[]);
     } else {
       setMemberships([]);

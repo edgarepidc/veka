@@ -1,6 +1,13 @@
 import { BlurView } from 'expo-blur';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import {
+  GLASS_RADIUS,
+  glassBlurIntensity,
+  glassBlurTint,
+  glassBorderColor,
+  glassOverlay,
+} from '@/constants/glass';
 import { useTheme } from '@/hooks/useTheme';
 
 const TAB_ICONS: Record<string, string> = {
@@ -23,6 +30,7 @@ type TabBarProps = {
 
 export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const theme = useTheme();
+  const useBlur = Platform.OS === 'ios' || Platform.OS === 'android';
 
   return (
     <View style={styles.wrap}>
@@ -30,15 +38,23 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
         style={[
           styles.bar,
           {
-            borderColor: theme.tabBarBorder,
-            backgroundColor: Platform.OS === 'web' ? theme.tabBar : 'transparent',
+            borderColor: glassBorderColor(theme),
+            backgroundColor: Platform.OS === 'web' ? glassOverlay(theme, 'bar') : 'transparent',
             shadowColor: theme.shadow,
           },
         ]}
       >
-        {Platform.OS === 'ios' ? (
-          <BlurView intensity={24} tint={theme.mode === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+        {useBlur ? (
+          <BlurView
+            intensity={glassBlurIntensity(theme, 'bar')}
+            tint={glassBlurTint(theme)}
+            style={StyleSheet.absoluteFill}
+          />
         ) : null}
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: glassOverlay(theme, 'bar') }]}
+        />
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label = options.title ?? route.name;
@@ -58,7 +74,12 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
               }}
               style={[
                 styles.item,
-                isFocused && { backgroundColor: theme.surfaceMuted },
+                isFocused && {
+                  backgroundColor:
+                    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.72)',
+                  borderColor: glassBorderColor(theme),
+                  borderWidth: StyleSheet.hairlineWidth,
+                },
               ]}
             >
               <Text style={styles.icon}>{icon}</Text>
@@ -91,22 +112,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: GLASS_RADIUS.sheet,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 10,
     paddingHorizontal: 6,
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 8,
   },
   item: {
     alignItems: 'center',
     gap: 2,
     paddingHorizontal: 6,
     paddingVertical: 8,
-    borderRadius: 14,
+    borderRadius: 18,
     minWidth: 48,
   },
   icon: { fontSize: 18 },

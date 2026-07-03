@@ -90,16 +90,20 @@ export function useSecurity(primary: ActiveMembership | null) {
       const now = new Date();
       const until = new Date(now.getTime() + (input.hoursValid ?? 24) * 60 * 60 * 1000);
 
-      const { error } = await supabase.from('visits').insert({
-        condominium_id: primary.condominium_id,
-        unit_id: primary.unit_id,
-        created_by: user.id,
-        visitor_name: input.visitorName.trim(),
-        visitor_phone: input.visitorPhone?.trim() || null,
-        visit_type: input.visitType,
-        valid_from: now.toISOString(),
-        valid_until: until.toISOString(),
-      });
+      const { data, error } = await supabase
+        .from('visits')
+        .insert({
+          condominium_id: primary.condominium_id,
+          unit_id: primary.unit_id,
+          created_by: user.id,
+          visitor_name: input.visitorName.trim(),
+          visitor_phone: input.visitorPhone?.trim() || null,
+          visit_type: input.visitType,
+          valid_from: now.toISOString(),
+          valid_until: until.toISOString(),
+        })
+        .select('id')
+        .single();
 
       if (error) {
         setActionError(error.message);
@@ -107,7 +111,7 @@ export function useSecurity(primary: ActiveMembership | null) {
       }
 
       await refresh();
-      return { error: null };
+      return { error: null, visitId: data.id as string };
     },
     [primary, refresh, user],
   );

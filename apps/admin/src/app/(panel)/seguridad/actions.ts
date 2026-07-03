@@ -1,0 +1,130 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+import { parseVisitQrPayload } from '@veka/shared';
+
+import { deliverUnitPushNotification } from '@/lib/unit-push';
+import { createClient } from '@/lib/supabase/server';
+
+export async function checkInVisit(input: { condominiumId: string; payload: string }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado.' };
+
+  const parsed = parseVisitQrPayload(input.payload);
+  if (!parsed) return { error: 'Código QR o referencia inválida.' };
+
+  const { data: visit, error } = await supabase
+    .from('visits')
+    .select(
+      'id, visitor_name, visit_type, valid_from, valid_until, checked_in_at, checked_out_at, unit:units (identifier)',
+    )
+    .eq('condominium_id', input.condominiumId)
+    .eq('qr_token', parsed.token)
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!visit) return { error: 'Visita no encontrada en este condominio.' };
+
+  const unit = Array.isArray(visit.unit) ? visit.unit[0] : visit.unit;
+  const unitIdentifier = unit?.identifier ?? '—';
+  const now = Date.now();
+
+  if (new Date(visit.valid_from).getTime() > now) {
+    return { error: 'Este pase aún no es válido.' };
+  }
+  if (new Date(visit.valid_until).getTime() < now) {
+    return { error: 'Este pase ya expiró.' };
+  }
+  if (visit.checked_out_at) {
+    return { error: 'El visitante ya registró salida.' };
+  }
+
+  if (visit.checked_in_at) {
+    return {
+      ok: true,
+      alreadyCheckedIn: true,
+      visit: {
+        visitorName: visit.visitor_name,
+        visitType: visit.visit_type,
+        unitIdentifier,
+        validUntil: visit.valid_until,
+      },
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from('visits')
+    .update({
+      checked_in_at: new Date().toISOString(),
+      checked_in_by: user.id,
+    })
+    .eq('id', visit.id);
+
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath('/seguridad');
+
+  return {
+    ok: true,
+    alreadyCheckedIn: false,
+    visit: {
+      visitorName: visit.visitor_name,
+      visitType: visit.visit_type,
+      unitIdentifier,
+      validUntil: visit.valid_until,
+    },
+  };
+}
+
+export async function registerPackage(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado.' };
+
+  const condominiumId = String(formData.get('condominium_id') ?? '').trim();
+  const unitId = String(formData.get('unit_id') ?? '').trim();
+  const carrier = String(formData.get('carrier') ?? '').trim();
+  const trackingNumber = String(formData.get('tracking_number') ?? '').trim();
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!condominiumId || !unitId) {
+    return { error: 'Selecciona unidad y condominio.' };
+  }
+
+  const { data: pkg, error } = await supabase
+    .from('packages')
+    .insert({
+      condominium_id: condominiumId,
+      unit_id: unitId,
+      carrier: carrier || null,
+      tracking_number: trackingNumber || null,
+      notes: notes || null,
+      received_by: user.id,
+      status: 'received',
+    })
+    .select('id')
+    .single();
+
+  if (error) return { error: error.message };
+
+  const label = carrier || 'Paquete';
+  const tracking = trackingNumber ? ` · Guía ${trackingNumber}` : '';
+
+  await deliverUnitPushNotification({
+    unitId,
+    title: 'Paquete en caseta — Veka',
+    body: `${label}${tracking}. Pasa por recepción cuando puedas.`,
+    data: { screen: 'security', tab: 'paquetes', packageId: pkg.id },
+  });
+
+  revalidatePath('/seguridad');
+  return { ok: true };
+}

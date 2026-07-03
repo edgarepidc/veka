@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 
@@ -55,6 +56,17 @@ async function savePushToken(userId: string, token: string): Promise<void> {
   );
 }
 
+function openNotificationTarget(data: Record<string, unknown> | undefined) {
+  const screen = typeof data?.screen === 'string' ? data.screen : null;
+  if (screen === 'finance') {
+    router.push('/finance');
+    return;
+  }
+  if (screen === 'security') {
+    router.push('/security');
+  }
+}
+
 export function usePushNotifications(userId: string | null | undefined) {
   const registeredRef = useRef<string | null>(null);
 
@@ -79,4 +91,13 @@ export function usePushNotifications(userId: string | null | undefined) {
       cancelled = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      openNotificationTarget(data);
+    });
+
+    return () => subscription.remove();
+  }, []);
 }

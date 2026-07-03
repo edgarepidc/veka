@@ -36,5 +36,27 @@ export function useProfile() {
     void refresh();
   }, [refresh]);
 
-  return { profile, loading, refresh };
+  const updatePhone = useCallback(
+    async (phone: string) => {
+      if (!user) return { error: 'No autenticado.' };
+
+      const trimmed = phone.trim();
+      const { error } = await supabase.from('profiles').upsert(
+        {
+          id: user.id,
+          phone: trimmed || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' },
+      );
+
+      if (error) return { error: error.message };
+
+      await refresh();
+      return { error: null };
+    },
+    [refresh, user],
+  );
+
+  return { profile, loading, refresh, updatePhone };
 }

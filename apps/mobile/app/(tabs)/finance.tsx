@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +30,7 @@ import { OnlinePaymentButton } from '@/components/OnlinePaymentButton';
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { GlassInput } from '@/components/ui/GlassInput';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { StatPill } from '@/components/ui/StatPill';
 import { Tag } from '@/components/ui/Tag';
@@ -283,6 +283,8 @@ export default function FinanceScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader
@@ -385,22 +387,12 @@ export default function FinanceScreen() {
               <Text style={{ color: theme.textSubtle, fontSize: 12, marginBottom: 6 }}>
                 Monto a pagar (abono parcial permitido)
               </Text>
-              <TextInput
+              <GlassInput
                 value={payAmountInput}
                 onChangeText={setPayAmountInput}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
-                placeholderTextColor={theme.textSubtle}
-                style={{
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  color: theme.text,
-                  backgroundColor: theme.input,
-                  marginBottom: 8,
-                }}
+                style={{ marginBottom: 8 }}
               />
               <Text style={{ color: theme.textSubtle, fontSize: 11, marginBottom: 12 }}>
                 Máximo {formatCurrency(paymentTotal)}

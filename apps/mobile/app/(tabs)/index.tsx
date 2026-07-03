@@ -58,6 +58,7 @@ export default function DashboardScreen() {
 
   const loading = membershipLoading || dashboardLoading;
   const firstName = displayName.split(' ')[0];
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
     <ScreenBackground>
@@ -66,7 +67,12 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => router.push('/account')}
+          style={styles.headerRow}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir mi cuenta"
+        >
           <View style={styles.headerText}>
             <Text style={[styles.greeting, { color: theme.textSubtle, fontFamily: theme.sansFamily }]}>
               Hola, {firstName}
@@ -80,15 +86,8 @@ export default function DashboardScreen() {
                 : 'Esperando asignación de unidad'}
             </Text>
           </View>
-          <Pressable onPress={() => router.push('/account')} style={styles.accountBtn}>
-            <Avatar
-              initials={firstName.slice(0, 2).toUpperCase()}
-              color={theme.accent}
-              size={40}
-              imageUri={avatarUri}
-            />
-          </Pressable>
-        </View>
+          <Avatar initials={initials} color={theme.accent} size={48} imageUri={avatarUri} />
+        </Pressable>
 
         {loading ? (
           <ActivityIndicator color={theme.accent} style={styles.loader} />
@@ -229,12 +228,17 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    marginBottom: 16,
+  },
   headerText: { flex: 1 },
   greeting: { fontSize: 13 },
-  title: { fontSize: 28, lineHeight: 34, marginTop: 2 },
+  title: { fontSize: 26, lineHeight: 32, marginTop: 2 },
   subtitle: { fontSize: 12, marginTop: 4 },
-  accountBtn: { marginTop: 4 },
   loader: { marginTop: 40 },
   statsRow: { gap: 10, paddingBottom: 16 },
   section: { marginBottom: 8 },

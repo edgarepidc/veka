@@ -20,3 +20,4 @@ export * from './storage';
 export * from './team';
 export * from './types';
 export * from './units';
+export * from './visit-qr';

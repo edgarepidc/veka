@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
+  Keyboard,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
+import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
+import { VisitQrPass } from '@/components/VisitQrPass';
 import { useMembership } from '@/hooks/useMembership';
 import { type VisitRow, useSecurity } from '@/hooks/useSecurity';
 import { useTheme } from '@/hooks/useTheme';
@@ -63,8 +65,14 @@ export default function SecurityScreen() {
     return visits.find((v) => !v.checked_out_at && new Date(v.valid_until).getTime() > Date.now()) ?? visits[0] ?? null;
   }, [selectedVisitId, visits]);
 
+  function closeSheet() {
+    Keyboard.dismiss();
+    setSheetOpen(false);
+  }
+
   async function handleCreateVisit() {
     if (!visitorName.trim()) return;
+    Keyboard.dismiss();
     setSubmitting(true);
     const result = await createVisit({
       visitorName,
@@ -78,6 +86,7 @@ export default function SecurityScreen() {
       setVisitorName('');
       setVisitorPhone('');
       setVisitType('visit');
+      if (result.visitId) setSelectedVisitId(result.visitId);
       setTab('qr');
     }
   }
@@ -108,6 +117,8 @@ export default function SecurityScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader
@@ -164,22 +175,11 @@ export default function SecurityScreen() {
 
           {tab === 'qr' ? (
             activeVisit ? (
-              <GlassCard style={{ alignItems: 'center' }}>
-                <Tag label={visitTypeLabel(activeVisit.visit_type)} tone="blue" />
-                <Text style={[styles.qrName, { color: theme.text, fontFamily: theme.serifFamily }]}>
-                  {activeVisit.visitor_name}
-                </Text>
-                <View style={[styles.qrBox, { borderColor: theme.glassBorder, backgroundColor: theme.glassDeep }]}>
-                  <Text style={[styles.qrToken, { color: theme.text }]}>{activeVisit.qr_token}</Text>
-                </View>
-                <Text style={[styles.qrHint, { color: theme.textMuted }]}>
-                  Muestra este código en caseta. Válido hasta{' '}
-                  {new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(
-                    new Date(activeVisit.valid_until),
-                  )}
-                </Text>
-                <Tag label={visitStatus(activeVisit).label} tone={visitStatus(activeVisit).tone} />
-              </GlassCard>
+              <VisitQrPass
+                visit={activeVisit}
+                condominiumName={primary.condominium?.name ?? 'Condominio'}
+                unitIdentifier={primary.unit?.identifier ?? '—'}
+              />
             ) : (
               <GlassCard>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin QR activo</Text>
@@ -229,44 +229,54 @@ export default function SecurityScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setSheetOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surface }]} onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.handle, { backgroundColor: theme.textSubtle }]} />
-            <Text style={[styles.sheetTitle, { color: theme.text, fontFamily: theme.serifFamily }]}>
-              Nueva visita
-            </Text>
-            <GlassInput placeholder="Nombre del visitante" value={visitorName} onChangeText={setVisitorName} />
-            <GlassInput
-              placeholder="Teléfono (opcional)"
-              value={visitorPhone}
-              onChangeText={setVisitorPhone}
-              keyboardType="phone-pad"
-            />
-            <View style={styles.typeRow}>
-              {(['visit', 'service', 'rental'] as const).map((type) => (
-                <Pressable
-                  key={type}
-                  onPress={() => setVisitType(type)}
-                  style={[
-                    styles.typeChip,
-                    {
-                      backgroundColor: visitType === type ? `${theme.accent}22` : theme.glassDeep,
-                      borderColor: visitType === type ? theme.accent : theme.glassBorder,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: visitType === type ? theme.accent : theme.textMuted, fontSize: 12, fontWeight: '600' }}>
-                    {visitTypeLabel(type)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+      <KeyboardFormSheet
+        visible={sheetOpen}
+        onClose={closeSheet}
+        title="Nueva visita"
+        titleStyle={{ fontFamily: theme.serifFamily, fontSize: 22 }}
+      >
+        <GlassInput
+          placeholder="Nombre del visitante"
+          value={visitorName}
+          onChangeText={setVisitorName}
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={Keyboard.dismiss}
+        />
+        <GlassInput
+          placeholder="Teléfono (opcional)"
+          value={visitorPhone}
+          onChangeText={setVisitorPhone}
+          keyboardType="phone-pad"
+        />
+        <View style={styles.typeRow}>
+          {(['visit', 'service', 'rental'] as const).map((type) => (
+            <Pressable
+              key={type}
+              onPress={() => setVisitType(type)}
+              style={[
+                styles.typeChip,
+                {
+                  backgroundColor: visitType === type ? `${theme.accent}22` : theme.glassDeep,
+                  borderColor: visitType === type ? theme.accent : theme.glassBorder,
+                },
+              ]}
+            >
+              <Text style={{ color: visitType === type ? theme.accent : theme.textMuted, fontSize: 12, fontWeight: '600' }}>
+                {visitTypeLabel(type)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={keyboardFormSheetStyles.actions}>
+          <View style={keyboardFormSheetStyles.actionBtn}>
+            <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
+          </View>
+          <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton label="Generar QR" loading={submitting} onPress={() => void handleCreateVisit()} />
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={() => setSheetOpen(false)} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </View>
+      </KeyboardFormSheet>
     </ScreenBackground>
   );
 }
@@ -280,21 +290,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   emptyTitle: { fontSize: 15, fontWeight: '700' },
   emptyText: { fontSize: 13, marginTop: 6, lineHeight: 20 },
-  qrName: { fontSize: 22, marginTop: 12, marginBottom: 16 },
-  qrBox: {
-    width: '100%',
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  qrToken: { fontSize: 22, fontWeight: '700', letterSpacing: 2, textAlign: 'center' },
-  qrHint: { fontSize: 12, textAlign: 'center', lineHeight: 18, marginBottom: 12, paddingHorizontal: 8 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: 36 },
-  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16, opacity: 0.35 },
-  sheetTitle: { fontSize: 22, marginBottom: 16 },
-  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   typeChip: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
 });
