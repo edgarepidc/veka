@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -16,6 +18,8 @@ import {
   type Amenity,
   type TimeSlot,
 } from '@/hooks/useSpaces';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
 interface AmenityReservationModalProps {
   visible: boolean;
@@ -103,6 +107,12 @@ export function AmenityReservationModal({
 
   if (!amenity) return null;
 
+  const imageUri = resolveStorageImageUrl(
+    SUPABASE_URL,
+    amenity.image_url,
+    STORAGE_BUCKETS.AMENITY_IMAGES,
+  );
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -114,6 +124,13 @@ export function AmenityReservationModal({
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.heroImage} resizeMode="cover" />
+          ) : null}
+          {amenity.description ? (
+            <Text style={[styles.description, { color: colors.muted }]}>{amenity.description}</Text>
+          ) : null}
+
           <Text style={[styles.label, { color: colors.muted }]}>Día</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
             {days.map((day) => {
@@ -192,6 +209,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', flex: 1 },
   close: { fontSize: 15, fontWeight: '600' },
   content: { padding: 20, paddingBottom: 40 },
+  heroImage: { width: '100%', height: 140, borderRadius: 14, marginBottom: 12 },
+  description: { fontSize: 13, lineHeight: 19, marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '600' },
   hint: { fontSize: 13, marginTop: 4, marginBottom: 12 },
   dayRow: { gap: 8, marginTop: 10 },

@@ -33,7 +33,7 @@ export interface ReservationRow {
   ends_at: string;
   status: 'confirmed' | 'cancelled' | 'completed' | 'pending';
   created_at: string;
-  amenity: { name: string } | null;
+  amenity: { name: string; image_url: string | null } | null;
   unit: { identifier: string } | null;
 }
 
@@ -58,7 +58,7 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       .order('name'),
     supabase
       .from('reservations')
-      .select('id, starts_at, ends_at, status, created_at, amenity:amenities(name), unit:units(identifier)')
+      .select('id, starts_at, ends_at, status, created_at, amenity:amenities(name, image_url), unit:units(identifier)')
       .eq('condominium_id', condoId)
       .gte('ends_at', now)
       .order('starts_at')
@@ -74,7 +74,7 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       ends_at: string;
       status: ReservationRow['status'];
       created_at: string;
-      amenity: { name: string } | { name: string }[] | null;
+      amenity: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
       unit: { identifier: string } | { identifier: string }[] | null;
     }[] | null)?.map((row) => ({
       id: row.id,

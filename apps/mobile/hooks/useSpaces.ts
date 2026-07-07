@@ -34,7 +34,7 @@ export interface Reservation {
   starts_at: string;
   ends_at: string;
   status: 'confirmed' | 'cancelled' | 'completed' | 'pending';
-  amenity?: { name: string } | { name: string }[] | null;
+  amenity?: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
 }
 
 export interface TimeSlot {
@@ -44,10 +44,18 @@ export interface TimeSlot {
   available: boolean;
 }
 
-function amenityName(reservation: Reservation): string {
+function amenityFromReservation(reservation: Reservation): { name: string; image_url: string | null } | null {
   const amenity = reservation.amenity;
-  if (!amenity) return 'Espacio';
-  return Array.isArray(amenity) ? (amenity[0]?.name ?? 'Espacio') : amenity.name;
+  if (!amenity) return null;
+  return Array.isArray(amenity) ? (amenity[0] ?? null) : amenity;
+}
+
+function amenityName(reservation: Reservation): string {
+  return amenityFromReservation(reservation)?.name ?? 'Espacio';
+}
+
+function amenityImageUrl(reservation: Reservation): string | null {
+  return amenityFromReservation(reservation)?.image_url ?? null;
 }
 
 function parseTimeOnDate(timeStr: string, date: Date): Date {
@@ -123,7 +131,7 @@ export function useSpaces(primary: ActiveMembership | null) {
         .order('name'),
       supabase
         .from('reservations')
-        .select('id, amenity_id, starts_at, ends_at, status, amenity:amenities (name)')
+        .select('id, amenity_id, starts_at, ends_at, status, amenity:amenities (name, image_url)')
         .eq('unit_id', primary.unit_id)
         .eq('user_id', user.id)
         .in('status', ['confirmed', 'pending'])
@@ -383,5 +391,6 @@ export function useSpaces(primary: ActiveMembership | null) {
     createReservation,
     cancelReservation,
     amenityName,
+    amenityImageUrl,
   };
 }

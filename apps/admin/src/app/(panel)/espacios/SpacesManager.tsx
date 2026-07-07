@@ -383,8 +383,12 @@ export function SpacesManager({
                   <div className="flex flex-wrap items-start gap-4">
                     {imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={imageUrl} alt="" className="h-20 w-28 rounded-xl object-cover" />
-                    ) : null}
+                      <img src={imageUrl} alt="" className="h-28 w-40 shrink-0 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-28 w-40 shrink-0 items-center justify-center rounded-xl bg-white/5 text-3xl">
+                        🏢
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-[var(--text)]">{amenity.name}</p>
                       <p className="mt-1 text-xs text-subtle">
@@ -458,45 +462,75 @@ export function SpacesManager({
               <p className="text-sm text-subtle">No hay reservas próximas.</p>
             </GlassCard>
           ) : (
-            reservations.map((reservation) => (
-              <GlassCard key={reservation.id} className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[var(--text)]">{reservation.amenity?.name ?? 'Amenidad'}</p>
-                  <p className="mt-1 text-sm text-muted">
-                    Unidad {reservation.unit?.identifier ?? '—'} · {formatDateTime(reservation.starts_at)}
-                  </p>
-                  <p className="mt-1 text-xs text-subtle">
-                    Hasta {formatDateTime(reservation.ends_at)} · {reservationStatusLabel(reservation.status)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {reservation.status === 'pending' ? (
-                    <form action={(formData) => run(approveReservation, formData, 'Reserva aprobada.')}>
-                      <input type="hidden" name="reservation_id" value={reservation.id} />
-                      <button
-                        type="submit"
-                        disabled={pending}
-                        className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
+            reservations.map((reservation) => {
+              const imageUrl = resolveStorageImageUrl(
+                SUPABASE_URL,
+                reservation.amenity?.image_url,
+                STORAGE_BUCKETS.AMENITY_IMAGES,
+              );
+              const amenityLabel = reservation.amenity?.name ?? 'Amenidad';
+
+              return (
+                <GlassCard key={reservation.id} className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
+                    {imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={imageUrl} alt="" className="h-24 w-36 shrink-0 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-24 w-36 shrink-0 items-center justify-center rounded-xl bg-white/5 text-3xl">
+                        🏢
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[var(--text)]">{amenityLabel}</p>
+                      <p className="mt-1 text-sm text-muted">
+                        Unidad {reservation.unit?.identifier ?? '—'} · {formatDateTime(reservation.starts_at)}
+                      </p>
+                      <p className="mt-1 text-xs text-subtle">
+                        Hasta {formatDateTime(reservation.ends_at)} · {reservationStatusLabel(reservation.status)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {reservation.status === 'pending' ? (
+                      <form action={(formData) => run(approveReservation, formData, 'Reserva aprobada.')}>
+                        <input type="hidden" name="reservation_id" value={reservation.id} />
+                        <button
+                          type="submit"
+                          disabled={pending}
+                          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
+                        >
+                          Aprobar
+                        </button>
+                      </form>
+                    ) : null}
+                    {reservation.status === 'confirmed' || reservation.status === 'pending' ? (
+                      <form
+                        action={(formData) => run(cancelReservation, formData, 'Reserva cancelada.')}
+                        onSubmit={(event) => {
+                          if (
+                            !window.confirm(
+                              `¿Cancelar la reserva de ${amenityLabel} (unidad ${reservation.unit?.identifier ?? '—'})? Esta acción no se puede deshacer.`,
+                            )
+                          ) {
+                            event.preventDefault();
+                          }
+                        }}
                       >
-                        Aprobar
-                      </button>
-                    </form>
-                  ) : null}
-                  {reservation.status === 'confirmed' || reservation.status === 'pending' ? (
-                    <form action={(formData) => run(cancelReservation, formData, 'Reserva cancelada.')}>
-                      <input type="hidden" name="reservation_id" value={reservation.id} />
-                      <button
-                        type="submit"
-                        disabled={pending}
-                        className="rounded-lg border border-red-400/40 px-3 py-1.5 text-sm text-red-200"
-                      >
-                        Cancelar
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              </GlassCard>
-            ))
+                        <input type="hidden" name="reservation_id" value={reservation.id} />
+                        <button
+                          type="submit"
+                          disabled={pending}
+                          className="rounded-lg border border-red-400/40 px-3 py-1.5 text-sm text-red-200"
+                        >
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                </GlassCard>
+              );
+            })
           )}
         </div>
       )}

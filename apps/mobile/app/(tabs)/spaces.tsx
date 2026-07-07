@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -77,6 +78,7 @@ export default function SpacesScreen() {
     createReservation,
     cancelReservation,
     amenityName,
+    amenityImageUrl,
   } = useSpaces(primary);
 
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
@@ -222,31 +224,61 @@ export default function SpacesScreen() {
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
               </GlassCard>
             ) : (
-              reservations.map((reservation) => (
-                <GlassCard key={reservation.id} style={styles.cardGap}>
-                  <View style={styles.cardTop}>
-                    <Text style={[styles.cardTitle, { color: theme.text }]}>{amenityName(reservation)}</Text>
-                    <Tag
-                      label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
-                      tone={reservationTone(reservation.status)}
-                    />
-                  </View>
-                  <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                    {formatReservationRange(reservation.starts_at, reservation.ends_at)}
-                  </Text>
-                  <PrimaryButton
-                    label={cancellingId === reservation.id ? 'Cancelando…' : 'Cancelar reserva'}
-                    variant="secondary"
-                    disabled={cancellingId === reservation.id}
-                    onPress={async () => {
-                      setCancellingId(reservation.id);
-                      await cancelReservation(reservation.id);
-                      setCancellingId(null);
-                    }}
-                    style={{ marginTop: 12 }}
-                  />
-                </GlassCard>
-              ))
+              reservations.map((reservation) => {
+                const imageUri = resolveStorageImageUrl(
+                  SUPABASE_URL,
+                  amenityImageUrl(reservation),
+                  STORAGE_BUCKETS.AMENITY_IMAGES,
+                );
+                const name = amenityName(reservation);
+
+                return (
+                  <GlassCard key={reservation.id} style={styles.cardGap} noPadding>
+                    {imageUri ? (
+                      <Image source={{ uri: imageUri }} style={styles.reservationImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.reservationEmojiWrap, { backgroundColor: theme.surface }]}>
+                        <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.reservationBody}>
+                      <View style={styles.cardTop}>
+                        <Text style={[styles.cardTitle, { color: theme.text }]}>{name}</Text>
+                        <Tag
+                          label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
+                          tone={reservationTone(reservation.status)}
+                        />
+                      </View>
+                      <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                        {formatReservationRange(reservation.starts_at, reservation.ends_at)}
+                      </Text>
+                      <PrimaryButton
+                        label={cancellingId === reservation.id ? 'Cancelando…' : 'Cancelar reserva'}
+                        variant="secondary"
+                        disabled={cancellingId === reservation.id}
+                        onPress={() => {
+                          Alert.alert(
+                            'Cancelar reserva',
+                            `¿Seguro que deseas cancelar tu reserva de ${name}? Esta acción no se puede deshacer.`,
+                            [
+                              { text: 'No', style: 'cancel' },
+                              {
+                                text: 'Sí, cancelar',
+                                style: 'destructive',
+                                onPress: () => {
+                                  setCancellingId(reservation.id);
+                                  void cancelReservation(reservation.id).finally(() => setCancellingId(null));
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                        style={{ marginTop: 12 }}
+                      />
+                    </View>
+                  </GlassCard>
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -291,7 +323,16 @@ const styles = StyleSheet.create({
   tileTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
   tileMeta: { fontSize: 11, marginBottom: 8 },
   reserveBtn: { marginTop: 8, paddingVertical: 10, minHeight: 40 },
-  cardGap: { marginBottom: 12 },
+  cardGap: { marginBottom: 12, overflow: 'hidden' },
+  reservationImage: { width: '100%', height: 120 },
+  reservationEmojiWrap: {
+    width: '100%',
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reservationEmoji: { fontSize: 32 },
+  reservationBody: { padding: 16 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
