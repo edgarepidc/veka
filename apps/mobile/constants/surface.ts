@@ -42,6 +42,18 @@ export function surfaceFloatingShadow(theme: AppTheme): ViewStyle {
   };
 }
 
+/** Tighter shadow for compact carousel tiles — less bleed, less clipping. */
+export function surfaceCompactShadow(theme: AppTheme): ViewStyle {
+  const isDark = theme.mode === 'dark';
+  return {
+    shadowColor: isDark ? '#000000' : '#1E293B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: Platform.OS === 'web' ? 0.06 : isDark ? 0.26 : 0.09,
+    shadowRadius: 10,
+    elevation: Platform.OS === 'android' ? 3 : 0,
+  };
+}
+
 export function surfaceShadow(theme: AppTheme): ViewStyle {
   return surfaceFloatingShadow(theme);
 }

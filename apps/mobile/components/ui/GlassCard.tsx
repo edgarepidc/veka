@@ -4,6 +4,7 @@ import {
   surfaceCardAccentStyle,
   surfaceCardMutedStyle,
   surfaceCardStyle,
+  surfaceCompactShadow,
   surfaceFloatingShadow,
   surfaceNoShadow,
   type SurfaceAccentTone,
@@ -15,6 +16,8 @@ interface GlassCardProps extends ViewProps {
   noPadding?: boolean;
   variant?: 'default' | 'accent' | 'muted';
   accent?: SurfaceAccentTone;
+  /** Use compact shadow for small tiles inside horizontal carousels. */
+  shadow?: 'default' | 'compact';
 }
 
 export function GlassCard({
@@ -24,6 +27,7 @@ export function GlassCard({
   noPadding,
   variant = 'default',
   accent = 'blue',
+  shadow = 'default',
   ...props
 }: GlassCardProps) {
   const theme = useTheme();
@@ -35,8 +39,10 @@ export function GlassCard({
         ? surfaceCardMutedStyle(theme)
         : surfaceCardStyle(theme);
 
+  const shadowStyle = shadow === 'compact' ? surfaceCompactShadow(theme) : surfaceFloatingShadow(theme);
+
   return (
-    <View style={[surfaceFloatingShadow(theme), style]} {...props}>
+    <View style={[shadowStyle, style]} {...props}>
       <View style={[cardStyle, styles.inner, surfaceNoShadow]}>
         <View style={noPadding ? styles.content : [styles.content, { padding }]}>{children}</View>
       </View>

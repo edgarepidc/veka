@@ -94,7 +94,13 @@ export default function DashboardScreen() {
         ) : (
           <>
             {primary?.unit_id ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+              <View style={styles.statsWrap}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.statsScroll}
+                contentContainerStyle={styles.statsRow}
+              >
                 <StatPill
                   label="Próximo pago"
                   value={data.nextCharge ? formatCurrency(data.nextCharge.amount) : '—'}
@@ -114,6 +120,7 @@ export default function DashboardScreen() {
                   valueColor={data.pendingPackage ? theme.accent3 : theme.textMuted}
                 />
               </ScrollView>
+              </View>
             ) : null}
 
             <View style={styles.section}>
@@ -259,7 +266,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, lineHeight: 32, marginTop: 2 },
   subtitle: { fontSize: 12, marginTop: 4 },
   loader: { marginTop: 40 },
-  statsRow: { gap: 10, paddingBottom: 16 },
+  statsWrap: { paddingVertical: 8, marginBottom: 4 },
+  statsScroll: { overflow: 'visible' },
+  statsRow: { gap: 10, paddingVertical: 4 },
   section: { marginBottom: 8 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },

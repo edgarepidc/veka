@@ -14,7 +14,7 @@ export function StatPill({ label, value, sub, valueColor, style, ...props }: Sta
   const theme = useTheme();
 
   return (
-    <GlassCard style={[styles.pill, style]} {...props}>
+    <GlassCard shadow="compact" style={[styles.pill, style]} {...props}>
       <Text style={[styles.label, { color: theme.textSubtle }]}>{label}</Text>
       <Text style={[styles.value, { color: valueColor ?? theme.text }]}>{value}</Text>
       {sub ? <Text style={[styles.sub, { color: theme.textMuted }]}>{sub}</Text> : null}
