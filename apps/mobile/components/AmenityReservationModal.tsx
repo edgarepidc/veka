@@ -21,7 +21,7 @@ interface AmenityReservationModalProps {
   visible: boolean;
   amenity: Amenity | null;
   onClose: () => void;
-  onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null }>;
+  onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null; pending?: boolean }>;
   fetchBookedSlots: (amenityId: string, day: Date) => Promise<{ starts_at: string; ends_at: string }[]>;
 }
 
@@ -140,8 +140,9 @@ export function AmenityReservationModal({
 
           <Text style={[styles.label, { color: colors.muted, marginTop: 20 }]}>Horario disponible</Text>
           <Text style={[styles.hint, { color: colors.muted }]}>
-            Bloques de {amenity.slot_duration_minutes} min · máx. {amenity.max_daily_reservations}/día ·{' '}
-            {amenity.max_monthly_reservations}/mes
+            Bloques de {amenity.slot_duration_minutes} min · cupo {amenity.max_concurrent_reservations} por horario ·
+            máx. {amenity.max_daily_reservations}/día · {amenity.max_monthly_reservations}/mes
+            {amenity.requires_approval ? ' · requiere aprobación' : ''}
           </Text>
 
           {loadingSlots ? (

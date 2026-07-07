@@ -1,6 +1,7 @@
 export const STORAGE_BUCKETS = {
   AVATARS: 'avatars',
   BRANDING: 'branding',
+  AMENITY_IMAGES: 'amenity-images',
   EXPENSE_EVIDENCE: 'expense-evidence',
   MAINTENANCE_FILES: 'maintenance-files',
 } as const;
@@ -14,6 +15,10 @@ export function avatarStoragePath(userId: string, ext: string): string {
 
 export function condominiumLogoPath(condominiumId: string, ext: string): string {
   return `${condominiumId}/logo.${ext}`;
+}
+
+export function amenityImagePath(condominiumId: string, amenityId: string, ext: string): string {
+  return `${condominiumId}/amenities/${amenityId}.${ext}`;
 }
 
 export function expenseEvidencePath(condominiumId: string, fileId: string, ext: string): string {

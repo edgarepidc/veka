@@ -16,6 +16,7 @@ export * from './late-fees';
 export * from './maintenance';
 export * from './recurring-fees';
 export * from './roles';
+export * from './spaces';
 export * from './storage';
 export * from './team';
 export * from './types';
