@@ -9,7 +9,7 @@ export default {
     tabIconDefault: '#94A3B8',
     tabIconSelected: tintColorLight,
     card: '#FFFFFF',
-    border: '#CBD5E1',
+    border: '#EBEBEB',
     muted: '#64748B',
     danger: '#DC2626',
     warning: '#D97706',

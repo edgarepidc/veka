@@ -118,7 +118,7 @@ export default function DashboardScreen() {
 
             <View style={styles.section}>
               {!primary?.unit_id ? (
-                <GlassCard>
+                <GlassCard variant="accent" accent="orange">
                   <Tag label="Pendiente" tone="orange" />
                   <Text style={[styles.cardTitle, { color: theme.text, marginTop: 10 }]}>Sin unidad asignada</Text>
                   <Text style={[styles.cardBody, { color: theme.textMuted }]}>
@@ -129,7 +129,11 @@ export default function DashboardScreen() {
               ) : (
                 <>
                   {data.nextCharge ? (
-                    <GlassCard style={styles.cardGap}>
+                    <GlassCard
+                      style={styles.cardGap}
+                      variant="accent"
+                      accent={data.nextCharge.status === 'overdue' ? 'danger' : 'blue'}
+                    >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
                           {chargeDisplayTitle(data.nextCharge)}
@@ -149,7 +153,7 @@ export default function DashboardScreen() {
                       </Text>
                     </GlassCard>
                   ) : (
-                    <GlassCard style={[styles.cardGap, { borderColor: `${theme.accent}44` }]}>
+                    <GlassCard style={styles.cardGap} variant="accent" accent="green">
                       <Tag label="Al día" tone="green" />
                       <Text style={[styles.cardTitle, { color: theme.text, marginTop: 8 }]}>Sin cuotas pendientes</Text>
                       <Text style={[styles.cardBody, { color: theme.textMuted }]}>
@@ -159,7 +163,11 @@ export default function DashboardScreen() {
                   )}
 
                   {data.upcomingReservation ? (
-                    <GlassCard style={styles.cardGap}>
+                    <GlassCard
+                      style={styles.cardGap}
+                      variant="accent"
+                      accent={data.upcomingReservation.status === 'pending' ? 'orange' : 'blue'}
+                    >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
                           {data.upcomingReservation.status === 'pending'
@@ -178,7 +186,11 @@ export default function DashboardScreen() {
                   ) : null}
 
                   {data.latestPost ? (
-                    <GlassCard style={styles.cardGap}>
+                    <GlassCard
+                      style={styles.cardGap}
+                      variant={data.latestPost.is_pinned ? 'accent' : 'default'}
+                      accent="purple"
+                    >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
                           {data.latestPost.is_pinned ? 'Aviso destacado' : 'Comunidad'}
@@ -194,7 +206,7 @@ export default function DashboardScreen() {
                   ) : null}
 
                   {data.pendingPackage ? (
-                    <GlassCard style={styles.cardGap}>
+                    <GlassCard style={styles.cardGap} variant="accent" accent="orange">
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>Paquete en recepción</Text>
                         <Tag label="Nuevo" tone="red" />
@@ -219,7 +231,7 @@ export default function DashboardScreen() {
                 { label: 'Seguridad', emoji: '🔒', route: '/security' },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)} style={styles.quickItem}>
-                  <GlassCard style={styles.quickCard}>
+                  <GlassCard style={styles.quickCard} variant="muted">
                     <Text style={styles.quickEmoji}>{item.emoji}</Text>
                     <Text style={[styles.quickLabel, { color: theme.text }]}>{item.label}</Text>
                   </GlassCard>

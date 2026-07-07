@@ -1,6 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { surfaceCardStyle } from '@/constants/surface';
+import { surfaceCardStyle, surfaceFloatingShadow, surfaceNoShadow } from '@/constants/surface';
 import { Tag } from '@/components/ui/Tag';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -33,42 +33,48 @@ export function AmenityCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [surfaceCardStyle(theme), styles.card, { opacity: pressed ? 0.92 : 1 }]}
+      style={({ pressed }) => [
+        surfaceFloatingShadow(theme),
+        styles.shadowWrap,
+        { opacity: pressed ? 0.92 : 1 },
+      ]}
     >
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
-      ) : (
-        <View style={[styles.imageFallback, { backgroundColor: theme.surfaceMuted }]}>
-          <Text style={styles.emoji}>{fallbackEmoji}</Text>
-        </View>
-      )}
+      <View style={[surfaceCardStyle(theme), styles.card, surfaceNoShadow]}>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+        ) : (
+          <View style={[styles.imageFallback, { backgroundColor: theme.surfaceMuted }]}>
+            <Text style={styles.emoji}>{fallbackEmoji}</Text>
+          </View>
+        )}
 
-      <View style={styles.body}>
-        <Text style={[styles.title, { color: theme.text, fontFamily: theme.sansFamily }]} numberOfLines={2}>
-          {name}
-        </Text>
-        <Text style={[styles.meta, { color: theme.textSubtle }]} numberOfLines={1}>
-          {scopeLabel} · {hoursLabel}
-        </Text>
+        <View style={styles.body}>
+          <Text style={[styles.title, { color: theme.text, fontFamily: theme.sansFamily }]} numberOfLines={2}>
+            {name}
+          </Text>
+          <Text style={[styles.meta, { color: theme.textSubtle }]} numberOfLines={1}>
+            {scopeLabel} · {hoursLabel}
+          </Text>
 
-        {requiresApproval ? (
-          <Tag label="Requiere aprobación" tone="orange" />
-        ) : null}
-
-        <View style={styles.footer}>
-          {availabilityLoading ? (
-            <Text style={[styles.availability, { color: theme.textSubtle }]}>Consultando…</Text>
-          ) : availabilityLabel ? (
-            <Text
-              style={[
-                styles.availability,
-                { color: isFull ? theme.textSubtle : theme.accent, fontWeight: isFull ? '500' : '600' },
-              ]}
-            >
-              {availabilityLabel}
-            </Text>
+          {requiresApproval ? (
+            <Tag label="Requiere aprobación" tone="orange" />
           ) : null}
-          <Text style={[styles.chevron, { color: theme.accent }]}>›</Text>
+
+          <View style={styles.footer}>
+            {availabilityLoading ? (
+              <Text style={[styles.availability, { color: theme.textSubtle }]}>Consultando…</Text>
+            ) : availabilityLabel ? (
+              <Text
+                style={[
+                  styles.availability,
+                  { color: isFull ? theme.textSubtle : theme.accent, fontWeight: isFull ? '500' : '600' },
+                ]}
+              >
+                {availabilityLabel}
+              </Text>
+            ) : null}
+            <Text style={[styles.chevron, { color: theme.accent }]}>›</Text>
+          </View>
         </View>
       </View>
     </Pressable>
@@ -80,8 +86,12 @@ const CARD_WIDTH = 260;
 export const AMENITY_CARD_WIDTH = CARD_WIDTH;
 
 const styles = StyleSheet.create({
-  card: {
+  shadowWrap: {
     width: CARD_WIDTH,
+  },
+  card: {
+    width: '100%',
+    overflow: 'hidden',
   },
   image: {
     width: '100%',

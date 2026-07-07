@@ -4,10 +4,18 @@ export {
   SURFACE_BORDER_WIDTH,
   SURFACE_RADIUS,
   SURFACE_RADIUS as GLASS_RADIUS,
+  accentColor,
+  surfaceAccentBanner,
   surfaceBarStyle,
+  surfaceCardAccentStyle,
+  surfaceCardMutedStyle,
   surfaceCardStyle,
+  surfaceFloatingShadow,
   surfaceInputStyle,
+  surfaceNoShadow,
   surfaceShadow,
+  surfaceBorderColor,
+  type SurfaceAccentTone,
 } from '@/constants/surface';
 
 /** @deprecated Prefer theme.border via surfaceCardStyle */
