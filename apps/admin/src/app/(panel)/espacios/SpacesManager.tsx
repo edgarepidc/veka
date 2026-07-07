@@ -4,6 +4,9 @@ import { useMemo, useState, useTransition } from 'react';
 import {
   amenityImagePath,
   amenityScopeLabel,
+  DEFAULT_BOOKING_HORIZON_DAYS,
+  MAX_BOOKING_HORIZON_DAYS,
+  MIN_BOOKING_HORIZON_DAYS,
   resolveStorageImageUrl,
   STORAGE_BUCKETS,
 } from '@veka/shared';
@@ -84,6 +87,7 @@ export function SpacesManager({
   const [editing, setEditing] = useState<AmenityRow | null>(null);
   const [draftId] = useState(() => crypto.randomUUID());
   const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | string>('all');
+  const [reservationScopeFilter, setReservationScopeFilter] = useState<'all' | 'general' | string>('all');
   const [pending, start] = useTransition();
 
   const draft = editing ?? ({ ...EMPTY_AMENITY, id: '', created_at: '', cluster: null } as AmenityRow);
@@ -104,6 +108,19 @@ export function SpacesManager({
     if (scopeFilter === 'general') return amenities.filter((amenity) => !amenity.cluster_id);
     return amenities.filter((amenity) => amenity.cluster_id === scopeFilter);
   }, [amenities, scopeFilter]);
+
+  const filteredReservations = useMemo(() => {
+    if (reservationScopeFilter === 'all') return reservations;
+    if (reservationScopeFilter === 'general') {
+      return reservations.filter((reservation) => !reservation.amenity?.cluster_id);
+    }
+    return reservations.filter(
+      (reservation) => reservation.amenity?.cluster_id === reservationScopeFilter,
+    );
+  }, [reservations, reservationScopeFilter]);
+
+  const bookingHorizonDays =
+    spacesSettings.booking_horizon_days ?? DEFAULT_BOOKING_HORIZON_DAYS;
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
@@ -128,11 +145,11 @@ export function SpacesManager({
           Controla si los residentes con adeudos pueden reservar espacios marcados con restricción por mora.
         </p>
         <form
-          className="mt-4 flex flex-wrap items-center gap-4"
+          className="mt-4 grid gap-4 sm:grid-cols-2"
           action={(formData) => run(updateSpacesSettings, formData, 'Reglas guardadas.')}
         >
           <input type="hidden" name="condominium_id" value={condominiumId} />
-          <label className="flex items-center gap-2 text-sm text-[var(--text)]">
+          <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
             <input
               type="checkbox"
               name="block_reservations_if_overdue"
@@ -140,13 +157,30 @@ export function SpacesManager({
             />
             Bloquear reservas si la unidad tiene adeudos
           </label>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            Guardar reglas
-          </button>
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium text-[var(--text)]">Anticipación para reservas (días)</span>
+            <input
+              type="number"
+              name="booking_horizon_days"
+              min={MIN_BOOKING_HORIZON_DAYS}
+              max={MAX_BOOKING_HORIZON_DAYS}
+              defaultValue={bookingHorizonDays}
+              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+            />
+            <span className="text-xs text-subtle">
+              Los residentes podrán elegir fechas dentro de este rango, incluyendo hoy (máx.{' '}
+              {MAX_BOOKING_HORIZON_DAYS} días).
+            </span>
+          </label>
+          <div className="flex items-end sm:col-span-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Guardar reglas
+            </button>
+          </div>
         </form>
       </GlassCard>
 
@@ -457,12 +491,28 @@ export function SpacesManager({
           <p className="text-sm text-muted">
             Aprueba solicitudes pendientes o cancela reservas confirmadas cuando sea necesario.
           </p>
-          {reservations.length === 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {scopeOptions.map((option) => (
+              <button
+                key={`reservation-${option.id}`}
+                type="button"
+                onClick={() => setReservationScopeFilter(option.id)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  reservationScopeFilter === option.id
+                    ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]'
+                    : 'border-[var(--border)] text-muted'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {filteredReservations.length === 0 ? (
             <GlassCard>
-              <p className="text-sm text-subtle">No hay reservas próximas.</p>
+              <p className="text-sm text-subtle">No hay reservas próximas en esta vista.</p>
             </GlassCard>
           ) : (
-            reservations.map((reservation) => {
+            filteredReservations.map((reservation) => {
               const imageUrl = resolveStorageImageUrl(
                 SUPABASE_URL,
                 reservation.amenity?.image_url,
@@ -487,7 +537,12 @@ export function SpacesManager({
                         Unidad {reservation.unit?.identifier ?? '—'} · {formatDateTime(reservation.starts_at)}
                       </p>
                       <p className="mt-1 text-xs text-subtle">
-                        Hasta {formatDateTime(reservation.ends_at)} · {reservationStatusLabel(reservation.status)}
+                        {amenityScopeLabel(
+                          reservation.amenity?.cluster_id,
+                          reservation.amenity?.cluster?.name,
+                        )}{' '}
+                        · Hasta {formatDateTime(reservation.ends_at)} ·{' '}
+                        {reservationStatusLabel(reservation.status)}
                       </p>
                     </div>
                   </div>

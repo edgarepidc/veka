@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
+import { bookingDayOptions, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -24,21 +24,10 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 interface AmenityReservationModalProps {
   visible: boolean;
   amenity: Amenity | null;
+  bookingHorizonDays: number;
   onClose: () => void;
   onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null; pending?: boolean }>;
   fetchBookedSlots: (amenityId: string, day: Date) => Promise<{ starts_at: string; ends_at: string }[]>;
-}
-
-function dayOptions(): Date[] {
-  const days: Date[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(today);
-    day.setDate(today.getDate() + i);
-    days.push(day);
-  }
-  return days;
 }
 
 function formatDayLabel(date: Date): string {
@@ -57,13 +46,14 @@ function formatDayLabel(date: Date): string {
 export function AmenityReservationModal({
   visible,
   amenity,
+  bookingHorizonDays,
   onClose,
   onReserve,
   fetchBookedSlots,
 }: AmenityReservationModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const days = useMemo(() => dayOptions(), []);
+  const days = useMemo(() => bookingDayOptions(bookingHorizonDays), [bookingHorizonDays]);
   const [selectedDay, setSelectedDay] = useState(days[0]);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -132,6 +122,9 @@ export function AmenityReservationModal({
           ) : null}
 
           <Text style={[styles.label, { color: colors.muted }]}>Día</Text>
+          <Text style={[styles.hint, { color: colors.muted, marginTop: 0, marginBottom: 10 }]}>
+            Puedes reservar hasta {bookingHorizonDays} día(s) por adelantado.
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
             {days.map((day) => {
               const active = day.getTime() === selectedDay.getTime();

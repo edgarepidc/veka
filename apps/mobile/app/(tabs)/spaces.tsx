@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { AmenityReservationModal } from '@/components/AmenityReservationModal';
+import { ReservationDetailModal } from '@/components/ReservationDetailModal';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -72,6 +72,7 @@ export default function SpacesScreen() {
     setScopeFilter,
     unitClusterName,
     blockIfOverdue,
+    bookingHorizonDays,
     clearActionError,
     refresh,
     fetchBookedSlots,
@@ -79,11 +80,18 @@ export default function SpacesScreen() {
     cancelReservation,
     amenityName,
     amenityImageUrl,
+    allAmenities,
   } = useSpaces(primary);
 
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const amenityById = useMemo(
+    () => new Map(allAmenities.map((amenity) => [amenity.id, amenity])),
+    [allAmenities],
+  );
 
   const scopeOptions = useMemo(() => {
     const options: { id: 'all' | 'general' | 'cluster'; label: string }[] = [
@@ -233,50 +241,30 @@ export default function SpacesScreen() {
                 const name = amenityName(reservation);
 
                 return (
-                  <GlassCard key={reservation.id} style={styles.cardGap} noPadding>
-                    {imageUri ? (
-                      <Image source={{ uri: imageUri }} style={styles.reservationImage} resizeMode="cover" />
-                    ) : (
-                      <View style={[styles.reservationEmojiWrap, { backgroundColor: theme.surface }]}>
-                        <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
+                  <Pressable key={reservation.id} onPress={() => setSelectedReservation(reservation)}>
+                    <GlassCard style={styles.cardGap} noPadding>
+                      {imageUri ? (
+                        <Image source={{ uri: imageUri }} style={styles.reservationImage} resizeMode="cover" />
+                      ) : (
+                        <View style={[styles.reservationEmojiWrap, { backgroundColor: theme.surface }]}>
+                          <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
+                        </View>
+                      )}
+                      <View style={styles.reservationBody}>
+                        <View style={styles.cardTop}>
+                          <Text style={[styles.cardTitle, { color: theme.text }]}>{name}</Text>
+                          <Tag
+                            label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
+                            tone={reservationTone(reservation.status)}
+                          />
+                        </View>
+                        <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                          {formatReservationRange(reservation.starts_at, reservation.ends_at)}
+                        </Text>
+                        <Text style={[styles.viewDetail, { color: theme.accent }]}>Ver detalle</Text>
                       </View>
-                    )}
-                    <View style={styles.reservationBody}>
-                      <View style={styles.cardTop}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>{name}</Text>
-                        <Tag
-                          label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
-                          tone={reservationTone(reservation.status)}
-                        />
-                      </View>
-                      <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                        {formatReservationRange(reservation.starts_at, reservation.ends_at)}
-                      </Text>
-                      <PrimaryButton
-                        label={cancellingId === reservation.id ? 'Cancelando…' : 'Cancelar reserva'}
-                        variant="secondary"
-                        disabled={cancellingId === reservation.id}
-                        onPress={() => {
-                          Alert.alert(
-                            'Cancelar reserva',
-                            `¿Seguro que deseas cancelar tu reserva de ${name}? Esta acción no se puede deshacer.`,
-                            [
-                              { text: 'No', style: 'cancel' },
-                              {
-                                text: 'Sí, cancelar',
-                                style: 'destructive',
-                                onPress: () => {
-                                  setCancellingId(reservation.id);
-                                  void cancelReservation(reservation.id).finally(() => setCancellingId(null));
-                                },
-                              },
-                            ],
-                          );
-                        }}
-                        style={{ marginTop: 12 }}
-                      />
-                    </View>
-                  </GlassCard>
+                    </GlassCard>
+                  </Pressable>
                 );
               })
             )}
@@ -287,6 +275,7 @@ export default function SpacesScreen() {
       <AmenityReservationModal
         visible={selectedAmenity !== null}
         amenity={selectedAmenity}
+        bookingHorizonDays={bookingHorizonDays}
         onClose={() => setSelectedAmenity(null)}
         onReserve={async (startsAt, endsAt) => {
           if (!selectedAmenity) return { error: null, pending: false };
@@ -297,6 +286,28 @@ export default function SpacesScreen() {
           return result;
         }}
         fetchBookedSlots={fetchBookedSlots}
+      />
+
+      <ReservationDetailModal
+        visible={selectedReservation !== null}
+        reservation={selectedReservation}
+        amenityLabel={selectedReservation ? amenityName(selectedReservation) : ''}
+        amenityImagePath={selectedReservation ? amenityImageUrl(selectedReservation) : null}
+        amenityClusterId={selectedReservation ? amenityById.get(selectedReservation.amenity_id)?.cluster_id : null}
+        amenityClusterName={
+          selectedReservation ? amenityById.get(selectedReservation.amenity_id)?.cluster_name : null
+        }
+        cancelling={selectedReservation ? cancellingId === selectedReservation.id : false}
+        onClose={() => setSelectedReservation(null)}
+        onCancel={async (reservationId) => {
+          setCancellingId(reservationId);
+          await cancelReservation(reservationId);
+          setCancellingId(null);
+        }}
+        formatRange={formatReservationRange}
+        fallbackEmoji={
+          selectedReservation ? amenityEmoji(amenityName(selectedReservation)) : '🏢'
+        }
       />
     </>
   );
@@ -333,6 +344,7 @@ const styles = StyleSheet.create({
   },
   reservationEmoji: { fontSize: 32 },
   reservationBody: { padding: 16 },
+  viewDetail: { fontSize: 13, fontWeight: '600', marginTop: 10 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },

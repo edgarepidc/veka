@@ -33,7 +33,12 @@ export interface ReservationRow {
   ends_at: string;
   status: 'confirmed' | 'cancelled' | 'completed' | 'pending';
   created_at: string;
-  amenity: { name: string; image_url: string | null } | null;
+  amenity: {
+    name: string;
+    image_url: string | null;
+    cluster_id: string | null;
+    cluster: { name: string } | null;
+  } | null;
   unit: { identifier: string } | null;
 }
 
@@ -58,7 +63,9 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       .order('name'),
     supabase
       .from('reservations')
-      .select('id, starts_at, ends_at, status, created_at, amenity:amenities(name, image_url), unit:units(identifier)')
+      .select(
+        'id, starts_at, ends_at, status, created_at, amenity:amenities(name, image_url, cluster_id, cluster:clusters(name)), unit:units(identifier)',
+      )
       .eq('condominium_id', condoId)
       .gte('ends_at', now)
       .order('starts_at')
@@ -74,17 +81,43 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       ends_at: string;
       status: ReservationRow['status'];
       created_at: string;
-      amenity: { name: string; image_url: string | null } | { name: string; image_url: string | null }[] | null;
+      amenity:
+        | {
+            name: string;
+            image_url: string | null;
+            cluster_id: string | null;
+            cluster: { name: string } | { name: string }[] | null;
+          }
+        | {
+            name: string;
+            image_url: string | null;
+            cluster_id: string | null;
+            cluster: { name: string } | { name: string }[] | null;
+          }[]
+        | null;
       unit: { identifier: string } | { identifier: string }[] | null;
-    }[] | null)?.map((row) => ({
-      id: row.id,
-      starts_at: row.starts_at,
-      ends_at: row.ends_at,
-      status: row.status,
-      created_at: row.created_at,
-      amenity: Array.isArray(row.amenity) ? (row.amenity[0] ?? null) : row.amenity,
-      unit: Array.isArray(row.unit) ? (row.unit[0] ?? null) : row.unit,
-    })) ?? [];
+    }[] | null)?.map((row) => {
+      const amenityRow = Array.isArray(row.amenity) ? (row.amenity[0] ?? null) : row.amenity;
+      const cluster = amenityRow?.cluster;
+      const clusterObj = Array.isArray(cluster) ? (cluster[0] ?? null) : cluster;
+
+      return {
+        id: row.id,
+        starts_at: row.starts_at,
+        ends_at: row.ends_at,
+        status: row.status,
+        created_at: row.created_at,
+        amenity: amenityRow
+          ? {
+              name: amenityRow.name,
+              image_url: amenityRow.image_url,
+              cluster_id: amenityRow.cluster_id,
+              cluster: clusterObj ?? null,
+            }
+          : null,
+        unit: Array.isArray(row.unit) ? (row.unit[0] ?? null) : row.unit,
+      };
+    }) ?? [];
 
   const amenities =
     (amenitiesRes.data as {

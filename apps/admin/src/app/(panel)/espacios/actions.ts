@@ -1,5 +1,6 @@
 'use server';
 
+import { normalizeBookingHorizonDays } from '@veka/shared';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'crypto';
 
@@ -45,6 +46,9 @@ export async function updateSpacesSettings(formData: FormData) {
     spaces: {
       ...current.spaces,
       block_reservations_if_overdue: checkbox(formData, 'block_reservations_if_overdue'),
+      booking_horizon_days: normalizeBookingHorizonDays(
+        formData.get('booking_horizon_days'),
+      ),
     },
   };
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   amenityAppliesToUnitCluster,
   isDelinquentCharge,
+  isWithinBookingHorizon,
   parseSpacesSettings,
   slotHasCapacity,
 } from '@veka/shared';
@@ -101,6 +102,7 @@ export function useSpaces(primary: ActiveMembership | null) {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [blockIfOverdue, setBlockIfOverdue] = useState(false);
+  const [bookingHorizonDays, setBookingHorizonDays] = useState(7);
   const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | 'cluster'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -114,6 +116,7 @@ export function useSpaces(primary: ActiveMembership | null) {
       setAmenities([]);
       setReservations([]);
       setBlockIfOverdue(false);
+      setBookingHorizonDays(7);
       setLoading(false);
       return;
     }
@@ -147,6 +150,7 @@ export function useSpaces(primary: ActiveMembership | null) {
 
     const spacesSettings = parseSpacesSettings(condoRes.data?.settings);
     setBlockIfOverdue(Boolean(spacesSettings.block_reservations_if_overdue));
+    setBookingHorizonDays(spacesSettings.booking_horizon_days ?? 7);
 
     const rawAmenities =
       (amenitiesRes.data as {
@@ -249,6 +253,13 @@ export function useSpaces(primary: ActiveMembership | null) {
         return { ok: false, message: 'Debes tener una unidad asignada.' };
       }
 
+      if (!isWithinBookingHorizon(startsAt, bookingHorizonDays)) {
+        return {
+          ok: false,
+          message: `Solo puedes reservar con hasta ${bookingHorizonDays} día(s) de anticipación.`,
+        };
+      }
+
       if (blockIfOverdue && amenity.restrict_if_overdue) {
         const delinquent = await hasOutstandingDebt();
         if (delinquent) {
@@ -306,7 +317,7 @@ export function useSpaces(primary: ActiveMembership | null) {
 
       return { ok: true, message: null };
     },
-    [blockIfOverdue, fetchBookedSlots, hasOutstandingDebt, primary?.unit_id, user],
+    [blockIfOverdue, bookingHorizonDays, fetchBookedSlots, hasOutstandingDebt, primary?.unit_id, user],
   );
 
   const createReservation = useCallback(
@@ -385,6 +396,7 @@ export function useSpaces(primary: ActiveMembership | null) {
     unitClusterId,
     unitClusterName,
     blockIfOverdue,
+    bookingHorizonDays,
     clearActionError,
     refresh,
     fetchBookedSlots,
