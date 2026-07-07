@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDateKey } from '@veka/shared';
 
+import { SURFACE_BORDER_WIDTH, surfaceCardStyle } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 import type { Reservation } from '@/hooks/useSpaces';
 
@@ -137,7 +138,7 @@ export function ReservationsCalendar({
               <Pressable
                 key={reservation.id}
                 onPress={() => onSelectReservation(reservation)}
-                style={[styles.dayItem, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                style={[styles.dayItem, surfaceCardStyle(theme)]}
               >
                 <Text style={[styles.dayItemTitle, { color: theme.text }]}>{amenityName(reservation)}</Text>
                 <Text style={[styles.dayItemMeta, { color: theme.textMuted }]}>
@@ -197,12 +198,10 @@ const styles = StyleSheet.create({
   dayList: {
     marginTop: 16,
     paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: SURFACE_BORDER_WIDTH,
     gap: 8,
   },
   dayItem: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
     padding: 12,
   },
   dayItemTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },

@@ -1,5 +1,6 @@
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { surfaceCardStyle } from '@/constants/surface';
 import { Tag } from '@/components/ui/Tag';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -32,14 +33,7 @@ export function AmenityCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: theme.surface,
-          shadowColor: theme.shadow,
-          opacity: pressed ? 0.92 : 1,
-        },
-      ]}
+      style={({ pressed }) => [surfaceCardStyle(theme), styles.card, { opacity: pressed ? 0.92 : 1 }]}
     >
       {imageUri ? (
         <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
@@ -88,12 +82,6 @@ export const AMENITY_CARD_WIDTH = CARD_WIDTH;
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: Platform.OS === 'web' ? 0.06 : 0.1,
-    shadowRadius: 12,
-    elevation: 3,
   },
   image: {
     width: '100%',

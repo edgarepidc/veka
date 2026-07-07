@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,6 +21,7 @@ import { ReservationsCalendar } from '@/components/ReservationsCalendar';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { Tag } from '@/components/ui/Tag';
+import { SURFACE_BORDER_WIDTH, surfaceCardStyle } from '@/constants/surface';
 import { useAmenityAvailability } from '@/hooks/useAmenityAvailability';
 import { type Amenity, type Reservation, useSpaces } from '@/hooks/useSpaces';
 import { useMembership } from '@/hooks/useMembership';
@@ -144,7 +144,7 @@ export default function SpacesScreen() {
 
   if (membershipLoading || loading) {
     return (
-      <ScreenBackground variant="plain" style={styles.centered}>
+      <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
       </ScreenBackground>
     );
@@ -152,8 +152,8 @@ export default function SpacesScreen() {
 
   if (!primary?.unit_id) {
     return (
-      <ScreenBackground variant="plain" style={[styles.centered, { padding: 24 }]}>
-        <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <ScreenBackground style={[styles.centered, { padding: 24 }]}>
+        <View style={[styles.emptyCard, surfaceCardStyle(theme)]}>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin unidad asignada</Text>
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>
             Pide a la administración que te invite con tu correo electrónico.
@@ -165,7 +165,7 @@ export default function SpacesScreen() {
 
   return (
     <>
-      <ScreenBackground variant="plain">
+      <ScreenBackground>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
           refreshControl={
@@ -228,7 +228,7 @@ export default function SpacesScreen() {
             contentContainerStyle={styles.tilesRow}
           >
             {amenities.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.emptyCard, surfaceCardStyle(theme)]}>
                 <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay espacios en esta vista.</Text>
               </View>
             ) : (
@@ -301,7 +301,7 @@ export default function SpacesScreen() {
 
           <View style={styles.section}>
             {reservations.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.emptyCard, surfaceCardStyle(theme)]}>
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
               </View>
             ) : reservationsView === 'calendar' ? (
@@ -322,16 +322,7 @@ export default function SpacesScreen() {
 
                 return (
                   <Pressable key={reservation.id} onPress={() => setSelectedReservation(reservation)}>
-                    <View
-                      style={[
-                        styles.reservationRow,
-                        {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.border,
-                          shadowColor: theme.shadow,
-                        },
-                      ]}
-                    >
+                    <View style={[styles.reservationRow, surfaceCardStyle(theme)]}>
                       {imageUri ? (
                         <Image source={{ uri: imageUri }} style={styles.reservationThumb} resizeMode="cover" />
                       ) : (
@@ -440,7 +431,7 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, marginHorizontal: 20, marginBottom: 8 },
   scopeRow: { gap: 8, paddingHorizontal: 20, marginBottom: 12 },
   scopeChip: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: SURFACE_BORDER_WIDTH,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -472,14 +463,8 @@ const styles = StyleSheet.create({
   },
   reservationRow: {
     flexDirection: 'row',
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: 10,
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: Platform.OS === 'web' ? 0.04 : 0.08,
-    shadowRadius: 8,
-    elevation: 2,
   },
   reservationThumb: { width: 88, height: 88 },
   reservationThumbFallback: {
@@ -494,8 +479,6 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   emptyCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
     padding: 16,
     minWidth: 200,
   },

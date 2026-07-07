@@ -1,6 +1,5 @@
-import { BlurView } from 'expo-blur';
 import { useCallback, useEffect, useState } from 'react';
-import { LayoutChangeEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -8,14 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { TabBarIcon } from '@/components/ui/TabBarIcon';
-import {
-  GLASS_RADIUS,
-  glassBlurIntensity,
-  glassBlurTint,
-  glassBorderColor,
-  glassInnerBorderColor,
-  glassOverlay,
-} from '@/constants/glass';
+import { SURFACE_RADIUS, surfaceBarStyle } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 
 const LENS_SPRING = { damping: 20, stiffness: 260, mass: 0.85 };
@@ -31,7 +23,7 @@ type TabBarProps = {
   };
 };
 
-function TabGlassLens({
+function TabActiveLens({
   layouts,
   activeIndex,
 }: {
@@ -39,7 +31,6 @@ function TabGlassLens({
   activeIndex: number;
 }) {
   const theme = useTheme();
-  const useBlur = Platform.OS === 'ios' || Platform.OS === 'android';
   const lensX = useSharedValue(0);
   const lensWidth = useSharedValue(0);
   const lensOpacity = useSharedValue(0);
@@ -59,38 +50,23 @@ function TabGlassLens({
     width: Math.max(lensWidth.value, 0),
   }));
 
-  const lensFill =
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.72)';
-  const lensBlur = glassBlurIntensity(theme, 'chip') + (theme.mode === 'dark' ? 8 : 12);
-
   return (
-    <Animated.View pointerEvents="none" style={[styles.lens, lensStyle]}>
-      {useBlur ? (
-        <BlurView
-          intensity={lensBlur}
-          tint={glassBlurTint(theme)}
-          style={[StyleSheet.absoluteFill, { borderRadius: GLASS_RADIUS.button }]}
-        />
-      ) : null}
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: lensFill, borderRadius: GLASS_RADIUS.button },
-        ]}
-      />
-      <View
-        style={[
-          styles.lensHighlight,
-          { borderColor: glassInnerBorderColor(theme), borderRadius: GLASS_RADIUS.button },
-        ]}
-      />
-    </Animated.View>
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.lens,
+        lensStyle,
+        {
+          backgroundColor: theme.mode === 'dark' ? `${theme.accent}22` : `${theme.accent}12`,
+          borderColor: theme.mode === 'dark' ? `${theme.accent}44` : `${theme.accent}28`,
+        },
+      ]}
+    />
   );
 }
 
 export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const theme = useTheme();
-  const useBlur = Platform.OS === 'ios' || Platform.OS === 'android';
   const [tabLayouts, setTabLayouts] = useState<TabLayout[]>([]);
 
   const onTabLayout = useCallback((index: number, event: LayoutChangeEvent) => {
@@ -104,29 +80,8 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
 
   return (
     <View style={styles.wrap}>
-      <View
-        style={[
-          styles.bar,
-          {
-            borderColor: glassBorderColor(theme),
-            backgroundColor: Platform.OS === 'web' ? glassOverlay(theme, 'bar') : 'transparent',
-            shadowColor: theme.shadow,
-          },
-        ]}
-      >
-        {useBlur ? (
-          <BlurView
-            intensity={glassBlurIntensity(theme, 'bar')}
-            tint={glassBlurTint(theme)}
-            style={[StyleSheet.absoluteFill, { borderRadius: GLASS_RADIUS.sheet }]}
-          />
-        ) : null}
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: glassOverlay(theme, 'bar') }]}
-        />
-
-        <TabGlassLens layouts={tabLayouts} activeIndex={state.index} />
+      <View style={[styles.bar, surfaceBarStyle(theme)]}>
+        <TabActiveLens layouts={tabLayouts} activeIndex={state.index} />
 
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
@@ -178,31 +133,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    borderRadius: GLASS_RADIUS.sheet,
-    borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 4,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.24,
-    shadowRadius: 32,
-    elevation: 10,
   },
   lens: {
     position: 'absolute',
     left: 0,
     top: 6,
     bottom: 6,
-    borderRadius: GLASS_RADIUS.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.55)',
-    overflow: 'hidden',
-    zIndex: 0,
-  },
-  lensHighlight: {
-    ...StyleSheet.absoluteFillObject,
+    borderRadius: SURFACE_RADIUS.button,
     borderWidth: 1,
-    opacity: 0.9,
+    zIndex: 0,
   },
   item: {
     alignItems: 'center',

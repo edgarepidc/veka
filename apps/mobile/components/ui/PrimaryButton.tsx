@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import {
   ActivityIndicator,
   Platform,
@@ -9,14 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import {
-  GLASS_RADIUS,
-  glassBlurIntensity,
-  glassBlurTint,
-  glassBorderColor,
-  glassInnerBorderColor,
-  glassOverlay,
-} from '@/constants/glass';
+import { SURFACE_BORDER_WIDTH, SURFACE_RADIUS } from '@/constants/surface';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -38,62 +30,12 @@ export function PrimaryButton({
   onPress,
 }: PrimaryButtonProps) {
   const theme = useTheme();
-  const useBlur = Platform.OS === 'ios' || Platform.OS === 'android';
   const isSecondary = variant === 'secondary';
   const isDanger = variant === 'danger';
 
-  const bg = isDanger ? theme.danger : isSecondary ? 'transparent' : theme.accent;
+  const bg = isDanger ? theme.danger : isSecondary ? theme.surface : theme.accent;
   const color = isSecondary ? theme.text : isDanger ? '#fff' : theme.onAccent;
-
-  const buttonBody = (
-    <>
-      {loading ? (
-        <ActivityIndicator color={color} />
-      ) : (
-        <Text style={[styles.label, { color, fontFamily: theme.sansFamily }]}>{label}</Text>
-      )}
-    </>
-  );
-
-  if (isSecondary && useBlur) {
-    return (
-      <PressableScale disabled={disabled || loading} onPress={onPress} style={[styles.wrapper, style]}>
-        <View
-          style={[
-            styles.button,
-            {
-              borderColor: glassBorderColor(theme),
-              borderRadius: GLASS_RADIUS.button,
-            },
-          ]}
-        >
-          <BlurView
-            intensity={glassBlurIntensity(theme, 'chip')}
-            tint={glassBlurTint(theme)}
-            style={[StyleSheet.absoluteFill, { borderRadius: GLASS_RADIUS.button }]}
-          />
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: glassOverlay(theme, 'chip'),
-                borderRadius: GLASS_RADIUS.button,
-              },
-            ]}
-          />
-          <View
-            pointerEvents="none"
-            style={[
-              styles.innerHighlight,
-              { borderColor: glassInnerBorderColor(theme), borderRadius: GLASS_RADIUS.button },
-            ]}
-          />
-          <View style={styles.content}>{buttonBody}</View>
-        </View>
-      </PressableScale>
-    );
-  }
+  const borderColor = isSecondary ? theme.border : 'transparent';
 
   return (
     <PressableScale
@@ -104,39 +46,30 @@ export function PrimaryButton({
         Platform.OS === 'web' ? styles.webButton : undefined,
         {
           backgroundColor: bg,
-          borderColor: isSecondary ? glassBorderColor(theme) : 'transparent',
-          borderRadius: GLASS_RADIUS.button,
+          borderColor,
+          borderRadius: SURFACE_RADIUS.button,
         },
         style,
       ]}
     >
-      {buttonBody}
+      {loading ? (
+        <ActivityIndicator color={color} />
+      ) : (
+        <Text style={[styles.label, { color, fontFamily: theme.sansFamily }]}>{label}</Text>
+      )}
     </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { width: '100%' },
   button: {
-    borderRadius: GLASS_RADIUS.button,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: SURFACE_RADIUS.button,
+    borderWidth: SURFACE_BORDER_WIDTH,
     paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
     overflow: 'hidden',
-  },
-  innerHighlight: {
-    ...StyleSheet.absoluteFillObject,
-    borderWidth: 1,
-    opacity: 0.9,
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingVertical: 13,
-    zIndex: 1,
   },
   webButton: {
     cursor: 'pointer',

@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import type { ReactNode } from 'react';
 import {
   Keyboard,
@@ -17,12 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  glassBlurIntensity,
-  glassBlurTint,
-  glassBorderColor,
-  glassOverlay,
-} from '@/constants/glass';
+import { SURFACE_BORDER_WIDTH } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 
 interface KeyboardFormSheetProps {
@@ -56,21 +50,14 @@ export function KeyboardFormSheet({
         <View
           style={[
             styles.sheet,
-            { borderColor: glassBorderColor(theme), paddingBottom: insets.bottom + 12 },
+            {
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              paddingBottom: insets.bottom + 12,
+            },
             sheetStyle,
           ]}
         >
-          {Platform.OS === 'ios' || Platform.OS === 'android' ? (
-            <BlurView
-              intensity={glassBlurIntensity(theme, 'bar')}
-              tint={glassBlurTint(theme)}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : null}
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: glassOverlay(theme, 'bar') }]}
-          />
           <View style={[styles.handle, { backgroundColor: theme.textSubtle }]} />
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -106,7 +93,7 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: SURFACE_BORDER_WIDTH,
     paddingHorizontal: 20,
     paddingTop: 12,
     maxHeight: '92%',

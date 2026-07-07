@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import {
   InputAccessoryView,
   Keyboard,
@@ -11,13 +10,7 @@ import {
   type TextInputProps,
 } from 'react-native';
 
-import {
-  GLASS_RADIUS,
-  glassBlurIntensity,
-  glassBlurTint,
-  glassBorderColor,
-  glassOverlay,
-} from '@/constants/glass';
+import { surfaceInputStyle } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 
 const DONE_ACCESSORY_ID = 'glass-input-done';
@@ -35,22 +28,10 @@ function needsDoneAccessory(keyboardType: TextInputProps['keyboardType']): boole
 export function GlassInput({ style, keyboardType, inputAccessoryViewID, ...props }: TextInputProps) {
   const theme = useTheme();
   const showDoneAccessory = needsDoneAccessory(keyboardType);
-  const useBlur = Platform.OS === 'ios' || Platform.OS === 'android';
 
   return (
     <>
-      <View style={[styles.wrap, { borderColor: glassBorderColor(theme) }]}>
-        {useBlur ? (
-          <BlurView
-            intensity={glassBlurIntensity(theme, 'input')}
-            tint={glassBlurTint(theme)}
-            style={StyleSheet.absoluteFill}
-          />
-        ) : null}
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: glassOverlay(theme, 'input') }]}
-        />
+      <View style={[styles.wrap, surfaceInputStyle(theme)]}>
         <TextInput
           placeholderTextColor={theme.textSubtle}
           keyboardType={keyboardType}
@@ -81,19 +62,15 @@ export function GlassInput({ style, keyboardType, inputAccessoryViewID, ...props
 
 const styles = StyleSheet.create({
   wrap: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: GLASS_RADIUS.input,
-    overflow: 'hidden',
     marginBottom: 10,
   },
   input: {
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    backgroundColor: 'transparent',
   },
   accessory: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: 12,
