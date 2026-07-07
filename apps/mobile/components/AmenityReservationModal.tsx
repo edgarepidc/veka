@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { bookingDayOptions, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
+import { bookingDayOptionsFiltered, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -25,6 +25,8 @@ interface AmenityReservationModalProps {
   visible: boolean;
   amenity: Amenity | null;
   bookingHorizonDays: number;
+  blockedDates: string[];
+  minBookingLeadHours: number;
   onClose: () => void;
   onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null; pending?: boolean }>;
   fetchBookedSlots: (amenityId: string, day: Date) => Promise<{ starts_at: string; ends_at: string }[]>;
@@ -47,13 +49,18 @@ export function AmenityReservationModal({
   visible,
   amenity,
   bookingHorizonDays,
+  blockedDates,
+  minBookingLeadHours,
   onClose,
   onReserve,
   fetchBookedSlots,
 }: AmenityReservationModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
-  const days = useMemo(() => bookingDayOptions(bookingHorizonDays), [bookingHorizonDays]);
+  const days = useMemo(
+    () => bookingDayOptionsFiltered(bookingHorizonDays, blockedDates),
+    [bookingHorizonDays, blockedDates],
+  );
   const [selectedDay, setSelectedDay] = useState(days[0]);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -64,12 +71,12 @@ export function AmenityReservationModal({
     if (!amenity) return;
     setLoadingSlots(true);
     const booked = await fetchBookedSlots(amenity.id, selectedDay);
-    setSlots(buildSlotsForDay(amenity, selectedDay, booked));
+    setSlots(buildSlotsForDay(amenity, selectedDay, booked, minBookingLeadHours));
     setLoadingSlots(false);
-  }, [amenity, fetchBookedSlots, selectedDay]);
+  }, [amenity, fetchBookedSlots, minBookingLeadHours, selectedDay]);
 
   useEffect(() => {
-    if (visible && amenity) {
+    if (visible && amenity && days.length > 0) {
       setSelectedDay(days[0]);
       setLocalError(null);
     }
@@ -123,8 +130,15 @@ export function AmenityReservationModal({
 
           <Text style={[styles.label, { color: colors.muted }]}>Día</Text>
           <Text style={[styles.hint, { color: colors.muted, marginTop: 0, marginBottom: 10 }]}>
-            Puedes reservar hasta {bookingHorizonDays} día(s) por adelantado.
+            Puedes reservar hasta {bookingHorizonDays} día(s) por adelantado
+            {minBookingLeadHours > 0 ? ` · mínimo ${minBookingLeadHours} h antes del horario` : ''}.
           </Text>
+          {days.length === 0 ? (
+            <Text style={[styles.empty, { color: colors.muted }]}>
+              No hay fechas disponibles en el horizonte configurado.
+            </Text>
+          ) : (
+            <>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayRow}>
             {days.map((day) => {
               const active = day.getTime() === selectedDay.getTime();
@@ -179,6 +193,8 @@ export function AmenityReservationModal({
                 </Pressable>
               ))}
             </View>
+          )}
+            </>
           )}
 
           {localError ? <Text style={[styles.error, { color: colors.danger }]}>{localError}</Text> : null}

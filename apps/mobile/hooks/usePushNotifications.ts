@@ -62,6 +62,10 @@ function openNotificationTarget(data: Record<string, unknown> | undefined) {
     router.push('/finance');
     return;
   }
+  if (screen === 'spaces') {
+    router.push('/spaces');
+    return;
+  }
   if (screen === 'security') {
     router.push('/security');
   }

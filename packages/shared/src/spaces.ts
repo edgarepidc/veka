@@ -2,11 +2,27 @@ export interface SpacesSettings {
   block_reservations_if_overdue?: boolean;
   /** Días calendario disponibles para reservar, incluyendo hoy. */
   booking_horizon_days?: number;
+  /** Horas mínimas antes del inicio para poder reservar (0 = sin restricción). */
+  min_booking_lead_hours?: number;
+  /** Horas mínimas antes del inicio para que el residente pueda cancelar (0 = sin restricción). */
+  min_cancel_lead_hours?: number;
+  /** Máximo de reservas activas por unidad en todos los espacios (0 = sin límite). */
+  max_active_reservations_per_unit?: number;
+  /** Valor inicial del checkbox "requiere aprobación" al crear amenidades. */
+  default_requires_approval?: boolean;
+  /** Fechas YYYY-MM-DD sin reservas en todo el fraccionamiento. */
+  blocked_dates?: string[];
+  /** Enviar push/correo al residente cuando admin aprueba o cancela. */
+  notify_reservation_updates?: boolean;
 }
 
 export const DEFAULT_BOOKING_HORIZON_DAYS = 7;
 export const MIN_BOOKING_HORIZON_DAYS = 1;
 export const MAX_BOOKING_HORIZON_DAYS = 90;
+
+export const DEFAULT_MIN_BOOKING_LEAD_HOURS = 2;
+export const DEFAULT_MIN_CANCEL_LEAD_HOURS = 24;
+export const MAX_LEAD_HOURS = 168;
 
 export function normalizeBookingHorizonDays(value: unknown): number {
   const parsed =
@@ -18,6 +34,52 @@ export function normalizeBookingHorizonDays(value: unknown): number {
   );
 }
 
+export function normalizeLeadHours(value: unknown, fallback: number): number {
+  const parsed =
+    typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(MAX_LEAD_HOURS, Math.max(0, Math.round(parsed)));
+}
+
+export function normalizeMaxActiveReservations(value: unknown): number {
+  const parsed =
+    typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed));
+}
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function parseBlockedDates(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const unique = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const trimmed = item.trim();
+    if (DATE_KEY_RE.test(trimmed)) unique.add(trimmed);
+  }
+  return [...unique].sort();
+}
+
+export function parseBlockedDatesInput(raw: string): string[] {
+  const parts = raw
+    .split(/[\n,;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parseBlockedDates(parts);
+}
+
+export function formatBlockedDatesForInput(dates: string[]): string {
+  return dates.join('\n');
+}
+
 export function parseSpacesSettings(raw: unknown): SpacesSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const spaces = (raw as { spaces?: unknown }).spaces;
@@ -26,6 +88,20 @@ export function parseSpacesSettings(raw: unknown): SpacesSettings {
   return {
     block_reservations_if_overdue: Boolean(typed.block_reservations_if_overdue),
     booking_horizon_days: normalizeBookingHorizonDays(typed.booking_horizon_days),
+    min_booking_lead_hours: normalizeLeadHours(
+      typed.min_booking_lead_hours,
+      DEFAULT_MIN_BOOKING_LEAD_HOURS,
+    ),
+    min_cancel_lead_hours: normalizeLeadHours(
+      typed.min_cancel_lead_hours,
+      DEFAULT_MIN_CANCEL_LEAD_HOURS,
+    ),
+    max_active_reservations_per_unit: normalizeMaxActiveReservations(
+      typed.max_active_reservations_per_unit,
+    ),
+    default_requires_approval: Boolean(typed.default_requires_approval),
+    blocked_dates: parseBlockedDates(typed.blocked_dates),
+    notify_reservation_updates: typed.notify_reservation_updates !== false,
   };
 }
 
@@ -50,6 +126,58 @@ export function isWithinBookingHorizon(date: Date, horizonDays: number): boolean
   const candidate = new Date(date);
   candidate.setHours(0, 0, 0, 0);
   return candidate >= today && candidate < limit;
+}
+
+export function isBlockedDate(date: Date, blockedDates: string[]): boolean {
+  if (!blockedDates.length) return false;
+  return blockedDates.includes(formatDateKey(date));
+}
+
+export function bookingDayOptionsFiltered(
+  horizonDays: number,
+  blockedDates: string[],
+): Date[] {
+  return bookingDayOptions(horizonDays).filter((day) => !isBlockedDate(day, blockedDates));
+}
+
+export function meetsMinBookingLead(
+  startsAt: Date,
+  leadHours: number,
+  now: Date = new Date(),
+): boolean {
+  const hours = normalizeLeadHours(leadHours, 0);
+  if (hours <= 0) return true;
+  return startsAt.getTime() - now.getTime() >= hours * 60 * 60 * 1000;
+}
+
+export function canCancelByLead(
+  startsAt: Date,
+  leadHours: number,
+  now: Date = new Date(),
+): boolean {
+  const hours = normalizeLeadHours(leadHours, 0);
+  if (hours <= 0) return true;
+  return startsAt.getTime() - now.getTime() >= hours * 60 * 60 * 1000;
+}
+
+export function minBookingLeadMessage(leadHours: number): string {
+  const hours = normalizeLeadHours(leadHours, 0);
+  if (hours <= 0) return '';
+  if (hours < 24) {
+    return `Debes reservar al menos ${hours} hora(s) antes del horario.`;
+  }
+  const days = Math.round(hours / 24);
+  return `Debes reservar al menos ${days} día(s) antes del horario.`;
+}
+
+export function minCancelLeadMessage(leadHours: number): string {
+  const hours = normalizeLeadHours(leadHours, 0);
+  if (hours <= 0) return '';
+  if (hours < 24) {
+    return `Solo puedes cancelar hasta ${hours} hora(s) antes del inicio.`;
+  }
+  const days = Math.round(hours / 24);
+  return `Solo puedes cancelar hasta ${days} día(s) antes del inicio.`;
 }
 
 /** General amenity (no cluster) is visible to all units; cluster amenity only to matching tower. */

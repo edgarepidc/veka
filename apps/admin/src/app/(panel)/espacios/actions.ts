@@ -1,11 +1,20 @@
 'use server';
 
-import { normalizeBookingHorizonDays } from '@veka/shared';
+import {
+  DEFAULT_MIN_BOOKING_LEAD_HOURS,
+  DEFAULT_MIN_CANCEL_LEAD_HOURS,
+  normalizeBookingHorizonDays,
+  normalizeLeadHours,
+  normalizeMaxActiveReservations,
+  parseBlockedDatesInput,
+  parseSpacesSettings,
+} from '@veka/shared';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
+import { deliverReservationUpdate } from '@/lib/notifications';
 import { assertAdminAction } from '@/lib/require-admin';
 import { createClient } from '@/lib/supabase/server';
 
@@ -25,6 +34,46 @@ function checkbox(formData: FormData, name: string): boolean {
   return value === 'on' || value === 'true' || value === '1';
 }
 
+async function notifyReservationUpdate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  condominiumId: string,
+  reservationId: string,
+  kind: 'approved' | 'cancelled',
+) {
+  const { data: condo } = await supabase
+    .from('condominiums')
+    .select('settings')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  const spacesSettings = parseSpacesSettings(condo?.settings);
+  if (!spacesSettings.notify_reservation_updates) return;
+
+  const { data: reservation } = await supabase
+    .from('reservations')
+    .select('id, user_id, unit_id, starts_at, amenity:amenities(name)')
+    .eq('id', reservationId)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!reservation?.user_id || !reservation.unit_id) return;
+
+  const amenity = reservation.amenity as { name: string } | { name: string }[] | null;
+  const amenityName = Array.isArray(amenity)
+    ? (amenity[0]?.name ?? 'Espacio')
+    : (amenity?.name ?? 'Espacio');
+
+  await deliverReservationUpdate({
+    condominiumId,
+    unitId: reservation.unit_id,
+    userId: reservation.user_id,
+    reservationId: reservation.id,
+    amenityName,
+    startsAt: reservation.starts_at,
+    kind,
+  });
+}
+
 export async function updateSpacesSettings(formData: FormData) {
   const denied = await assertAdminAction();
   if (denied) return denied;
@@ -41,14 +90,27 @@ export async function updateSpacesSettings(formData: FormData) {
     .maybeSingle();
 
   const current = parseCondominiumSettings(existing?.settings);
+  const blockedDatesRaw = String(formData.get('blocked_dates') ?? '');
   const settings = {
     ...current,
     spaces: {
       ...current.spaces,
       block_reservations_if_overdue: checkbox(formData, 'block_reservations_if_overdue'),
-      booking_horizon_days: normalizeBookingHorizonDays(
-        formData.get('booking_horizon_days'),
+      booking_horizon_days: normalizeBookingHorizonDays(formData.get('booking_horizon_days')),
+      min_booking_lead_hours: normalizeLeadHours(
+        formData.get('min_booking_lead_hours'),
+        DEFAULT_MIN_BOOKING_LEAD_HOURS,
       ),
+      min_cancel_lead_hours: normalizeLeadHours(
+        formData.get('min_cancel_lead_hours'),
+        DEFAULT_MIN_CANCEL_LEAD_HOURS,
+      ),
+      max_active_reservations_per_unit: normalizeMaxActiveReservations(
+        formData.get('max_active_reservations_per_unit'),
+      ),
+      default_requires_approval: checkbox(formData, 'default_requires_approval'),
+      blocked_dates: parseBlockedDatesInput(blockedDatesRaw),
+      notify_reservation_updates: checkbox(formData, 'notify_reservation_updates'),
     },
   };
 
@@ -167,6 +229,8 @@ export async function cancelReservation(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  await notifyReservationUpdate(supabase, condominiumId, reservationId, 'cancelled');
+
   revalidatePath('/espacios');
   return { success: true };
 }
@@ -191,6 +255,8 @@ export async function approveReservation(formData: FormData) {
     .eq('status', 'pending');
 
   if (error) return { error: error.message };
+
+  await notifyReservationUpdate(supabase, condominiumId, reservationId, 'approved');
 
   revalidatePath('/espacios');
   return { success: true };

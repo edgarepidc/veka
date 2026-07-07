@@ -17,6 +17,8 @@ interface ReservationDetailModalProps {
   amenityClusterId?: string | null;
   amenityClusterName?: string | null;
   cancelling: boolean;
+  canCancel: boolean;
+  cancelBlockedMessage?: string | null;
   onClose: () => void;
   onCancel: (reservationId: string) => Promise<void>;
   formatRange: (startsAt: string, endsAt: string) => string;
@@ -43,6 +45,8 @@ export function ReservationDetailModal({
   amenityClusterId,
   amenityClusterName,
   cancelling,
+  canCancel,
+  cancelBlockedMessage,
   onClose,
   onCancel,
   formatRange,
@@ -118,13 +122,18 @@ export function ReservationDetailModal({
           ) : null}
 
           {reservation.status === 'confirmed' || reservation.status === 'pending' ? (
-            <PrimaryButton
-              label={cancelling ? 'Cancelando…' : 'Cancelar reserva'}
-              variant="secondary"
-              disabled={cancelling}
-              onPress={handleCancel}
-              style={{ marginTop: 20 }}
-            />
+            <>
+              {!canCancel && cancelBlockedMessage ? (
+                <Text style={[styles.note, { color: colors.muted }]}>{cancelBlockedMessage}</Text>
+              ) : null}
+              <PrimaryButton
+                label={cancelling ? 'Cancelando…' : 'Cancelar reserva'}
+                variant="secondary"
+                disabled={cancelling || !canCancel}
+                onPress={handleCancel}
+                style={{ marginTop: 20 }}
+              />
+            </>
           ) : null}
         </ScrollView>
       </View>

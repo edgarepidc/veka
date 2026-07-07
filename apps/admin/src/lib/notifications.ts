@@ -75,7 +75,7 @@ async function logDelivery(
     condominiumId: string;
     unitId: string;
     userId: string | null;
-    chargeId: string;
+    chargeId?: string | null;
     channel: 'push' | 'email';
     status: 'sent' | 'failed' | 'skipped';
     message: string;
@@ -86,7 +86,7 @@ async function logDelivery(
     condominium_id: row.condominiumId,
     unit_id: row.unitId,
     user_id: row.userId,
-    charge_id: row.chargeId,
+    charge_id: row.chargeId ?? null,
     channel: row.channel,
     status: row.status,
     message: row.message,
@@ -270,6 +270,121 @@ export async function deliverChargeReminder(
           });
         }
       }
+    }
+  }
+
+  return { pushSent, emailSent, skipped, failures };
+}
+
+export type ReservationNotificationKind = 'approved' | 'cancelled';
+
+export interface ReservationNotificationInput {
+  condominiumId: string;
+  unitId: string;
+  userId: string;
+  reservationId: string;
+  amenityName: string;
+  startsAt: string;
+  kind: ReservationNotificationKind;
+  notifyPush?: boolean;
+  notifyEmail?: boolean;
+}
+
+export async function deliverReservationUpdate(
+  input: ReservationNotificationInput,
+): Promise<ReminderDeliveryResult> {
+  const admin = createAdminClient();
+  const notifyPush = input.notifyPush ?? true;
+  const notifyEmail = input.notifyEmail ?? true;
+
+  const when = new Date(input.startsAt).toLocaleString('es-MX', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const title =
+    input.kind === 'approved' ? 'Reserva confirmada — Veka' : 'Reserva cancelada — Veka';
+  const message =
+    input.kind === 'approved'
+      ? `Tu reserva de ${input.amenityName} (${when}) fue aprobada.`
+      : `Tu reserva de ${input.amenityName} (${when}) fue cancelada por administración.`;
+
+  let pushSent = 0;
+  let emailSent = 0;
+  let skipped = 0;
+  let failures = 0;
+
+  if (notifyPush) {
+    const tokens = await getUserPushTokens(admin, input.userId);
+    if (tokens.length === 0) {
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId: input.userId,
+        chargeId: null,
+        channel: 'push',
+        status: 'skipped',
+        message,
+        error: 'Sin token push registrado',
+      });
+      skipped += 1;
+    } else {
+      const result = await sendExpoPush(tokens, title, message, {
+        reservationId: input.reservationId,
+        screen: 'spaces',
+      });
+      pushSent += result.sent;
+      failures += result.failed;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId: input.userId,
+        chargeId: null,
+        channel: 'push',
+        status: result.sent > 0 ? 'sent' : 'failed',
+        message,
+        error: result.sent > 0 ? undefined : 'No se pudo entregar push',
+      });
+    }
+  }
+
+  if (notifyEmail) {
+    const email = await getUserEmail(admin, input.userId);
+    if (!email) {
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId: input.userId,
+        chargeId: null,
+        channel: 'email',
+        status: 'skipped',
+        message,
+        error: 'Sin correo en la cuenta',
+      });
+      skipped += 1;
+    } else if (!process.env.RESEND_API_KEY) {
+      skipped += 1;
+    } else {
+      const ok = await sendReminderEmail(
+        email,
+        title,
+        `<p>Hola,</p><p>${message}</p><p>— Administración Veka</p>`,
+      );
+      if (ok) emailSent += 1;
+      else failures += 1;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId: input.userId,
+        chargeId: null,
+        channel: 'email',
+        status: ok ? 'sent' : 'failed',
+        message,
+        error: ok ? undefined : 'Error al enviar correo',
+      });
     }
   }
 

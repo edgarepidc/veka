@@ -6,7 +6,11 @@ import {
   amenityImagePath,
   amenityScopeLabel,
   DEFAULT_BOOKING_HORIZON_DAYS,
+  DEFAULT_MIN_BOOKING_LEAD_HOURS,
+  DEFAULT_MIN_CANCEL_LEAD_HOURS,
+  formatBlockedDatesForInput,
   MAX_BOOKING_HORIZON_DAYS,
+  MAX_LEAD_HOURS,
   MIN_BOOKING_HORIZON_DAYS,
   resolveStorageImageUrl,
   STORAGE_BUCKETS,
@@ -168,6 +172,25 @@ export function SpacesManager({
   const bookingHorizonDays =
     spacesSettings.booking_horizon_days ?? DEFAULT_BOOKING_HORIZON_DAYS;
   const blockIfOverdue = Boolean(spacesSettings.block_reservations_if_overdue);
+  const minBookingLeadHours =
+    spacesSettings.min_booking_lead_hours ?? DEFAULT_MIN_BOOKING_LEAD_HOURS;
+  const minCancelLeadHours =
+    spacesSettings.min_cancel_lead_hours ?? DEFAULT_MIN_CANCEL_LEAD_HOURS;
+  const maxActiveReservations =
+    spacesSettings.max_active_reservations_per_unit ?? 0;
+  const defaultRequiresApproval = Boolean(spacesSettings.default_requires_approval);
+  const blockedDates = spacesSettings.blocked_dates ?? [];
+  const notifyReservationUpdates = spacesSettings.notify_reservation_updates !== false;
+  const rulesFormKey = [
+    blockIfOverdue,
+    bookingHorizonDays,
+    minBookingLeadHours,
+    minCancelLeadHours,
+    maxActiveReservations,
+    defaultRequiresApproval,
+    blockedDates.join(','),
+    notifyReservationUpdates,
+  ].join('|');
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
@@ -215,6 +238,33 @@ export function SpacesManager({
                   value={`${bookingHorizonDays} día${bookingHorizonDays === 1 ? '' : 's'}`}
                   tone="green"
                 />
+                <RulesSummaryChip
+                  label="Reserva mín."
+                  value={`${minBookingLeadHours} h`}
+                  tone="neutral"
+                />
+                <RulesSummaryChip
+                  label="Cancelación"
+                  value={`${minCancelLeadHours} h antes`}
+                  tone="neutral"
+                />
+                <RulesSummaryChip
+                  label="Activas/unidad"
+                  value={maxActiveReservations > 0 ? String(maxActiveReservations) : 'Sin límite'}
+                  tone="neutral"
+                />
+                {blockedDates.length > 0 ? (
+                  <RulesSummaryChip
+                    label="Días bloqueados"
+                    value={String(blockedDates.length)}
+                    tone="amber"
+                  />
+                ) : null}
+                <RulesSummaryChip
+                  label="Notificaciones"
+                  value={notifyReservationUpdates ? 'Activas' : 'Inactivas'}
+                  tone={notifyReservationUpdates ? 'green' : 'neutral'}
+                />
               </div>
             ) : null}
           </div>
@@ -223,11 +273,10 @@ export function SpacesManager({
         {rulesExpanded ? (
           <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4">
             <p className="text-sm text-muted">
-              Controla si los residentes con adeudos pueden reservar espacios marcados con restricción
-              por mora y cuántos días hacia adelante pueden elegir fecha.
+              Políticas globales que aplican a todas las amenidades y reservas del condominio.
             </p>
             <form
-              key={`${blockIfOverdue}-${bookingHorizonDays}`}
+              key={rulesFormKey}
               className="grid gap-4 sm:grid-cols-2"
               action={(formData) =>
                 run(updateSpacesSettings, formData, 'Reglas guardadas.', () => {
@@ -256,8 +305,77 @@ export function SpacesManager({
                   className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
                 />
                 <span className="text-xs text-subtle">
-                  Los residentes podrán elegir fechas dentro de este rango, incluyendo hoy (máx.{' '}
-                  {MAX_BOOKING_HORIZON_DAYS} días).
+                  Rango de fechas que el residente puede elegir, incluyendo hoy.
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-[var(--text)]">Anticipación mínima (horas)</span>
+                <input
+                  type="number"
+                  name="min_booking_lead_hours"
+                  min={0}
+                  max={MAX_LEAD_HOURS}
+                  defaultValue={minBookingLeadHours}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                />
+                <span className="text-xs text-subtle">
+                  Horas antes del inicio para poder reservar un horario (0 = sin restricción).
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-[var(--text)]">Plazo para cancelar (horas)</span>
+                <input
+                  type="number"
+                  name="min_cancel_lead_hours"
+                  min={0}
+                  max={MAX_LEAD_HOURS}
+                  defaultValue={minCancelLeadHours}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                />
+                <span className="text-xs text-subtle">
+                  El residente solo puede cancelar si faltan al menos estas horas para el inicio.
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-[var(--text)]">Máx. reservas activas por unidad</span>
+                <input
+                  type="number"
+                  name="max_active_reservations_per_unit"
+                  min={0}
+                  defaultValue={maxActiveReservations}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                />
+                <span className="text-xs text-subtle">
+                  Total entre todos los espacios. Usa 0 para sin límite global.
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
+                <input
+                  type="checkbox"
+                  name="default_requires_approval"
+                  defaultChecked={defaultRequiresApproval}
+                />
+                Nuevas amenidades requieren aprobación por defecto
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
+                <input
+                  type="checkbox"
+                  name="notify_reservation_updates"
+                  defaultChecked={notifyReservationUpdates}
+                />
+                Notificar al residente cuando se aprueba o cancela su reserva
+              </label>
+              <label className="grid gap-1 text-sm sm:col-span-2">
+                <span className="font-medium text-[var(--text)]">Días bloqueados (YYYY-MM-DD)</span>
+                <textarea
+                  name="blocked_dates"
+                  rows={4}
+                  defaultValue={formatBlockedDatesForInput(blockedDates)}
+                  placeholder={'2026-12-25\n2026-01-01'}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs"
+                />
+                <span className="text-xs text-subtle">
+                  Una fecha por línea. No habrá reservas en esos días en ningún espacio.
                 </span>
               </label>
               <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
@@ -324,7 +442,13 @@ export function SpacesManager({
             <button
               type="button"
               onClick={() =>
-                setEditing({ ...EMPTY_AMENITY, id: '', created_at: new Date().toISOString(), cluster: null })
+                setEditing({
+                  ...EMPTY_AMENITY,
+                  id: '',
+                  created_at: new Date().toISOString(),
+                  cluster: null,
+                  requires_approval: defaultRequiresApproval,
+                })
               }
               className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
             >

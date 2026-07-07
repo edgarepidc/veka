@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   amenityAppliesToUnitCluster,
+  canCancelByLead,
+  isBlockedDate,
   isDelinquentCharge,
   isWithinBookingHorizon,
+  meetsMinBookingLead,
+  minBookingLeadMessage,
+  minCancelLeadMessage,
   parseSpacesSettings,
   slotHasCapacity,
+  type SpacesSettings,
 } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
@@ -70,6 +76,7 @@ export function buildSlotsForDay(
   amenity: Amenity,
   day: Date,
   booked: { starts_at: string; ends_at: string }[],
+  minBookingLeadHours = 0,
 ): TimeSlot[] {
   const open = parseTimeOnDate(amenity.open_time, day);
   const close = parseTimeOnDate(amenity.close_time, day);
@@ -83,6 +90,7 @@ export function buildSlotsForDay(
     const endsAt = new Date(start + durationMs);
     const hasCapacity = slotHasCapacity(booked, startsAt, endsAt, maxConcurrent);
     const inPast = endsAt <= now;
+    const meetsLead = meetsMinBookingLead(startsAt, minBookingLeadHours, now);
     slots.push({
       startsAt,
       endsAt,
@@ -90,7 +98,7 @@ export function buildSlotsForDay(
         hour: '2-digit',
         minute: '2-digit',
       }).format(startsAt),
-      available: hasCapacity && !inPast,
+      available: hasCapacity && !inPast && meetsLead,
     });
   }
 
@@ -102,7 +110,7 @@ export function useSpaces(primary: ActiveMembership | null) {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [blockIfOverdue, setBlockIfOverdue] = useState(false);
-  const [bookingHorizonDays, setBookingHorizonDays] = useState(7);
+  const [spacesSettings, setSpacesSettings] = useState<SpacesSettings>({});
   const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | 'cluster'>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,7 +124,7 @@ export function useSpaces(primary: ActiveMembership | null) {
       setAmenities([]);
       setReservations([]);
       setBlockIfOverdue(false);
-      setBookingHorizonDays(7);
+      setSpacesSettings({});
       setLoading(false);
       return;
     }
@@ -148,9 +156,9 @@ export function useSpaces(primary: ActiveMembership | null) {
         .in('status', ['pending', 'overdue']),
     ]);
 
-    const spacesSettings = parseSpacesSettings(condoRes.data?.settings);
-    setBlockIfOverdue(Boolean(spacesSettings.block_reservations_if_overdue));
-    setBookingHorizonDays(spacesSettings.booking_horizon_days ?? 7);
+    const parsedSpacesSettings = parseSpacesSettings(condoRes.data?.settings);
+    setSpacesSettings(parsedSpacesSettings);
+    setBlockIfOverdue(Boolean(parsedSpacesSettings.block_reservations_if_overdue));
 
     const rawAmenities =
       (amenitiesRes.data as {
@@ -247,10 +255,20 @@ export function useSpaces(primary: ActiveMembership | null) {
     return data ?? [];
   }, []);
 
+  const bookingHorizonDays = spacesSettings.booking_horizon_days ?? 7;
+  const minBookingLeadHours = spacesSettings.min_booking_lead_hours ?? 2;
+  const minCancelLeadHours = spacesSettings.min_cancel_lead_hours ?? 24;
+  const maxActiveReservationsPerUnit = spacesSettings.max_active_reservations_per_unit ?? 0;
+  const blockedDates = spacesSettings.blocked_dates ?? [];
+
   const canBook = useCallback(
     async (amenity: Amenity, startsAt: Date, endsAt: Date) => {
       if (!user || !primary?.unit_id) {
         return { ok: false, message: 'Debes tener una unidad asignada.' };
+      }
+
+      if (isBlockedDate(startsAt, blockedDates)) {
+        return { ok: false, message: 'Ese día está bloqueado para reservas.' };
       }
 
       if (!isWithinBookingHorizon(startsAt, bookingHorizonDays)) {
@@ -258,6 +276,30 @@ export function useSpaces(primary: ActiveMembership | null) {
           ok: false,
           message: `Solo puedes reservar con hasta ${bookingHorizonDays} día(s) de anticipación.`,
         };
+      }
+
+      if (!meetsMinBookingLead(startsAt, minBookingLeadHours)) {
+        return {
+          ok: false,
+          message: minBookingLeadMessage(minBookingLeadHours),
+        };
+      }
+
+      if (maxActiveReservationsPerUnit > 0) {
+        const nowIso = new Date().toISOString();
+        const { data: activeForUnit } = await supabase
+          .from('reservations')
+          .select('id')
+          .eq('unit_id', primary.unit_id)
+          .in('status', ['confirmed', 'pending'])
+          .gte('ends_at', nowIso);
+
+        if ((activeForUnit?.length ?? 0) >= maxActiveReservationsPerUnit) {
+          return {
+            ok: false,
+            message: `Tu unidad ya tiene ${maxActiveReservationsPerUnit} reserva(s) activa(s).`,
+          };
+        }
       }
 
       if (blockIfOverdue && amenity.restrict_if_overdue) {
@@ -317,7 +359,17 @@ export function useSpaces(primary: ActiveMembership | null) {
 
       return { ok: true, message: null };
     },
-    [blockIfOverdue, bookingHorizonDays, fetchBookedSlots, hasOutstandingDebt, primary?.unit_id, user],
+    [
+      blockIfOverdue,
+      blockedDates,
+      bookingHorizonDays,
+      maxActiveReservationsPerUnit,
+      minBookingLeadHours,
+      fetchBookedSlots,
+      hasOutstandingDebt,
+      primary?.unit_id,
+      user,
+    ],
   );
 
   const createReservation = useCallback(
@@ -363,9 +415,32 @@ export function useSpaces(primary: ActiveMembership | null) {
     [canBook, fetchBookedSlots, primary, refresh, user],
   );
 
+  const canCancelReservation = useCallback(
+    (reservation: Reservation) => {
+      const startsAt = new Date(reservation.starts_at);
+      if (!canCancelByLead(startsAt, minCancelLeadHours)) {
+        return {
+          ok: false,
+          message: minCancelLeadMessage(minCancelLeadHours),
+        };
+      }
+      return { ok: true, message: null };
+    },
+    [minCancelLeadHours],
+  );
+
   const cancelReservation = useCallback(
     async (reservationId: string) => {
       setActionError(null);
+      const reservation = reservations.find((row) => row.id === reservationId);
+      if (reservation) {
+        const cancelCheck = canCancelReservation(reservation);
+        if (!cancelCheck.ok) {
+          setActionError(cancelCheck.message);
+          return { error: cancelCheck.message };
+        }
+      }
+
       const { error } = await supabase
         .from('reservations')
         .update({ status: 'cancelled' })
@@ -379,7 +454,7 @@ export function useSpaces(primary: ActiveMembership | null) {
       await refresh();
       return { error: null };
     },
-    [refresh],
+    [canCancelReservation, refresh, reservations],
   );
 
   const clearActionError = useCallback(() => setActionError(null), []);
@@ -396,12 +471,17 @@ export function useSpaces(primary: ActiveMembership | null) {
     unitClusterId,
     unitClusterName,
     blockIfOverdue,
+    spacesSettings,
     bookingHorizonDays,
+    minBookingLeadHours,
+    minCancelLeadHours,
+    blockedDates,
     clearActionError,
     refresh,
     fetchBookedSlots,
     createReservation,
     cancelReservation,
+    canCancelReservation,
     amenityName,
     amenityImageUrl,
   };
