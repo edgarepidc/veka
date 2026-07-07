@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   amenityImagePath,
   amenityScopeLabel,
@@ -69,6 +70,49 @@ function reservationStatusLabel(status: ReservationRow['status']): string {
   return 'Completada';
 }
 
+function RulesSummaryChip({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  tone?: 'neutral' | 'green' | 'amber';
+}) {
+  const tones = {
+    neutral: 'border-white/15 bg-white/5 text-subtle',
+    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
+    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${tones[tone]}`}
+    >
+      <span className="opacity-80">{label}</span>
+      <span>{value}</span>
+    </span>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-subtle">
+      <svg
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </span>
+  );
+}
+
 export function SpacesManager({
   amenities,
   reservations,
@@ -88,7 +132,9 @@ export function SpacesManager({
   const [draftId] = useState(() => crypto.randomUUID());
   const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | string>('all');
   const [reservationScopeFilter, setReservationScopeFilter] = useState<'all' | 'general' | string>('all');
+  const [rulesExpanded, setRulesExpanded] = useState(false);
   const [pending, start] = useTransition();
+  const router = useRouter();
 
   const draft = editing ?? ({ ...EMPTY_AMENITY, id: '', created_at: '', cluster: null } as AmenityRow);
   const isNew = !editing?.id;
@@ -121,67 +167,118 @@ export function SpacesManager({
 
   const bookingHorizonDays =
     spacesSettings.booking_horizon_days ?? DEFAULT_BOOKING_HORIZON_DAYS;
+  const blockIfOverdue = Boolean(spacesSettings.block_reservations_if_overdue);
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
     formData: FormData,
     ok: string,
+    onSuccess?: () => void,
   ) {
     setMessage(null);
     start(async () => {
       const result = await action(formData);
       setMessage(result.error ?? ok);
-      if (!result.error && ok.includes('guardad')) {
-        setEditing(null);
+      if (!result.error) {
+        onSuccess?.();
+        if (ok.includes('guardad')) {
+          setEditing(null);
+        }
       }
     });
   }
 
   return (
     <div className="space-y-6">
-      <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Reglas generales</h2>
-        <p className="mt-1 text-sm text-muted">
-          Controla si los residentes con adeudos pueden reservar espacios marcados con restricción por mora.
-        </p>
-        <form
-          className="mt-4 grid gap-4 sm:grid-cols-2"
-          action={(formData) => run(updateSpacesSettings, formData, 'Reglas guardadas.')}
+      <GlassCard className="overflow-hidden p-0">
+        <button
+          type="button"
+          onClick={() => setRulesExpanded((open) => !open)}
+          className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-white/5"
+          aria-expanded={rulesExpanded}
         >
-          <input type="hidden" name="condominium_id" value={condominiumId} />
-          <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
-            <input
-              type="checkbox"
-              name="block_reservations_if_overdue"
-              defaultChecked={Boolean(spacesSettings.block_reservations_if_overdue)}
-            />
-            Bloquear reservas si la unidad tiene adeudos
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium text-[var(--text)]">Anticipación para reservas (días)</span>
-            <input
-              type="number"
-              name="booking_horizon_days"
-              min={MIN_BOOKING_HORIZON_DAYS}
-              max={MAX_BOOKING_HORIZON_DAYS}
-              defaultValue={bookingHorizonDays}
-              className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-            />
-            <span className="text-xs text-subtle">
-              Los residentes podrán elegir fechas dentro de este rango, incluyendo hoy (máx.{' '}
-              {MAX_BOOKING_HORIZON_DAYS} días).
-            </span>
-          </label>
-          <div className="flex items-end sm:col-span-2">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              Guardar reglas
-            </button>
+          <Chevron open={rulesExpanded} />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold text-[var(--text)]">Reglas generales</h2>
+            <p className="mt-1 text-sm text-muted">
+              Políticas globales de reservas para todos los espacios del condominio.
+            </p>
+            {!rulesExpanded ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <RulesSummaryChip
+                  label="Bloqueo por mora"
+                  value={blockIfOverdue ? 'Activo' : 'Inactivo'}
+                  tone={blockIfOverdue ? 'amber' : 'neutral'}
+                />
+                <RulesSummaryChip
+                  label="Anticipación"
+                  value={`${bookingHorizonDays} día${bookingHorizonDays === 1 ? '' : 's'}`}
+                  tone="green"
+                />
+              </div>
+            ) : null}
           </div>
-        </form>
+        </button>
+
+        {rulesExpanded ? (
+          <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4">
+            <p className="text-sm text-muted">
+              Controla si los residentes con adeudos pueden reservar espacios marcados con restricción
+              por mora y cuántos días hacia adelante pueden elegir fecha.
+            </p>
+            <form
+              key={`${blockIfOverdue}-${bookingHorizonDays}`}
+              className="grid gap-4 sm:grid-cols-2"
+              action={(formData) =>
+                run(updateSpacesSettings, formData, 'Reglas guardadas.', () => {
+                  setRulesExpanded(false);
+                  router.refresh();
+                })
+              }
+            >
+              <input type="hidden" name="condominium_id" value={condominiumId} />
+              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
+                <input
+                  type="checkbox"
+                  name="block_reservations_if_overdue"
+                  defaultChecked={blockIfOverdue}
+                />
+                Bloquear reservas si la unidad tiene adeudos
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-[var(--text)]">Anticipación para reservas (días)</span>
+                <input
+                  type="number"
+                  name="booking_horizon_days"
+                  min={MIN_BOOKING_HORIZON_DAYS}
+                  max={MAX_BOOKING_HORIZON_DAYS}
+                  defaultValue={bookingHorizonDays}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                />
+                <span className="text-xs text-subtle">
+                  Los residentes podrán elegir fechas dentro de este rango, incluyendo hoy (máx.{' '}
+                  {MAX_BOOKING_HORIZON_DAYS} días).
+                </span>
+              </label>
+              <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  Guardar reglas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRulesExpanded(false)}
+                  className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
       </GlassCard>
 
       <div className="glass-tab-strip">
