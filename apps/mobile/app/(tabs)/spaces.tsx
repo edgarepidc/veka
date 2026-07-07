@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,13 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
+import { AMENITY_CARD_WIDTH, AmenityCard } from '@/components/AmenityCard';
 import { AmenityReservationModal } from '@/components/AmenityReservationModal';
 import { ReservationDetailModal } from '@/components/ReservationDetailModal';
+import { ReservationsCalendar } from '@/components/ReservationsCalendar';
 import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
-import { GlassCard } from '@/components/ui/GlassCard';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { Tag } from '@/components/ui/Tag';
+import { useAmenityAvailability } from '@/hooks/useAmenityAvailability';
 import { type Amenity, type Reservation, useSpaces } from '@/hooks/useSpaces';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
@@ -59,9 +62,12 @@ function reservationTone(status: Reservation['status']): 'green' | 'orange' | 'g
   return 'gray';
 }
 
+type ReservationsView = 'list' | 'calendar';
+
 export default function SpacesScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ reservationId?: string }>();
   const { primary, loading: membershipLoading } = useMembership();
   const {
     amenities,
@@ -85,10 +91,13 @@ export default function SpacesScreen() {
     allAmenities,
   } = useSpaces(primary);
 
+  const { availabilityLabels, availabilityLoading } = useAmenityAvailability(amenities, fetchBookedSlots);
+
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [reservationsView, setReservationsView] = useState<ReservationsView>('list');
 
   const amenityById = useMemo(
     () => new Map(allAmenities.map((amenity) => [amenity.id, amenity])),
@@ -106,9 +115,36 @@ export default function SpacesScreen() {
     return options;
   }, [primary?.unit?.cluster?.id, unitClusterName]);
 
+  const openAmenity = useCallback(
+    async (amenity: Amenity) => {
+      clearActionError();
+      setSuccessMessage(null);
+      if (blockIfOverdue && amenity.restrict_if_overdue) {
+        const delinquent = await checkUnitDebt();
+        if (delinquent) {
+          Alert.alert(
+            'Adeudos pendientes',
+            'Tu unidad tiene adeudos pendientes. Regulariza tu cuenta en Finanzas para reservar este espacio.',
+            [{ text: 'Entendido' }],
+          );
+          return;
+        }
+      }
+      setSelectedAmenity(amenity);
+    },
+    [blockIfOverdue, checkUnitDebt, clearActionError],
+  );
+
+  useEffect(() => {
+    const reservationId = params.reservationId;
+    if (!reservationId || reservations.length === 0) return;
+    const found = reservations.find((row) => row.id === reservationId);
+    if (found) setSelectedReservation(found);
+  }, [params.reservationId, reservations]);
+
   if (membershipLoading || loading) {
     return (
-      <ScreenBackground style={styles.centered}>
+      <ScreenBackground variant="plain" style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
       </ScreenBackground>
     );
@@ -116,20 +152,20 @@ export default function SpacesScreen() {
 
   if (!primary?.unit_id) {
     return (
-      <ScreenBackground style={[styles.centered, { padding: 24 }]}>
-        <GlassCard>
+      <ScreenBackground variant="plain" style={[styles.centered, { padding: 24 }]}>
+        <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin unidad asignada</Text>
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>
             Pide a la administración que te invite con tu correo electrónico.
           </Text>
-        </GlassCard>
+        </View>
       </ScreenBackground>
     );
   }
 
   return (
     <>
-      <ScreenBackground>
+      <ScreenBackground variant="plain">
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
           refreshControl={
@@ -170,8 +206,8 @@ export default function SpacesScreen() {
                   style={[
                     styles.scopeChip,
                     {
-                      backgroundColor: active ? theme.accent : 'transparent',
-                      borderColor: active ? theme.accent : theme.border,
+                      backgroundColor: active ? theme.accent : theme.surfaceMuted,
+                      borderColor: active ? theme.accent : 'transparent',
                     },
                   ]}
                 >
@@ -184,11 +220,17 @@ export default function SpacesScreen() {
           </ScrollView>
 
           <SectionLabel title="Amenidades" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tilesRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={AMENITY_CARD_WIDTH + 12}
+            contentContainerStyle={styles.tilesRow}
+          >
             {amenities.length === 0 ? (
-              <GlassCard style={styles.tile}>
+              <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay espacios en esta vista.</Text>
-              </GlassCard>
+              </View>
             ) : (
               amenities.map((amenity) => {
                 const imageUri = resolveStorageImageUrl(
@@ -198,54 +240,77 @@ export default function SpacesScreen() {
                 );
 
                 return (
-                  <GlassCard key={amenity.id} style={styles.tile}>
-                    {imageUri ? (
-                      <Image source={{ uri: imageUri }} style={styles.tileImage} resizeMode="cover" />
-                    ) : (
-                      <Text style={styles.tileEmoji}>{amenityEmoji(amenity.name)}</Text>
-                    )}
-                    <Text style={[styles.tileTitle, { color: theme.text }]}>{amenity.name}</Text>
-                    <Text style={[styles.tileMeta, { color: theme.textSubtle }]}>
-                      {amenity.cluster_name ?? 'Fraccionamiento'} · {amenity.open_time.slice(0, 5)}–
-                      {amenity.close_time.slice(0, 5)}
-                    </Text>
-                    {amenity.requires_approval ? (
-                      <Tag label="Requiere aprobación" tone="orange" />
-                    ) : null}
-                    <PrimaryButton
-                      label="Reservar"
-                      onPress={() => {
-                        void (async () => {
-                          clearActionError();
-                          setSuccessMessage(null);
-                          if (blockIfOverdue && amenity.restrict_if_overdue) {
-                            const delinquent = await checkUnitDebt();
-                            if (delinquent) {
-                              Alert.alert(
-                                'Adeudos pendientes',
-                                'Tu unidad tiene adeudos pendientes. Regulariza tu cuenta en Finanzas para reservar este espacio.',
-                                [{ text: 'Entendido' }],
-                              );
-                              return;
-                            }
-                          }
-                          setSelectedAmenity(amenity);
-                        })();
-                      }}
-                      style={styles.reserveBtn}
-                    />
-                  </GlassCard>
+                  <AmenityCard
+                    key={amenity.id}
+                    name={amenity.name}
+                    scopeLabel={amenity.cluster_name ?? 'Fraccionamiento'}
+                    hoursLabel={`${amenity.open_time.slice(0, 5)}–${amenity.close_time.slice(0, 5)}`}
+                    imageUri={imageUri}
+                    fallbackEmoji={amenityEmoji(amenity.name)}
+                    availabilityLabel={availabilityLabels[amenity.id]}
+                    availabilityLoading={availabilityLoading && !availabilityLabels[amenity.id]}
+                    requiresApproval={amenity.requires_approval}
+                    onPress={() => {
+                      void openAmenity(amenity);
+                    }}
+                  />
                 );
               })
             )}
           </ScrollView>
 
-          <SectionLabel title="Mis reservas" />
+          <View style={styles.reservationsHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.textSubtle }]}>Mis reservas</Text>
+            <View style={[styles.viewToggle, { backgroundColor: theme.surfaceMuted }]}>
+              <Pressable
+                onPress={() => setReservationsView('list')}
+                style={[
+                  styles.viewToggleBtn,
+                  reservationsView === 'list' ? { backgroundColor: theme.surface } : null,
+                ]}
+              >
+                <Text
+                  style={{
+                    color: reservationsView === 'list' ? theme.text : theme.textMuted,
+                    fontSize: 12,
+                    fontWeight: '600',
+                  }}
+                >
+                  Lista
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setReservationsView('calendar')}
+                style={[
+                  styles.viewToggleBtn,
+                  reservationsView === 'calendar' ? { backgroundColor: theme.surface } : null,
+                ]}
+              >
+                <Text
+                  style={{
+                    color: reservationsView === 'calendar' ? theme.text : theme.textMuted,
+                    fontSize: 12,
+                    fontWeight: '600',
+                  }}
+                >
+                  Calendario
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           <View style={styles.section}>
             {reservations.length === 0 ? (
-              <GlassCard>
+              <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
-              </GlassCard>
+              </View>
+            ) : reservationsView === 'calendar' ? (
+              <ReservationsCalendar
+                reservations={reservations}
+                onSelectReservation={setSelectedReservation}
+                amenityName={amenityName}
+                formatRange={formatReservationRange}
+              />
             ) : (
               reservations.map((reservation) => {
                 const imageUri = resolveStorageImageUrl(
@@ -257,17 +322,28 @@ export default function SpacesScreen() {
 
                 return (
                   <Pressable key={reservation.id} onPress={() => setSelectedReservation(reservation)}>
-                    <GlassCard style={styles.cardGap} noPadding>
+                    <View
+                      style={[
+                        styles.reservationRow,
+                        {
+                          backgroundColor: theme.surface,
+                          borderColor: theme.border,
+                          shadowColor: theme.shadow,
+                        },
+                      ]}
+                    >
                       {imageUri ? (
-                        <Image source={{ uri: imageUri }} style={styles.reservationImage} resizeMode="cover" />
+                        <Image source={{ uri: imageUri }} style={styles.reservationThumb} resizeMode="cover" />
                       ) : (
-                        <View style={[styles.reservationEmojiWrap, { backgroundColor: theme.surface }]}>
+                        <View style={[styles.reservationThumbFallback, { backgroundColor: theme.surfaceMuted }]}>
                           <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
                         </View>
                       )}
-                      <View style={styles.reservationBody}>
+                      <View style={styles.reservationContent}>
                         <View style={styles.cardTop}>
-                          <Text style={[styles.cardTitle, { color: theme.text }]}>{name}</Text>
+                          <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
+                            {name}
+                          </Text>
                           <Tag
                             label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
                             tone={reservationTone(reservation.status)}
@@ -278,7 +354,7 @@ export default function SpacesScreen() {
                         </Text>
                         <Text style={[styles.viewDetail, { color: theme.accent }]}>Ver detalle</Text>
                       </View>
-                    </GlassCard>
+                    </View>
                   </Pressable>
                 );
               })
@@ -331,6 +407,16 @@ export default function SpacesScreen() {
             : null
         }
         onClose={() => setSelectedReservation(null)}
+        onRebook={
+          selectedReservation
+            ? () => {
+                const amenity = amenityById.get(selectedReservation.amenity_id);
+                if (!amenity) return;
+                setSelectedReservation(null);
+                void openAmenity(amenity);
+              }
+            : undefined
+        }
         onCancel={async (reservationId) => {
           setCancellingId(reservationId);
           await cancelReservation(reservationId);
@@ -354,31 +440,65 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, marginHorizontal: 20, marginBottom: 8 },
   scopeRow: { gap: 8, paddingHorizontal: 20, marginBottom: 12 },
   scopeChip: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   tilesRow: { gap: 12, paddingHorizontal: 20, paddingBottom: 16 },
-  tile: { width: 156, minHeight: 210 },
-  tileImage: { width: '100%', height: 72, borderRadius: 12, marginBottom: 8 },
-  tileEmoji: { fontSize: 28, marginBottom: 8 },
-  tileTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
-  tileMeta: { fontSize: 11, marginBottom: 8 },
-  reserveBtn: { marginTop: 8, paddingVertical: 10, minHeight: 40 },
-  cardGap: { marginBottom: 12, overflow: 'hidden' },
-  reservationImage: { width: '100%', height: 120 },
-  reservationEmojiWrap: {
-    width: '100%',
-    height: 72,
+  reservationsHeader: {
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    borderRadius: 999,
+    padding: 3,
+    gap: 2,
+  },
+  viewToggleBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  reservationRow: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: Platform.OS === 'web' ? 0.04 : 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reservationThumb: { width: 88, height: 88 },
+  reservationThumbFallback: {
+    width: 88,
+    height: 88,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reservationEmoji: { fontSize: 32 },
-  reservationBody: { padding: 16 },
-  viewDetail: { fontSize: 13, fontWeight: '600', marginTop: 10 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
+  reservationEmoji: { fontSize: 28 },
+  reservationContent: { flex: 1, padding: 12, justifyContent: 'center' },
+  viewDetail: { fontSize: 13, fontWeight: '600', marginTop: 8 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  emptyCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: 16,
+    minWidth: 200,
+  },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   emptyText: { fontSize: 13, lineHeight: 20, textAlign: 'center' },
 });

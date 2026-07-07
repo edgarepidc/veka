@@ -19,6 +19,7 @@ import {
 import {
   approveReservation,
   cancelReservation,
+  rejectReservation,
   toggleAmenityActive,
   updateSpacesSettings,
   upsertAmenity,
@@ -728,18 +729,41 @@ export function SpacesManager({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {reservation.status === 'pending' ? (
-                      <form action={(formData) => run(approveReservation, formData, 'Reserva aprobada.')}>
-                        <input type="hidden" name="reservation_id" value={reservation.id} />
-                        <button
-                          type="submit"
-                          disabled={pending}
-                          className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
+                      <>
+                        <form action={(formData) => run(approveReservation, formData, 'Reserva aprobada.')}>
+                          <input type="hidden" name="reservation_id" value={reservation.id} />
+                          <button
+                            type="submit"
+                            disabled={pending}
+                            className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
+                          >
+                            Aprobar
+                          </button>
+                        </form>
+                        <form
+                          action={(formData) => run(rejectReservation, formData, 'Solicitud rechazada.')}
+                          onSubmit={(event) => {
+                            if (
+                              !window.confirm(
+                                `¿Rechazar la solicitud de ${amenityLabel} (unidad ${reservation.unit?.identifier ?? '—'})?`,
+                              )
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
                         >
-                          Aprobar
-                        </button>
-                      </form>
+                          <input type="hidden" name="reservation_id" value={reservation.id} />
+                          <button
+                            type="submit"
+                            disabled={pending}
+                            className="rounded-lg border border-red-400/40 px-3 py-1.5 text-sm text-red-200"
+                          >
+                            Rechazar
+                          </button>
+                        </form>
+                      </>
                     ) : null}
-                    {reservation.status === 'confirmed' || reservation.status === 'pending' ? (
+                    {reservation.status === 'confirmed' ? (
                       <form
                         action={(formData) => run(cancelReservation, formData, 'Reserva cancelada.')}
                         onSubmit={(event) => {

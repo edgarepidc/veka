@@ -58,12 +58,17 @@ async function savePushToken(userId: string, token: string): Promise<void> {
 
 function openNotificationTarget(data: Record<string, unknown> | undefined) {
   const screen = typeof data?.screen === 'string' ? data.screen : null;
+  const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
   if (screen === 'finance') {
     router.push('/finance');
     return;
   }
   if (screen === 'spaces') {
-    router.push('/spaces');
+    if (reservationId) {
+      router.push({ pathname: '/spaces', params: { reservationId } });
+    } else {
+      router.push('/spaces');
+    }
     return;
   }
   if (screen === 'security') {

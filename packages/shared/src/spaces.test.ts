@@ -6,6 +6,8 @@ import {
   bookingDayOptionsFiltered,
   canCancelByLead,
   countOverlappingBookings,
+  countAvailableSlots,
+  formatTodayAvailabilityLabel,
   formatDateKey,
   isBlockedDate,
   isWithinBookingHorizon,
@@ -81,5 +83,20 @@ describe('spaces reservation rules', () => {
     assert.equal(countOverlappingBookings(booked, startsAt, endsAt), 2);
     assert.equal(slotHasCapacity(booked, startsAt, endsAt, 2), false);
     assert.equal(slotHasCapacity(booked, startsAt, endsAt, 3), true);
+  });
+
+  it('formats today availability labels', () => {
+    assert.equal(formatTodayAvailabilityLabel(0), 'Lleno hoy');
+    assert.equal(formatTodayAvailabilityLabel(1), '1 horario hoy');
+    assert.equal(formatTodayAvailabilityLabel(3), '3 horarios hoy');
+  });
+
+  it('counts available slots', () => {
+    const slots = [
+      { startsAt: new Date(), endsAt: new Date(), available: true },
+      { startsAt: new Date(), endsAt: new Date(), available: false },
+      { startsAt: new Date(), endsAt: new Date(), available: true },
+    ];
+    assert.equal(countAvailableSlots(slots), 2);
   });
 });

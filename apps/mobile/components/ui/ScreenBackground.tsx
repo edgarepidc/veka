@@ -4,9 +4,24 @@ import { StyleSheet, View, type ViewProps } from 'react-native';
 import { BackgroundGradientWashes } from '@/components/ui/BackgroundGradientWashes';
 import { useTheme } from '@/hooks/useTheme';
 
-export function ScreenBackground({ children, style, ...props }: ViewProps) {
+interface ScreenBackgroundProps extends ViewProps {
+  variant?: 'gradient' | 'plain';
+}
+
+export function ScreenBackground({ children, style, variant = 'gradient', ...props }: ScreenBackgroundProps) {
   const theme = useTheme();
   const isDark = theme.mode === 'dark';
+
+  if (variant === 'plain') {
+    return (
+      <View
+        style={[styles.root, { backgroundColor: isDark ? theme.background : '#FFFFFF' }, style]}
+        {...props}
+      >
+        <View style={styles.content}>{children}</View>
+      </View>
+    );
+  }
 
   const washes = isDark
     ? [

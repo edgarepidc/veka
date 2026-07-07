@@ -276,7 +276,7 @@ export async function deliverChargeReminder(
   return { pushSent, emailSent, skipped, failures };
 }
 
-export type ReservationNotificationKind = 'approved' | 'cancelled';
+export type ReservationNotificationKind = 'approved' | 'cancelled' | 'rejected';
 
 export interface ReservationNotificationInput {
   condominiumId: string;
@@ -306,11 +306,17 @@ export async function deliverReservationUpdate(
   });
 
   const title =
-    input.kind === 'approved' ? 'Reserva confirmada — Veka' : 'Reserva cancelada — Veka';
+    input.kind === 'approved'
+      ? 'Reserva confirmada — Veka'
+      : input.kind === 'rejected'
+        ? 'Solicitud rechazada — Veka'
+        : 'Reserva cancelada — Veka';
   const message =
     input.kind === 'approved'
       ? `Tu reserva de ${input.amenityName} (${when}) fue aprobada.`
-      : `Tu reserva de ${input.amenityName} (${when}) fue cancelada por administración.`;
+      : input.kind === 'rejected'
+        ? `Tu solicitud de ${input.amenityName} (${when}) fue rechazada por administración.`
+        : `Tu reserva de ${input.amenityName} (${when}) fue cancelada por administración.`;
 
   let pushSent = 0;
   let emailSent = 0;

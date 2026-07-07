@@ -38,7 +38,7 @@ async function notifyReservationUpdate(
   supabase: Awaited<ReturnType<typeof createClient>>,
   condominiumId: string,
   reservationId: string,
-  kind: 'approved' | 'cancelled',
+  kind: 'approved' | 'cancelled' | 'rejected',
 ) {
   const { data: condo } = await supabase
     .from('condominiums')
@@ -224,11 +224,38 @@ export async function cancelReservation(formData: FormData) {
     .update({ status: 'cancelled' })
     .eq('id', reservationId)
     .eq('condominium_id', condominiumId)
-    .in('status', ['confirmed', 'pending']);
+    .eq('status', 'confirmed');
 
   if (error) return { error: error.message };
 
   await notifyReservationUpdate(supabase, condominiumId, reservationId, 'cancelled');
+
+  revalidatePath('/espacios');
+  return { success: true };
+}
+
+export async function rejectReservation(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const reservationId = String(formData.get('reservation_id') ?? '').trim();
+  if (!reservationId) return { error: 'Reserva inválida.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('reservations')
+    .update({ status: 'cancelled' })
+    .eq('id', reservationId)
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'pending');
+
+  if (error) return { error: error.message };
+
+  await notifyReservationUpdate(supabase, condominiumId, reservationId, 'rejected');
 
   revalidatePath('/espacios');
   return { success: true };

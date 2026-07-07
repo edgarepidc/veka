@@ -227,3 +227,19 @@ export function slotHasCapacity(
 ): boolean {
   return countOverlappingBookings(booked, startsAt, endsAt) < Math.max(1, maxConcurrent);
 }
+
+export interface TimeSlotAvailability {
+  startsAt: Date;
+  endsAt: Date;
+  available: boolean;
+}
+
+export function countAvailableSlots(slots: TimeSlotAvailability[]): number {
+  return slots.filter((slot) => slot.available).length;
+}
+
+export function formatTodayAvailabilityLabel(availableCount: number): string {
+  if (availableCount <= 0) return 'Lleno hoy';
+  if (availableCount === 1) return '1 horario hoy';
+  return `${availableCount} horarios hoy`;
+}

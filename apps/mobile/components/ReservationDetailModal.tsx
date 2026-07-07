@@ -21,6 +21,7 @@ interface ReservationDetailModalProps {
   cancelBlockedMessage?: string | null;
   onClose: () => void;
   onCancel: (reservationId: string) => Promise<void>;
+  onRebook?: () => void;
   formatRange: (startsAt: string, endsAt: string) => string;
   fallbackEmoji: string;
 }
@@ -49,6 +50,7 @@ export function ReservationDetailModal({
   cancelBlockedMessage,
   onClose,
   onCancel,
+  onRebook,
   formatRange,
   fallbackEmoji,
 }: ReservationDetailModalProps) {
@@ -123,6 +125,13 @@ export function ReservationDetailModal({
 
           {reservation.status === 'confirmed' || reservation.status === 'pending' ? (
             <>
+              {onRebook ? (
+                <PrimaryButton
+                  label="Reservar de nuevo"
+                  onPress={onRebook}
+                  style={{ marginTop: 20 }}
+                />
+              ) : null}
               {!canCancel && cancelBlockedMessage ? (
                 <Text style={[styles.note, { color: colors.muted }]}>{cancelBlockedMessage}</Text>
               ) : null}
@@ -131,7 +140,7 @@ export function ReservationDetailModal({
                 variant="secondary"
                 disabled={cancelling || !canCancel}
                 onPress={handleCancel}
-                style={{ marginTop: 20 }}
+                style={{ marginTop: onRebook ? 12 : 20 }}
               />
             </>
           ) : null}
