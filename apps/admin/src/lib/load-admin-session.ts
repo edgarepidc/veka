@@ -1,4 +1,4 @@
-import { isAdminRole, type MembershipRole } from '@veka/shared';
+import { canAccessSecurityPanel, isAdminRole, type MembershipRole } from '@veka/shared';
 
 import {
   loadUserCondominiums,
@@ -30,6 +30,7 @@ export interface AdminSession {
     unit_identifier: string | null;
   } | null;
   isAdmin: boolean;
+  canAccessSecurity: boolean;
   isImpersonating: boolean;
   impersonatedCondominiumStatus: CondominiumStatus | null;
 }
@@ -116,6 +117,7 @@ export async function loadAdminSession(): Promise<AdminSession | null> {
         }
       : null,
     isAdmin: isAdminRole(role),
+    canAccessSecurity: canAccessSecurityPanel(role),
     isImpersonating,
     impersonatedCondominiumStatus,
   };

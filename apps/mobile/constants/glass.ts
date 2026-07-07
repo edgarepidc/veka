@@ -14,36 +14,36 @@ export function glassBlurTint(theme: AppTheme): 'light' | 'dark' | 'default' {
 
 export function glassBlurIntensity(theme: AppTheme, surface: 'card' | 'bar' | 'input' | 'chip' = 'card'): number {
   if (theme.mode === 'dark') {
-    if (surface === 'bar') return 40;
-    if (surface === 'input') return 28;
-    if (surface === 'chip') return 24;
-    return 36;
+    if (surface === 'bar') return 55;
+    if (surface === 'input') return 40;
+    if (surface === 'chip') return 32;
+    return 48;
   }
-  if (surface === 'bar') return 80;
-  if (surface === 'input') return 48;
-  if (surface === 'chip') return 40;
-  return 64;
+  if (surface === 'bar') return 100;
+  if (surface === 'input') return 72;
+  if (surface === 'chip') return 56;
+  return 88;
 }
 
 export function glassOverlay(theme: AppTheme, surface: 'card' | 'bar' | 'input' | 'chip' = 'card'): string {
   if (theme.mode === 'dark') {
-    if (surface === 'bar') return 'rgba(30, 41, 59, 0.55)';
-    if (surface === 'input') return 'rgba(30, 41, 59, 0.66)';
-    if (surface === 'chip') return 'rgba(51, 65, 85, 0.58)';
-    return 'rgba(30, 41, 59, 0.5)';
+    if (surface === 'bar') return 'rgba(30, 41, 59, 0.38)';
+    if (surface === 'input') return 'rgba(30, 41, 59, 0.48)';
+    if (surface === 'chip') return 'rgba(51, 65, 85, 0.42)';
+    return 'rgba(30, 41, 59, 0.32)';
   }
-  if (surface === 'bar') return 'rgba(255, 255, 255, 0.62)';
-  if (surface === 'input') return 'rgba(255, 255, 255, 0.78)';
-  if (surface === 'chip') return 'rgba(255, 255, 255, 0.68)';
-  return 'rgba(255, 255, 255, 0.55)';
+  if (surface === 'bar') return 'rgba(255, 255, 255, 0.38)';
+  if (surface === 'input') return 'rgba(255, 255, 255, 0.45)';
+  if (surface === 'chip') return 'rgba(255, 255, 255, 0.4)';
+  return 'rgba(255, 255, 255, 0.28)';
 }
 
 export function glassBorderColor(theme: AppTheme): string {
-  return theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.88)';
+  return theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.95)';
 }
 
 export function glassInnerBorderColor(theme: AppTheme): string {
-  return theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.55)';
+  return theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.72)';
 }
 
 export function glassVibrancyFill(theme: AppTheme, accent: string): string {

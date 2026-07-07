@@ -128,3 +128,56 @@ export async function registerPackage(formData: FormData) {
   revalidatePath('/seguridad');
   return { ok: true };
 }
+
+export async function deliverPackage(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado.' };
+
+  const packageId = String(formData.get('package_id') ?? '').trim();
+  const deliveredTo = String(formData.get('delivered_to') ?? '').trim();
+
+  if (!packageId) return { error: 'Paquete inválido.' };
+
+  const { error } = await supabase
+    .from('packages')
+    .update({
+      status: 'delivered',
+      delivered_at: new Date().toISOString(),
+      delivered_to: deliveredTo || null,
+    })
+    .eq('id', packageId)
+    .eq('status', 'received');
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/seguridad');
+  return { ok: true };
+}
+
+export async function checkOutVisit(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado.' };
+
+  const visitId = String(formData.get('visit_id') ?? '').trim();
+  if (!visitId) return { error: 'Visita inválida.' };
+
+  const { error } = await supabase
+    .from('visits')
+    .update({ checked_out_at: new Date().toISOString() })
+    .eq('id', visitId)
+    .is('checked_out_at', null)
+    .not('checked_in_at', 'is', null);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/seguridad');
+  return { ok: true };
+}

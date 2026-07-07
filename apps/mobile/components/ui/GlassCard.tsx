@@ -61,12 +61,12 @@ export function GlassCard({ children, style, padding = 16, noPadding, ...props }
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: Platform.OS === 'web' ? 0.06 : 0.16,
-    shadowRadius: 24,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: Platform.OS === 'web' ? 0.08 : 0.22,
+    shadowRadius: 28,
+    elevation: 6,
   },
   innerHighlight: {
     ...StyleSheet.absoluteFillObject,

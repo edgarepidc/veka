@@ -10,6 +10,7 @@ export const MEMBERSHIP_ROLES = [
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
 
 export const ADMIN_ROLES: MembershipRole[] = ['super_admin', 'admin'];
+export const SECURITY_PANEL_ROLES: MembershipRole[] = ['super_admin', 'admin', 'guard', 'staff'];
 export const STAFF_ROLES: MembershipRole[] = ['super_admin', 'admin', 'guard', 'staff'];
 export const FINANCE_VIEW_ROLES: MembershipRole[] = [
   'super_admin',
@@ -20,4 +21,8 @@ export const FINANCE_VIEW_ROLES: MembershipRole[] = [
 
 export function isAdminRole(role: MembershipRole): boolean {
   return ADMIN_ROLES.includes(role);
+}
+
+export function canAccessSecurityPanel(role: MembershipRole): boolean {
+  return SECURITY_PANEL_ROLES.includes(role);
 }

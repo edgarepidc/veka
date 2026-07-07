@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { acceptPendingInvitations } from '@/lib/accept-invitations';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadPlatformSession } from '@/lib/platform-admin';
+import { panelHomePath } from '@/lib/route-access';
 
 export async function GET() {
   await acceptPendingInvitations();
@@ -25,5 +26,10 @@ export async function GET() {
     return NextResponse.json({ path: '/' });
   }
 
-  return NextResponse.json({ path: '/mi-cuenta' });
+  return NextResponse.json({
+    path: panelHomePath({
+      isAdmin: session.isAdmin,
+      canAccessSecurity: session.canAccessSecurity,
+    }),
+  });
 }

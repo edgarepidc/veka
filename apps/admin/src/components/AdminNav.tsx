@@ -27,10 +27,19 @@ function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+const GUARD_NAV = [
+  { href: '/seguridad', label: 'Caseta', icon: '🔒' },
+  { href: '/configuracion/perfil', label: 'Mi perfil', icon: '👤' },
+];
+
 export function AdminNav() {
   const pathname = usePathname();
   const session = usePanelSession();
-  const nav = session.isAdmin ? ADMIN_NAV : RESIDENT_NAV;
+  const nav = session.isAdmin
+    ? ADMIN_NAV
+    : session.canAccessSecurity
+      ? GUARD_NAV
+      : RESIDENT_NAV;
 
   return (
     <nav className="flex flex-1 flex-col gap-1 p-3">

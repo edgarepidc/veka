@@ -1,12 +1,14 @@
 import { PackageRegisterPanel } from '@/components/PackageRegisterPanel';
+import { SecurityOpsPanels } from '@/components/SecurityOpsPanels';
 import { VisitCheckInPanel } from '@/components/VisitCheckInPanel';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { requireAdminSession } from '@/lib/require-admin';
+import { loadSeguridadData } from '@/lib/load-seguridad';
+import { requireSecuritySession } from '@/lib/require-security';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function SeguridadPage() {
-  const session = await requireAdminSession();
+  const session = await requireSecuritySession();
   const condominiumId = session.activeCondominiumId;
 
   if (!condominiumId) {
@@ -14,37 +16,42 @@ export default async function SeguridadPage() {
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Seguridad" highlight="y acceso" />
         <GlassCard>
-          <p className="text-[var(--text-muted)]">Selecciona un condominio para registrar paquetes.</p>
+          <p className="text-[var(--text-muted)]">Selecciona un condominio para operar caseta.</p>
         </GlassCard>
       </div>
     );
   }
 
   const supabase = await createClient();
-
-  const { data: units } = await supabase
-    .from('units')
-    .select('id, identifier')
-    .eq('condominium_id', condominiumId)
-    .order('identifier');
+  const [{ data: units }, ops] = await Promise.all([
+    supabase
+      .from('units')
+      .select('id, identifier')
+      .eq('condominium_id', condominiumId)
+      .order('identifier'),
+    loadSeguridadData(condominiumId),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Seguridad"
         highlight="y acceso"
-        subtitle="Paquetería en caseta y validación de visitas (QR en app móvil)."
+        subtitle="Paquetería, visitas del día y validación de pases QR."
       />
+
+      <VisitCheckInPanel condominiumId={condominiumId} />
 
       <PackageRegisterPanel condominiumId={condominiumId} units={units ?? []} />
 
-      <VisitCheckInPanel condominiumId={condominiumId} />
+      <SecurityOpsPanels visits={ops.visits} packages={ops.packages} />
 
       <GlassCard>
         <h2 className="text-lg font-semibold text-[var(--text)]">Cómo funciona</h2>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          El residente genera el pase en la app móvil y puede guardarlo como imagen. En caseta escanea el QR o
-          ingresa la referencia; el sistema valida vigencia y registra el ingreso automáticamente.
+          El residente genera el pase en la app móvil. En caseta escanea el QR o ingresa la referencia; el
+          sistema valida vigencia y registra el ingreso. Los guardias pueden usar este panel desde el navegador
+          del celular o una tablet en recepción.
         </p>
       </GlassCard>
     </div>

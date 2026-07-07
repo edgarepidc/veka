@@ -7,7 +7,7 @@ import { APP_NAME } from '@veka/shared';
 
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { formatHomeStatMoney, loadHomeStats } from '@/lib/load-home-stats';
-import { residentHomePath } from '@/lib/route-access';
+import { panelHomePath } from '@/lib/route-access';
 
 const modules = [
   { title: 'Finanzas', description: 'Cuotas, pagos, egresos y fondos.', href: '/finanzas', icon: '💳' },
@@ -31,7 +31,7 @@ const modules = [
 export default async function AdminHomePage() {
   const session = await loadAdminSession();
   if (!session) redirect('/login');
-  if (!session.isAdmin) redirect(residentHomePath());
+  if (!session.isAdmin) redirect(panelHomePath(session));
 
   const condoName = session.membership?.condominium_name ?? 'Condominio';
   const stats =

@@ -67,7 +67,7 @@ export function AdminShell({
         <aside className="glass-sidebar hidden w-64 shrink-0 lg:flex lg:flex-col">
           <div className="border-b border-white/10 px-5 py-6">
             <p className="text-xs font-semibold uppercase tracking-widest text-accent">
-              {session.isAdmin ? 'Panel admin' : 'Portal residente'}
+              {session.isAdmin ? 'Panel admin' : session.canAccessSecurity ? 'Caseta' : 'Portal residente'}
             </p>
             <div className="mt-2 flex items-center gap-3">
               {logoUrl ? (
@@ -130,7 +130,7 @@ export function AdminShell({
             </div>
           </header>
 
-          {!session.isAdmin ? (
+          {!session.isAdmin && !session.canAccessSecurity ? (
             <div className="border-b border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 sm:px-6">
               Estás en el portal de residente. Para pagar cuotas ve a{' '}
               <a href="/mi-cuenta" className="font-semibold underline">

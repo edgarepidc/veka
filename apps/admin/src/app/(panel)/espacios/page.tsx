@@ -1,13 +1,20 @@
-import { GlassCard } from '@/components/ui/GlassCard';
+import { SpacesManager } from '@/app/(panel)/espacios/SpacesManager';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { requireAdminSession } from '@/lib/require-admin';
+import { loadEspaciosData } from '@/lib/load-espacios';
 
-export default function EspaciosPage() {
+export default async function EspaciosPage() {
+  await requireAdminSession();
+  const data = await loadEspaciosData();
+
   return (
-    <div className="mx-auto max-w-3xl">
-      <PageHeader title="Espacios" highlight="comunes" />
-      <GlassCard>
-        <p className="text-muted">Módulo en construcción — amenidades y reservas.</p>
-      </GlassCard>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Espacios"
+        highlight="comunes"
+        subtitle="Amenidades, horarios y reservas de áreas comunes."
+      />
+      <SpacesManager {...data} />
     </div>
   );
 }
