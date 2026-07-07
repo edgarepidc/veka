@@ -1,15 +1,9 @@
-import dynamic from 'next/dynamic';
-
 import { PackageRegisterPanel } from '@/components/PackageRegisterPanel';
+import { VisitCheckInPanel } from '@/components/VisitCheckInPanel';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { requireAdminSession } from '@/lib/require-admin';
 import { createClient } from '@/lib/supabase/server';
-
-const VisitCheckInPanel = dynamic(
-  () => import('@/components/VisitCheckInPanel').then((module) => module.VisitCheckInPanel),
-  { ssr: false },
-);
 
 export default async function SeguridadPage() {
   const session = await requireAdminSession();
