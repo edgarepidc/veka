@@ -34,12 +34,82 @@ values
   ('22222222-2222-2222-2222-222222222222', 'reserve', 420000.00, current_date)
 on conflict (condominium_id, fund_type) do update set balance = excluded.balance;
 
-insert into public.amenities (condominium_id, name, description, max_daily_reservations, max_monthly_reservations)
+insert into public.amenities (
+  id,
+  condominium_id,
+  cluster_id,
+  name,
+  description,
+  image_url,
+  max_daily_reservations,
+  max_monthly_reservations,
+  max_concurrent_reservations,
+  requires_approval,
+  restrict_if_overdue,
+  open_time,
+  close_time,
+  slot_duration_minutes
+)
 values
-  ('22222222-2222-2222-2222-222222222222', 'Alberca', 'Área de alberca y chapoteadero', 1, 8),
-  ('22222222-2222-2222-2222-222222222222', 'Gimnasio', 'Gimnasio equipado', 2, 20),
-  ('22222222-2222-2222-2222-222222222222', 'Salón de eventos', 'Salón para 40 personas', 1, 2)
-on conflict do nothing;
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Alberca',
+    'Área de alberca y chapoteadero',
+    '22222222-2222-2222-2222-222222222222/amenities/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01.jpg',
+    1,
+    8,
+    1,
+    false,
+    true,
+    '08:00',
+    '20:00',
+    60
+  ),
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Gimnasio',
+    'Gimnasio equipado con cardio y pesas',
+    '22222222-2222-2222-2222-222222222222/amenities/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02.jpg',
+    2,
+    20,
+    8,
+    false,
+    false,
+    '06:00',
+    '22:00',
+    60
+  ),
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03',
+    '22222222-2222-2222-2222-222222222222',
+    null,
+    'Salón de eventos',
+    'Salón para 40 personas — requiere aprobación de administración',
+    '22222222-2222-2222-2222-222222222222/amenities/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03.jpg',
+    1,
+    2,
+    1,
+    true,
+    true,
+    '09:00',
+    '22:00',
+    120
+  )
+on conflict (id) do update set
+  description = excluded.description,
+  image_url = excluded.image_url,
+  max_daily_reservations = excluded.max_daily_reservations,
+  max_monthly_reservations = excluded.max_monthly_reservations,
+  max_concurrent_reservations = excluded.max_concurrent_reservations,
+  requires_approval = excluded.requires_approval,
+  restrict_if_overdue = excluded.restrict_if_overdue,
+  open_time = excluded.open_time,
+  close_time = excluded.close_time,
+  slot_duration_minutes = excluded.slot_duration_minutes;
 
 insert into public.notification_rules (condominium_id, rule_key, days_before, days_after, is_enabled)
 values

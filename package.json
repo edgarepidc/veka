@@ -23,7 +23,8 @@
     "setup:supabase": "bash scripts/setup-supabase.sh",
     "create:supabase": "bash scripts/create-supabase-project.sh",
     "link:supabase": "bash scripts/link-supabase-project.sh",
-    "setup:image-storage": "node scripts/setup-image-storage.mjs"
+    "setup:image-storage": "node scripts/setup-image-storage.mjs",
+    "seed:amenity-images": "node scripts/seed-amenity-demo-images.mjs"
   },
   "devDependencies": {
     "postgres": "^3.4.7",
