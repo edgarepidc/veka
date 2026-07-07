@@ -41,6 +41,7 @@ export interface DashboardReservation {
   starts_at: string;
   ends_at: string;
   amenity_name: string;
+  status: 'confirmed' | 'pending';
 }
 
 export interface DashboardPackage {
@@ -117,9 +118,9 @@ export function useDashboard(primary: ActiveMembership | null) {
         .limit(1),
       supabase
         .from('reservations')
-        .select('id, starts_at, ends_at, amenity:amenities (name)')
+        .select('id, starts_at, ends_at, status, amenity:amenities (name)')
         .eq('unit_id', primary.unit_id)
-        .eq('status', 'confirmed')
+        .in('status', ['confirmed', 'pending'])
         .gte('ends_at', now)
         .order('starts_at', { ascending: true })
         .limit(1),
@@ -137,6 +138,7 @@ export function useDashboard(primary: ActiveMembership | null) {
           id: string;
           starts_at: string;
           ends_at: string;
+          status: 'confirmed' | 'pending';
           amenity: { name: string } | { name: string }[] | null;
         }
       | undefined;
@@ -165,6 +167,7 @@ export function useDashboard(primary: ActiveMembership | null) {
             starts_at: reservationRow.starts_at,
             ends_at: reservationRow.ends_at,
             amenity_name: amenityName ?? 'Espacio',
+            status: reservationRow.status,
           }
         : null,
       pendingPackage: (packagesRes.data?.[0] as DashboardPackage | undefined) ?? null,

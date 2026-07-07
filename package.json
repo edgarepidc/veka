@@ -15,6 +15,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:shared": "npm run test --workspace=@veka/shared",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
@@ -25,7 +27,8 @@
     "link:supabase": "bash scripts/link-supabase-project.sh",
     "setup:image-storage": "node scripts/setup-image-storage.mjs",
     "seed:amenity-images": "node scripts/seed-amenity-demo-images.mjs",
-    "seed:amenity-rules": "node scripts/seed-amenity-rules.mjs"
+    "seed:amenity-rules": "node scripts/seed-amenity-rules.mjs",
+    "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs"
   },
   "devDependencies": {
     "postgres": "^3.4.7",

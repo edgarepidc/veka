@@ -161,8 +161,15 @@ export default function DashboardScreen() {
                   {data.upcomingReservation ? (
                     <GlassCard style={styles.cardGap}>
                       <View style={styles.cardTop}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>Reserva confirmada</Text>
-                        <Tag label="Activa" tone="green" />
+                        <Text style={[styles.cardTitle, { color: theme.text }]}>
+                          {data.upcomingReservation.status === 'pending'
+                            ? 'Reserva pendiente'
+                            : 'Reserva confirmada'}
+                        </Text>
+                        <Tag
+                          label={data.upcomingReservation.status === 'pending' ? 'Pendiente' : 'Activa'}
+                          tone={data.upcomingReservation.status === 'pending' ? 'orange' : 'green'}
+                        />
                       </View>
                       <Text style={[styles.cardBody, { color: theme.textMuted }]}>
                         {data.upcomingReservation.amenity_name} · {formatDateTime(data.upcomingReservation.starts_at)}

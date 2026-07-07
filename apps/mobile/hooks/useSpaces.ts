@@ -398,16 +398,11 @@ export function useSpaces(primary: ActiveMembership | null) {
         return { error: message, pending: false };
       }
 
-      const status = amenity.requires_approval ? 'pending' : 'confirmed';
-
-      const { error } = await supabase.from('reservations').insert({
-        amenity_id: amenity.id,
-        condominium_id: primary.condominium_id,
-        unit_id: primary.unit_id,
-        user_id: user.id,
-        starts_at: startsAt.toISOString(),
-        ends_at: endsAt.toISOString(),
-        status,
+      const { error } = await supabase.rpc('create_reservation_rpc', {
+        p_amenity_id: amenity.id,
+        p_unit_id: primary.unit_id,
+        p_starts_at: startsAt.toISOString(),
+        p_ends_at: endsAt.toISOString(),
       });
 
       if (error) {
@@ -415,8 +410,9 @@ export function useSpaces(primary: ActiveMembership | null) {
         return { error: error.message, pending: false };
       }
 
+      const pending = amenity.requires_approval;
       await refresh();
-      return { error: null, pending: status === 'pending' };
+      return { error: null, pending };
     },
     [canBook, fetchBookedSlots, primary, refresh, user],
   );
@@ -449,10 +445,9 @@ export function useSpaces(primary: ActiveMembership | null) {
         }
       }
 
-      const { error } = await supabase
-        .from('reservations')
-        .update({ status: 'cancelled' })
-        .eq('id', reservationId);
+      const { error } = await supabase.rpc('cancel_reservation_rpc', {
+        p_reservation_id: reservationId,
+      });
 
       if (error) {
         setActionError(error.message);
@@ -464,6 +459,16 @@ export function useSpaces(primary: ActiveMembership | null) {
     },
     [amenities, canCancelReservation, refresh, reservations],
   );
+
+  const checkUnitDebt = useCallback(async () => {
+    if (!primary?.unit_id) return false;
+    const { data } = await supabase
+      .from('charges')
+      .select('due_date, status')
+      .eq('unit_id', primary.unit_id)
+      .in('status', ['pending', 'overdue']);
+    return (data ?? []).some((charge) => isDelinquentCharge(charge));
+  }, [primary?.unit_id]);
 
   const clearActionError = useCallback(() => setActionError(null), []);
 
@@ -479,6 +484,7 @@ export function useSpaces(primary: ActiveMembership | null) {
     unitClusterId,
     unitClusterName,
     blockIfOverdue,
+    checkUnitDebt,
     clearActionError,
     refresh,
     fetchBookedSlots,

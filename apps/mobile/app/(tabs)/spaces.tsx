@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -72,6 +73,7 @@ export default function SpacesScreen() {
     setScopeFilter,
     unitClusterName,
     blockIfOverdue,
+    checkUnitDebt,
     clearActionError,
     refresh,
     fetchBookedSlots,
@@ -213,9 +215,22 @@ export default function SpacesScreen() {
                     <PrimaryButton
                       label="Reservar"
                       onPress={() => {
-                        clearActionError();
-                        setSuccessMessage(null);
-                        setSelectedAmenity(amenity);
+                        void (async () => {
+                          clearActionError();
+                          setSuccessMessage(null);
+                          if (blockIfOverdue && amenity.restrict_if_overdue) {
+                            const delinquent = await checkUnitDebt();
+                            if (delinquent) {
+                              Alert.alert(
+                                'Adeudos pendientes',
+                                'Tu unidad tiene adeudos pendientes. Regulariza tu cuenta en Finanzas para reservar este espacio.',
+                                [{ text: 'Entendido' }],
+                              );
+                              return;
+                            }
+                          }
+                          setSelectedAmenity(amenity);
+                        })();
                       }}
                       style={styles.reserveBtn}
                     />
@@ -275,6 +290,8 @@ export default function SpacesScreen() {
       <AmenityReservationModal
         visible={selectedAmenity !== null}
         amenity={selectedAmenity}
+        blockIfOverdue={blockIfOverdue}
+        checkUnitDebt={checkUnitDebt}
         onClose={() => setSelectedAmenity(null)}
         onReserve={async (startsAt, endsAt) => {
           if (!selectedAmenity) return { error: null, pending: false };

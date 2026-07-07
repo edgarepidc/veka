@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -21,9 +22,20 @@ import {
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
+const DEBT_MESSAGE =
+  'Tu unidad tiene adeudos pendientes. Regulariza tu cuenta en Finanzas para reservar este espacio.';
+
+function showDebtAlert(onClose?: () => void) {
+  Alert.alert('Adeudos pendientes', DEBT_MESSAGE, [
+    { text: 'Entendido', onPress: onClose, style: 'cancel' },
+  ]);
+}
+
 interface AmenityReservationModalProps {
   visible: boolean;
   amenity: Amenity | null;
+  blockIfOverdue: boolean;
+  checkUnitDebt: () => Promise<boolean>;
   onClose: () => void;
   onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null; pending?: boolean }>;
   fetchBookedSlots: (amenityId: string, day: Date) => Promise<{ starts_at: string; ends_at: string }[]>;
@@ -45,12 +57,15 @@ function formatDayLabel(date: Date): string {
 export function AmenityReservationModal({
   visible,
   amenity,
+  blockIfOverdue,
+  checkUnitDebt,
   onClose,
   onReserve,
   fetchBookedSlots,
 }: AmenityReservationModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const debtAlertShownRef = useRef(false);
   const bookingHorizonDays = amenity?.booking_horizon_days ?? 7;
   const blockedDates = amenity?.blocked_dates ?? [];
   const minBookingLeadHours = amenity?.min_booking_lead_hours ?? 0;
@@ -80,6 +95,23 @@ export function AmenityReservationModal({
   }, [visible, amenity, days]);
 
   useEffect(() => {
+    if (!visible) {
+      debtAlertShownRef.current = false;
+      return;
+    }
+    if (!amenity || !blockIfOverdue || !amenity.restrict_if_overdue || debtAlertShownRef.current) {
+      return;
+    }
+
+    void (async () => {
+      const delinquent = await checkUnitDebt();
+      if (!delinquent) return;
+      debtAlertShownRef.current = true;
+      showDebtAlert(onClose);
+    })();
+  }, [visible, amenity, blockIfOverdue, checkUnitDebt, onClose]);
+
+  useEffect(() => {
     if (visible && amenity) {
       void loadSlots();
     }
@@ -92,6 +124,10 @@ export function AmenityReservationModal({
     const result = await onReserve(slot.startsAt, slot.endsAt);
     setSubmitting(false);
     if (result.error) {
+      if (result.error.toLowerCase().includes('adeudos')) {
+        showDebtAlert();
+        return;
+      }
       setLocalError(result.error);
       await loadSlots();
       return;
