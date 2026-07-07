@@ -72,9 +72,6 @@ export default function SpacesScreen() {
     setScopeFilter,
     unitClusterName,
     blockIfOverdue,
-    bookingHorizonDays,
-    minBookingLeadHours,
-    blockedDates,
     clearActionError,
     refresh,
     fetchBookedSlots,
@@ -278,9 +275,6 @@ export default function SpacesScreen() {
       <AmenityReservationModal
         visible={selectedAmenity !== null}
         amenity={selectedAmenity}
-        bookingHorizonDays={bookingHorizonDays}
-        blockedDates={blockedDates}
-        minBookingLeadHours={minBookingLeadHours}
         onClose={() => setSelectedAmenity(null)}
         onReserve={async (startsAt, endsAt) => {
           if (!selectedAmenity) return { error: null, pending: false };
@@ -304,11 +298,19 @@ export default function SpacesScreen() {
         }
         cancelling={selectedReservation ? cancellingId === selectedReservation.id : false}
         canCancel={
-          selectedReservation ? canCancelReservation(selectedReservation).ok : false
+          selectedReservation
+            ? canCancelReservation(
+                selectedReservation,
+                amenityById.get(selectedReservation.amenity_id),
+              ).ok
+            : false
         }
         cancelBlockedMessage={
-          selectedReservation && !canCancelReservation(selectedReservation).ok
-            ? canCancelReservation(selectedReservation).message
+          selectedReservation
+            ? canCancelReservation(
+                selectedReservation,
+                amenityById.get(selectedReservation.amenity_id),
+              ).message
             : null
         }
         onClose={() => setSelectedReservation(null)}

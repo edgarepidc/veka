@@ -24,9 +24,6 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 interface AmenityReservationModalProps {
   visible: boolean;
   amenity: Amenity | null;
-  bookingHorizonDays: number;
-  blockedDates: string[];
-  minBookingLeadHours: number;
   onClose: () => void;
   onReserve: (startsAt: Date, endsAt: Date) => Promise<{ error: string | null; pending?: boolean }>;
   fetchBookedSlots: (amenityId: string, day: Date) => Promise<{ starts_at: string; ends_at: string }[]>;
@@ -48,15 +45,15 @@ function formatDayLabel(date: Date): string {
 export function AmenityReservationModal({
   visible,
   amenity,
-  bookingHorizonDays,
-  blockedDates,
-  minBookingLeadHours,
   onClose,
   onReserve,
   fetchBookedSlots,
 }: AmenityReservationModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const bookingHorizonDays = amenity?.booking_horizon_days ?? 7;
+  const blockedDates = amenity?.blocked_dates ?? [];
+  const minBookingLeadHours = amenity?.min_booking_lead_hours ?? 0;
   const days = useMemo(
     () => bookingDayOptionsFiltered(bookingHorizonDays, blockedDates),
     [bookingHorizonDays, blockedDates],

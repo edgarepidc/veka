@@ -1,19 +1,16 @@
 export interface SpacesSettings {
   block_reservations_if_overdue?: boolean;
-  /** Días calendario disponibles para reservar, incluyendo hoy. */
-  booking_horizon_days?: number;
-  /** Horas mínimas antes del inicio para poder reservar (0 = sin restricción). */
-  min_booking_lead_hours?: number;
-  /** Horas mínimas antes del inicio para que el residente pueda cancelar (0 = sin restricción). */
-  min_cancel_lead_hours?: number;
-  /** Máximo de reservas activas por unidad en todos los espacios (0 = sin límite). */
-  max_active_reservations_per_unit?: number;
-  /** Valor inicial del checkbox "requiere aprobación" al crear amenidades. */
-  default_requires_approval?: boolean;
-  /** Fechas YYYY-MM-DD sin reservas en todo el fraccionamiento. */
-  blocked_dates?: string[];
   /** Enviar push/correo al residente cuando admin aprueba o cancela. */
   notify_reservation_updates?: boolean;
+}
+
+export interface AmenityReservationRules {
+  booking_horizon_days: number;
+  min_booking_lead_hours: number;
+  min_cancel_lead_hours: number;
+  /** Máx. reservas activas por unidad en esta amenidad (0 = sin límite). */
+  max_active_reservations: number;
+  blocked_dates: string[];
 }
 
 export const DEFAULT_BOOKING_HORIZON_DAYS = 7;
@@ -87,21 +84,29 @@ export function parseSpacesSettings(raw: unknown): SpacesSettings {
   const typed = spaces as SpacesSettings;
   return {
     block_reservations_if_overdue: Boolean(typed.block_reservations_if_overdue),
-    booking_horizon_days: normalizeBookingHorizonDays(typed.booking_horizon_days),
+    notify_reservation_updates: typed.notify_reservation_updates !== false,
+  };
+}
+
+export function parseAmenityReservationRules(row: {
+  booking_horizon_days?: unknown;
+  min_booking_lead_hours?: unknown;
+  min_cancel_lead_hours?: unknown;
+  max_active_reservations?: unknown;
+  blocked_dates?: unknown;
+}): AmenityReservationRules {
+  return {
+    booking_horizon_days: normalizeBookingHorizonDays(row.booking_horizon_days),
     min_booking_lead_hours: normalizeLeadHours(
-      typed.min_booking_lead_hours,
+      row.min_booking_lead_hours,
       DEFAULT_MIN_BOOKING_LEAD_HOURS,
     ),
     min_cancel_lead_hours: normalizeLeadHours(
-      typed.min_cancel_lead_hours,
+      row.min_cancel_lead_hours,
       DEFAULT_MIN_CANCEL_LEAD_HOURS,
     ),
-    max_active_reservations_per_unit: normalizeMaxActiveReservations(
-      typed.max_active_reservations_per_unit,
-    ),
-    default_requires_approval: Boolean(typed.default_requires_approval),
-    blocked_dates: parseBlockedDates(typed.blocked_dates),
-    notify_reservation_updates: typed.notify_reservation_updates !== false,
+    max_active_reservations: normalizeMaxActiveReservations(row.max_active_reservations),
+    blocked_dates: parseBlockedDates(row.blocked_dates),
   };
 }
 

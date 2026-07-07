@@ -1,7 +1,7 @@
 import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
 import { createClient } from '@/lib/supabase/server';
-import { parseSpacesSettings } from '@veka/shared';
+import { parseAmenityReservationRules, parseSpacesSettings } from '@veka/shared';
 
 export interface ClusterOption {
   id: string;
@@ -18,6 +18,11 @@ export interface AmenityRow {
   max_daily_reservations: number;
   max_monthly_reservations: number;
   max_concurrent_reservations: number;
+  booking_horizon_days: number;
+  min_booking_lead_hours: number;
+  min_cancel_lead_hours: number;
+  max_active_reservations: number;
+  blocked_dates: string[];
   slot_duration_minutes: number;
   open_time: string;
   close_time: string;
@@ -57,7 +62,7 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
     supabase
       .from('amenities')
       .select(
-        'id, name, description, cluster_id, image_url, max_daily_reservations, max_monthly_reservations, max_concurrent_reservations, slot_duration_minutes, open_time, close_time, requires_approval, restrict_if_overdue, is_active, created_at, cluster:clusters(name)',
+        'id, name, description, cluster_id, image_url, max_daily_reservations, max_monthly_reservations, max_concurrent_reservations, booking_horizon_days, min_booking_lead_hours, min_cancel_lead_hours, max_active_reservations, blocked_dates, slot_duration_minutes, open_time, close_time, requires_approval, restrict_if_overdue, is_active, created_at, cluster:clusters(name)',
       )
       .eq('condominium_id', condoId)
       .order('name'),
@@ -129,6 +134,11 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       max_daily_reservations: number;
       max_monthly_reservations: number;
       max_concurrent_reservations: number;
+      booking_horizon_days: number;
+      min_booking_lead_hours: number;
+      min_cancel_lead_hours: number;
+      max_active_reservations: number;
+      blocked_dates: string[] | null;
       slot_duration_minutes: number;
       open_time: string;
       close_time: string;
@@ -137,10 +147,18 @@ export async function loadEspaciosData(condominiumId?: string): Promise<{
       is_active: boolean;
       created_at: string;
       cluster: { name: string } | { name: string }[] | null;
-    }[] | null)?.map((row) => ({
-      ...row,
-      cluster: Array.isArray(row.cluster) ? (row.cluster[0] ?? null) : row.cluster,
-    })) ?? [];
+    }[] | null)?.map((row) => {
+      const rules = parseAmenityReservationRules(row);
+      return {
+        ...row,
+        cluster: Array.isArray(row.cluster) ? (row.cluster[0] ?? null) : row.cluster,
+        booking_horizon_days: rules.booking_horizon_days,
+        min_booking_lead_hours: rules.min_booking_lead_hours,
+        min_cancel_lead_hours: rules.min_cancel_lead_hours,
+        max_active_reservations: rules.max_active_reservations,
+        blocked_dates: rules.blocked_dates,
+      };
+    }) ?? [];
 
   const settings = parseCondominiumSettings(condoRes.data?.settings);
 

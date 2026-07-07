@@ -1,5 +1,6 @@
 'use server';
 
+import { parseSpacesSettings } from '@veka/shared';
 import {
   DEFAULT_MIN_BOOKING_LEAD_HOURS,
   DEFAULT_MIN_CANCEL_LEAD_HOURS,
@@ -7,7 +8,6 @@ import {
   normalizeLeadHours,
   normalizeMaxActiveReservations,
   parseBlockedDatesInput,
-  parseSpacesSettings,
 } from '@veka/shared';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'crypto';
@@ -90,26 +90,11 @@ export async function updateSpacesSettings(formData: FormData) {
     .maybeSingle();
 
   const current = parseCondominiumSettings(existing?.settings);
-  const blockedDatesRaw = String(formData.get('blocked_dates') ?? '');
   const settings = {
     ...current,
     spaces: {
       ...current.spaces,
       block_reservations_if_overdue: checkbox(formData, 'block_reservations_if_overdue'),
-      booking_horizon_days: normalizeBookingHorizonDays(formData.get('booking_horizon_days')),
-      min_booking_lead_hours: normalizeLeadHours(
-        formData.get('min_booking_lead_hours'),
-        DEFAULT_MIN_BOOKING_LEAD_HOURS,
-      ),
-      min_cancel_lead_hours: normalizeLeadHours(
-        formData.get('min_cancel_lead_hours'),
-        DEFAULT_MIN_CANCEL_LEAD_HOURS,
-      ),
-      max_active_reservations_per_unit: normalizeMaxActiveReservations(
-        formData.get('max_active_reservations_per_unit'),
-      ),
-      default_requires_approval: checkbox(formData, 'default_requires_approval'),
-      blocked_dates: parseBlockedDatesInput(blockedDatesRaw),
       notify_reservation_updates: checkbox(formData, 'notify_reservation_updates'),
     },
   };
@@ -146,6 +131,7 @@ export async function upsertAmenity(formData: FormData) {
   const closeTime = parseTime(String(formData.get('close_time') ?? ''));
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const imageUrl = String(formData.get('image_url') ?? '').trim();
+  const blockedDatesRaw = String(formData.get('blocked_dates') ?? '');
 
   if (!name) return { error: 'El nombre es obligatorio.' };
   if (!openTime || !closeTime) return { error: 'Horario inválido.' };
@@ -166,6 +152,19 @@ export async function upsertAmenity(formData: FormData) {
       String(formData.get('max_concurrent_reservations') ?? ''),
       1,
     ),
+    booking_horizon_days: normalizeBookingHorizonDays(formData.get('booking_horizon_days')),
+    min_booking_lead_hours: normalizeLeadHours(
+      formData.get('min_booking_lead_hours'),
+      DEFAULT_MIN_BOOKING_LEAD_HOURS,
+    ),
+    min_cancel_lead_hours: normalizeLeadHours(
+      formData.get('min_cancel_lead_hours'),
+      DEFAULT_MIN_CANCEL_LEAD_HOURS,
+    ),
+    max_active_reservations: normalizeMaxActiveReservations(
+      formData.get('max_active_reservations'),
+    ),
+    blocked_dates: parseBlockedDatesInput(blockedDatesRaw),
     requires_approval: checkbox(formData, 'requires_approval'),
     restrict_if_overdue: checkbox(formData, 'restrict_if_overdue'),
     is_active: checkbox(formData, 'is_active'),

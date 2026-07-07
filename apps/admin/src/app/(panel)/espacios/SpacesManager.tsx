@@ -45,6 +45,11 @@ const EMPTY_AMENITY: Omit<AmenityRow, 'id' | 'created_at' | 'cluster'> = {
   max_daily_reservations: 1,
   max_monthly_reservations: 4,
   max_concurrent_reservations: 1,
+  booking_horizon_days: DEFAULT_BOOKING_HORIZON_DAYS,
+  min_booking_lead_hours: DEFAULT_MIN_BOOKING_LEAD_HOURS,
+  min_cancel_lead_hours: DEFAULT_MIN_CANCEL_LEAD_HOURS,
+  max_active_reservations: 1,
+  blocked_dates: [],
   slot_duration_minutes: 60,
   open_time: '08:00',
   close_time: '22:00',
@@ -169,28 +174,9 @@ export function SpacesManager({
     );
   }, [reservations, reservationScopeFilter]);
 
-  const bookingHorizonDays =
-    spacesSettings.booking_horizon_days ?? DEFAULT_BOOKING_HORIZON_DAYS;
   const blockIfOverdue = Boolean(spacesSettings.block_reservations_if_overdue);
-  const minBookingLeadHours =
-    spacesSettings.min_booking_lead_hours ?? DEFAULT_MIN_BOOKING_LEAD_HOURS;
-  const minCancelLeadHours =
-    spacesSettings.min_cancel_lead_hours ?? DEFAULT_MIN_CANCEL_LEAD_HOURS;
-  const maxActiveReservations =
-    spacesSettings.max_active_reservations_per_unit ?? 0;
-  const defaultRequiresApproval = Boolean(spacesSettings.default_requires_approval);
-  const blockedDates = spacesSettings.blocked_dates ?? [];
   const notifyReservationUpdates = spacesSettings.notify_reservation_updates !== false;
-  const rulesFormKey = [
-    blockIfOverdue,
-    bookingHorizonDays,
-    minBookingLeadHours,
-    minCancelLeadHours,
-    maxActiveReservations,
-    defaultRequiresApproval,
-    blockedDates.join(','),
-    notifyReservationUpdates,
-  ].join('|');
+  const rulesFormKey = [blockIfOverdue, notifyReservationUpdates].join('|');
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
@@ -224,7 +210,8 @@ export function SpacesManager({
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-[var(--text)]">Reglas generales</h2>
             <p className="mt-1 text-sm text-muted">
-              Políticas globales de reservas para todos los espacios del condominio.
+              Políticas del condominio que aplican a todas las amenidades. Las reglas de reserva se
+              configuran en cada espacio.
             </p>
             {!rulesExpanded ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
@@ -233,33 +220,6 @@ export function SpacesManager({
                   value={blockIfOverdue ? 'Activo' : 'Inactivo'}
                   tone={blockIfOverdue ? 'amber' : 'neutral'}
                 />
-                <RulesSummaryChip
-                  label="Anticipación"
-                  value={`${bookingHorizonDays} día${bookingHorizonDays === 1 ? '' : 's'}`}
-                  tone="green"
-                />
-                <RulesSummaryChip
-                  label="Reserva mín."
-                  value={`${minBookingLeadHours} h`}
-                  tone="neutral"
-                />
-                <RulesSummaryChip
-                  label="Cancelación"
-                  value={`${minCancelLeadHours} h antes`}
-                  tone="neutral"
-                />
-                <RulesSummaryChip
-                  label="Activas/unidad"
-                  value={maxActiveReservations > 0 ? String(maxActiveReservations) : 'Sin límite'}
-                  tone="neutral"
-                />
-                {blockedDates.length > 0 ? (
-                  <RulesSummaryChip
-                    label="Días bloqueados"
-                    value={String(blockedDates.length)}
-                    tone="amber"
-                  />
-                ) : null}
                 <RulesSummaryChip
                   label="Notificaciones"
                   value={notifyReservationUpdates ? 'Activas' : 'Inactivas'}
@@ -273,11 +233,12 @@ export function SpacesManager({
         {rulesExpanded ? (
           <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4">
             <p className="text-sm text-muted">
-              Políticas globales que aplican a todas las amenidades y reservas del condominio.
+              Activa el bloqueo por adeudos (cada amenidad puede marcarse con restricción por mora) y
+              las notificaciones al residente.
             </p>
             <form
               key={rulesFormKey}
-              className="grid gap-4 sm:grid-cols-2"
+              className="grid gap-4"
               action={(formData) =>
                 run(updateSpacesSettings, formData, 'Reglas guardadas.', () => {
                   setRulesExpanded(false);
@@ -286,7 +247,7 @@ export function SpacesManager({
               }
             >
               <input type="hidden" name="condominium_id" value={condominiumId} />
-              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                 <input
                   type="checkbox"
                   name="block_reservations_if_overdue"
@@ -294,70 +255,7 @@ export function SpacesManager({
                 />
                 Bloquear reservas si la unidad tiene adeudos
               </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-[var(--text)]">Anticipación para reservas (días)</span>
-                <input
-                  type="number"
-                  name="booking_horizon_days"
-                  min={MIN_BOOKING_HORIZON_DAYS}
-                  max={MAX_BOOKING_HORIZON_DAYS}
-                  defaultValue={bookingHorizonDays}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-                />
-                <span className="text-xs text-subtle">
-                  Rango de fechas que el residente puede elegir, incluyendo hoy.
-                </span>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-[var(--text)]">Anticipación mínima (horas)</span>
-                <input
-                  type="number"
-                  name="min_booking_lead_hours"
-                  min={0}
-                  max={MAX_LEAD_HOURS}
-                  defaultValue={minBookingLeadHours}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-                />
-                <span className="text-xs text-subtle">
-                  Horas antes del inicio para poder reservar un horario (0 = sin restricción).
-                </span>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-[var(--text)]">Plazo para cancelar (horas)</span>
-                <input
-                  type="number"
-                  name="min_cancel_lead_hours"
-                  min={0}
-                  max={MAX_LEAD_HOURS}
-                  defaultValue={minCancelLeadHours}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-                />
-                <span className="text-xs text-subtle">
-                  El residente solo puede cancelar si faltan al menos estas horas para el inicio.
-                </span>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium text-[var(--text)]">Máx. reservas activas por unidad</span>
-                <input
-                  type="number"
-                  name="max_active_reservations_per_unit"
-                  min={0}
-                  defaultValue={maxActiveReservations}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-                />
-                <span className="text-xs text-subtle">
-                  Total entre todos los espacios. Usa 0 para sin límite global.
-                </span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
-                <input
-                  type="checkbox"
-                  name="default_requires_approval"
-                  defaultChecked={defaultRequiresApproval}
-                />
-                Nuevas amenidades requieren aprobación por defecto
-              </label>
-              <label className="flex items-center gap-2 text-sm text-[var(--text)] sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-[var(--text)]">
                 <input
                   type="checkbox"
                   name="notify_reservation_updates"
@@ -365,20 +263,7 @@ export function SpacesManager({
                 />
                 Notificar al residente cuando se aprueba o cancela su reserva
               </label>
-              <label className="grid gap-1 text-sm sm:col-span-2">
-                <span className="font-medium text-[var(--text)]">Días bloqueados (YYYY-MM-DD)</span>
-                <textarea
-                  name="blocked_dates"
-                  rows={4}
-                  defaultValue={formatBlockedDatesForInput(blockedDates)}
-                  placeholder={'2026-12-25\n2026-01-01'}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs"
-                />
-                <span className="text-xs text-subtle">
-                  Una fecha por línea. No habrá reservas en esos días en ningún espacio.
-                </span>
-              </label>
-              <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <button
                   type="submit"
                   disabled={pending}
@@ -447,7 +332,6 @@ export function SpacesManager({
                   id: '',
                   created_at: new Date().toISOString(),
                   cluster: null,
-                  requires_approval: defaultRequiresApproval,
                 })
               }
               className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
@@ -562,6 +446,74 @@ export function SpacesManager({
                     defaultValue={draft.max_concurrent_reservations}
                     className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
                   />
+                  <span className="text-xs text-subtle">
+                    Personas o unidades que pueden reservar el mismo horario (capacidad del espacio).
+                  </span>
+                </label>
+
+                <p className="text-sm font-semibold text-[var(--text)] sm:col-span-2">
+                  Reglas de reserva de este espacio
+                </p>
+
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium text-[var(--text)]">Anticipación (días)</span>
+                  <input
+                    type="number"
+                    name="booking_horizon_days"
+                    min={MIN_BOOKING_HORIZON_DAYS}
+                    max={MAX_BOOKING_HORIZON_DAYS}
+                    defaultValue={draft.booking_horizon_days}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium text-[var(--text)]">Anticipación mínima (horas)</span>
+                  <input
+                    type="number"
+                    name="min_booking_lead_hours"
+                    min={0}
+                    max={MAX_LEAD_HOURS}
+                    defaultValue={draft.min_booking_lead_hours}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium text-[var(--text)]">Plazo para cancelar (horas)</span>
+                  <input
+                    type="number"
+                    name="min_cancel_lead_hours"
+                    min={0}
+                    max={MAX_LEAD_HOURS}
+                    defaultValue={draft.min_cancel_lead_hours}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                  />
+                </label>
+
+                <label className="grid gap-1 text-sm">
+                  <span className="font-medium text-[var(--text)]">Máx. reservas activas por unidad</span>
+                  <input
+                    type="number"
+                    name="max_active_reservations"
+                    min={0}
+                    defaultValue={draft.max_active_reservations}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
+                  />
+                  <span className="text-xs text-subtle">
+                    Cuántas reservas futuras puede tener una unidad en este espacio (0 = sin límite).
+                  </span>
+                </label>
+
+                <label className="grid gap-1 text-sm sm:col-span-2">
+                  <span className="font-medium text-[var(--text)]">Días bloqueados (YYYY-MM-DD)</span>
+                  <textarea
+                    name="blocked_dates"
+                    rows={3}
+                    defaultValue={formatBlockedDatesForInput(draft.blocked_dates)}
+                    placeholder={'2026-12-25\n2026-01-01'}
+                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs"
+                  />
                 </label>
 
                 <label className="grid gap-1 text-sm">
@@ -656,6 +608,13 @@ export function SpacesManager({
                         {trimTime(amenity.open_time)} – {trimTime(amenity.close_time)} · Turnos de{' '}
                         {amenity.slot_duration_minutes} min · cupo {amenity.max_concurrent_reservations}/horario ·{' '}
                         {amenity.max_daily_reservations}/día · {amenity.max_monthly_reservations}/mes
+                      </p>
+                      <p className="mt-1 text-xs text-subtle">
+                        Anticipación {amenity.booking_horizon_days} d · activas/unidad{' '}
+                        {amenity.max_active_reservations > 0 ? amenity.max_active_reservations : '∞'}
+                        {amenity.blocked_dates.length > 0
+                          ? ` · ${amenity.blocked_dates.length} día(s) bloqueado(s)`
+                          : ''}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
                         {amenity.requires_approval ? (
