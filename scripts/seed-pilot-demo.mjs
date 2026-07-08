@@ -220,11 +220,12 @@ try {
   `;
 
   await db`
-    insert into public.maintenance_routine_images (id, routine_id, image_url, sort_order)
+    insert into public.maintenance_routine_evidence (id, routine_id, evidence_date, image_url, sort_order)
     values
-      ('66666666-6666-6666-6666-666666666621', ${IDS.routinePool}, 'https://picsum.photos/seed/veka-pool-1/800/500', 0),
-      ('66666666-6666-6666-6666-666666666622', ${IDS.routinePool}, 'https://picsum.photos/seed/veka-pool-2/800/500', 1),
-      ('66666666-6666-6666-6666-666666666623', ${IDS.routineGarden}, 'https://picsum.photos/seed/veka-garden/800/500', 0)
+      ('66666666-6666-6666-6666-666666666621', ${IDS.routinePool}, current_date - 3, 'https://picsum.photos/seed/veka-pool-1/800/500', 0),
+      ('66666666-6666-6666-6666-666666666622', ${IDS.routinePool}, current_date - 3, 'https://picsum.photos/seed/veka-pool-2/800/500', 1),
+      ('66666666-6666-6666-6666-666666666623', ${IDS.routinePool}, current_date - 1, 'https://picsum.photos/seed/veka-pool-3/800/500', 0),
+      ('66666666-6666-6666-6666-666666666624', ${IDS.routineGarden}, current_date - 2, 'https://picsum.photos/seed/veka-garden/800/500', 0)
     on conflict (id) do nothing
   `;
 

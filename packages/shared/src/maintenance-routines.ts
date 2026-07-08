@@ -29,7 +29,7 @@ export interface MaintenanceRoutineRef {
   anchor_date: string | null;
   sort_order: number;
   amenity?: { name: string } | null;
-  images?: { id: string; image_url: string; caption: string | null; sort_order: number }[];
+  evidence?: MaintenanceRoutineEvidenceRef[];
 }
 
 export function weekdayLabel(day: number | null | undefined): string {
@@ -43,6 +43,68 @@ export function recurrenceLabel(recurrence: MaintenanceRecurrence): string {
 
 export function parseRoutineImageUrlsFromForm(formData: FormData, field = 'image_urls'): string[] {
   return [...new Set(formData.getAll(field).map((value) => String(value).trim()).filter(Boolean))];
+}
+
+export type MaintenancePeriodFilter = 'month' | 'quarter' | 'all';
+
+export const MAINTENANCE_PERIOD_LABELS: Record<MaintenancePeriodFilter, string> = {
+  month: 'Mes actual',
+  quarter: 'Últimos 3 meses',
+  all: 'Histórico',
+};
+
+export interface MaintenanceRoutineEvidenceRef {
+  id: string;
+  evidence_date: string;
+  image_url: string;
+  sort_order: number;
+}
+
+export function isDateInMaintenancePeriod(dateStr: string, period: MaintenancePeriodFilter): boolean {
+  const date = new Date(`${dateStr}T12:00:00`);
+  const now = new Date();
+  if (period === 'all') return true;
+  if (period === 'month') {
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  }
+  const threeMonthsAgo = new Date(now);
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  threeMonthsAgo.setHours(0, 0, 0, 0);
+  return date >= threeMonthsAgo;
+}
+
+export function formatEvidenceDateLabel(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+export function evidenceGroupLabel(dateStr: string): string {
+  return `Evidencia — ${formatEvidenceDateLabel(dateStr)}`;
+}
+
+export function groupEvidenceByDate<T extends { evidence_date: string; sort_order: number }>(
+  evidence: T[],
+  period: MaintenancePeriodFilter,
+): { date: string; label: string; items: T[] }[] {
+  const filtered = evidence.filter((item) => isDateInMaintenancePeriod(item.evidence_date, period));
+  const byDate = new Map<string, T[]>();
+
+  for (const item of filtered) {
+    const list = byDate.get(item.evidence_date) ?? [];
+    list.push(item);
+    byDate.set(item.evidence_date, list);
+  }
+
+  return [...byDate.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, items]) => ({
+      date,
+      label: evidenceGroupLabel(date),
+      items: items.sort((a, b) => a.sort_order - b.sort_order),
+    }));
 }
 
 export function groupRoutinesByWeekday<

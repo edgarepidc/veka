@@ -68,7 +68,7 @@ export const HELP = {
     encuestas: 'Crea votaciones formales o consultas informales. Las formales pueden requerir quórum según configuración.',
   },
   mantenimiento:
-    'Programa actividades por día de la semana (semanal, quincenal, mensual o a demanda) con fotos que los residentes ven en carrusel. Registra evidencia adicional de trabajos puntuales.',
+    'Programa actividades por día (semanal, quincenal, mensual o a demanda) y registra evidencia fotográfica por fecha. Los residentes consultan el programa y filtran evidencia por mes.',
   unidades:
     'Torres (clusters) y unidades con coeficiente de participación. Desde aquí envías invitaciones a residentes.',
   equipo: 'Administradores con acceso al panel. Roles: super_admin y admin según membresía.',

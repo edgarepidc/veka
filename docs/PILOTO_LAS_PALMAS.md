@@ -17,7 +17,7 @@ Tras `npm run db:reset` o `npm run seed:pilot-demo` en producción:
 - **Espacios:** reserva confirmada Alberca (mañana 18:00), reserva pendiente Salón (+10 días)
 - **Seguridad:** visita activa (Carlos Méndez, QR fijo), paquete Amazon en caseta
 - **Documentos:** reglamento interno y minuta asamblea (PDF demo)
-- **Mantenimiento:** ticket abierto de plomería en A-102; calendario semanal (alberca, poda, basura, etc.) con fotos en carrusel; evidencia de inspección
+- **Mantenimiento:** ticket A-102; programa mensual por día con evidencia fotográfica fechada
 
 ## Checklist de demostración
 

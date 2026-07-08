@@ -167,7 +167,6 @@ export async function createMaintenanceRoutine(formData: FormData) {
   const dayRaw = String(formData.get('day_of_week') ?? '').trim();
   const monthlyDayRaw = String(formData.get('monthly_day') ?? '').trim();
   const anchorDate = String(formData.get('anchor_date') ?? '').trim();
-  const imageUrls = parseRoutineImageUrlsFromForm(formData);
 
   if (!title) return { error: 'Título obligatorio.' };
   if (!MAINTENANCE_RECURRENCES.includes(recurrence)) return { error: 'Recurrencia inválida.' };
@@ -205,16 +204,49 @@ export async function createMaintenanceRoutine(formData: FormData) {
 
   if (error || !routine) return { error: error?.message ?? 'No se pudo crear la actividad.' };
 
-  if (imageUrls.length > 0) {
-    const { error: imagesError } = await supabase.from('maintenance_routine_images').insert(
-      imageUrls.map((imageUrl, index) => ({
-        routine_id: routine.id,
-        image_url: imageUrl,
-        sort_order: index,
-      })),
-    );
-    if (imagesError) return { error: imagesError.message };
-  }
+  revalidatePath('/mantenimiento');
+  return { success: true };
+}
+
+export async function createMaintenanceRoutineEvidence(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const routineId = String(formData.get('routine_id') ?? '').trim();
+  const evidenceDate = String(formData.get('evidence_date') ?? '').trim();
+  const imageUrls = parseRoutineImageUrlsFromForm(formData);
+
+  if (!routineId) return { error: 'Selecciona la actividad.' };
+  if (!evidenceDate) return { error: 'Indica la fecha del trabajo.' };
+  if (imageUrls.length === 0) return { error: 'Sube al menos una foto de evidencia.' };
+
+  const { data: routine } = await supabase
+    .from('maintenance_routines')
+    .select('id')
+    .eq('id', routineId)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!routine) return { error: 'Actividad no encontrada.' };
+
+  const { error } = await supabase.from('maintenance_routine_evidence').insert(
+    imageUrls.map((imageUrl, index) => ({
+      routine_id: routineId,
+      evidence_date: evidenceDate,
+      image_url: imageUrl,
+      sort_order: index,
+      created_by: user.id,
+    })),
+  );
+
+  if (error) return { error: error.message };
 
   revalidatePath('/mantenimiento');
   return { success: true };

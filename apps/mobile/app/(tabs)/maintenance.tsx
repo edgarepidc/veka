@@ -13,10 +13,13 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_TICKET_CATEGORIES,
+  groupEvidenceByDate,
   recurrenceLabel,
   ticketCategoryLabel,
   ticketStatusLabel,
+  type MaintenancePeriodFilter,
 } from '@veka/shared';
 import type { MaintenanceTicketCategory } from '@veka/shared';
 
@@ -26,7 +29,7 @@ import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
-import { TabStrip } from '@/components/ui/TabStrip';
+import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
 import { ImageCarousel } from '@/components/ui/ImageCarousel';
 import { Tag } from '@/components/ui/Tag';
 import { useMaintenance } from '@/hooks/useMaintenance';
@@ -45,8 +48,9 @@ export default function MaintenanceScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { tickets, routines, routineGroups, workLogs, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
+  const { tickets, routines, routineGroups, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
     useMaintenance(primary);
+
   const params = useLocalSearchParams<{ ticketId?: string | string[] }>();
   const ticketIdParam = Array.isArray(params.ticketId) ? params.ticketId[0] : params.ticketId;
 
@@ -55,6 +59,7 @@ export default function MaintenanceScreen() {
   const ticketRefs = useRef<Record<string, View | null>>({});
 
   const [tab, setTab] = useState('tickets');
+  const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null);
   const [scrollToTicketId, setScrollToTicketId] = useState<string | null>(null);
@@ -167,8 +172,7 @@ export default function MaintenanceScreen() {
           <TabStrip
             tabs={[
               { key: 'tickets', label: 'Mis tickets' },
-              { key: 'calendarios', label: 'Calendarios' },
-              { key: 'evidencia', label: 'Evidencia' },
+              { key: 'mensual', label: 'Mantenimiento mensual' },
             ]}
             active={tab}
             onChange={setTab}
@@ -230,12 +234,20 @@ export default function MaintenanceScreen() {
           </View>
         ) : null}
 
-        {tab === 'calendarios' ? (
+        {tab === 'mensual' ? (
           <View style={styles.section}>
+            <FilterBar
+              items={(Object.keys(MAINTENANCE_PERIOD_LABELS) as MaintenancePeriodFilter[]).map((key) => ({
+                key,
+                label: MAINTENANCE_PERIOD_LABELS[key],
+              }))}
+              active={periodFilter}
+              onChange={(key) => setPeriodFilter(key as MaintenancePeriodFilter)}
+            />
             {routines.length === 0 ? (
-              <GlassCard>
+              <GlassCard style={styles.mt}>
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>
-                  Sin actividades programadas. El administrador publicará el calendario semanal aquí.
+                  Sin actividades programadas. El administrador publicará el programa mensual aquí.
                 </Text>
               </GlassCard>
             ) : (
@@ -243,67 +255,47 @@ export default function MaintenanceScreen() {
                 group.items.length === 0 ? null : (
                   <View key={group.label} style={styles.mt}>
                     <Text style={[styles.dayHeading, { color: theme.accent }]}>{group.label}</Text>
-                    {group.items.map((routine) => (
-                      <GlassCard key={routine.id} style={styles.routineCard}>
-                        <View style={styles.row}>
-                          <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{routine.title}</Text>
-                          <Tag label={recurrenceLabel(routine.recurrence)} tone="blue" />
-                        </View>
-                        <Text style={[styles.meta, { color: theme.textSubtle }]}>
-                          {routine.amenity?.name ?? 'Áreas comunes'}
-                          {routine.monthly_day ? ` · día ${routine.monthly_day} del mes` : ''}
-                        </Text>
-                        {routine.description ? (
-                          <Text style={[styles.body, { color: theme.textMuted }]}>{routine.description}</Text>
-                        ) : null}
-                        {routine.images.length > 0 ? (
-                          <ImageCarousel
-                            images={routine.images.map((image) => ({
-                              id: image.id,
-                              url: image.resolved_url,
-                            }))}
-                            onOpen={(url) => void Linking.openURL(url)}
-                          />
-                        ) : null}
-                      </GlassCard>
-                    ))}
+                    {group.items.map((routine) => {
+                      const evidenceGroups = groupEvidenceByDate(routine.evidence, periodFilter);
+                      return (
+                        <GlassCard key={routine.id} style={styles.routineCard}>
+                          <View style={styles.row}>
+                            <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{routine.title}</Text>
+                            <Tag label={recurrenceLabel(routine.recurrence)} tone="blue" />
+                          </View>
+                          <Text style={[styles.meta, { color: theme.textSubtle }]}>
+                            {routine.amenity?.name ?? 'Áreas comunes'}
+                            {routine.monthly_day ? ` · día ${routine.monthly_day} del mes` : ''}
+                          </Text>
+                          {routine.description ? (
+                            <Text style={[styles.body, { color: theme.textMuted }]}>{routine.description}</Text>
+                          ) : null}
+                          {evidenceGroups.length === 0 ? (
+                            <Text style={[styles.meta, { color: theme.textSubtle, marginTop: 8 }]}>
+                              Sin evidencia en este periodo.
+                            </Text>
+                          ) : (
+                            evidenceGroups.map((evidenceGroup) => (
+                              <View key={evidenceGroup.date} style={styles.evidenceBlock}>
+                                <Text style={[styles.evidenceLabel, { color: theme.accent }]}>
+                                  {evidenceGroup.label}
+                                </Text>
+                                <ImageCarousel
+                                  images={evidenceGroup.items.map((image) => ({
+                                    id: image.id,
+                                    url: image.resolved_url,
+                                  }))}
+                                  onOpen={(url) => void Linking.openURL(url)}
+                                />
+                              </View>
+                            ))
+                          )}
+                        </GlassCard>
+                      );
+                    })}
                   </View>
                 ),
               )
-            )}
-          </View>
-        ) : null}
-
-        {tab === 'evidencia' ? (
-          <View style={styles.section}>
-            {workLogs.length === 0 ? (
-              <GlassCard>
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin evidencia de trabajos aún.</Text>
-              </GlassCard>
-            ) : (
-              workLogs.map((log) => (
-                <GlassCard key={log.id} style={styles.mt}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>{log.title}</Text>
-                  <Text style={[styles.meta, { color: theme.textSubtle }]}>
-                    {log.amenity?.name ?? 'General'} · {log.work_date}
-                  </Text>
-                  {log.description ? (
-                    <Text style={[styles.body, { color: theme.textMuted }]}>{log.description}</Text>
-                  ) : null}
-                  <View style={styles.links}>
-                    {log.photo_url ? (
-                      <Pressable onPress={() => void openFile(log.photo_url!)}>
-                        <Text style={[styles.link, { color: theme.accent }]}>Ver foto</Text>
-                      </Pressable>
-                    ) : null}
-                    {log.file_url ? (
-                      <Pressable onPress={() => void openFile(log.file_url!)}>
-                        <Text style={[styles.link, { color: theme.accent }]}>Ver documento</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </GlassCard>
-              ))
             )}
           </View>
         ) : null}
@@ -392,4 +384,6 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
   dayHeading: { fontSize: 13, fontWeight: '800', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
   routineCard: { marginBottom: 10 },
+  evidenceBlock: { marginTop: 12 },
+  evidenceLabel: { fontSize: 12, fontWeight: '700' },
 });

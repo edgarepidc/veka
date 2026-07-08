@@ -20,11 +20,11 @@ export interface MaintenanceTicketRow {
   resolved_at: string | null;
 }
 
-export interface MaintenanceRoutineImageRow {
+export interface MaintenanceRoutineEvidenceRow {
   id: string;
+  evidence_date: string;
   image_url: string;
   resolved_url: string;
-  caption: string | null;
   sort_order: number;
 }
 
@@ -37,27 +37,7 @@ export interface MaintenanceRoutineRow {
   monthly_day: number | null;
   sort_order: number;
   amenity: { name: string } | null;
-  images: MaintenanceRoutineImageRow[];
-}
-
-export interface MaintenanceScheduleRow {
-  id: string;
-  title: string;
-  description: string | null;
-  period_start: string | null;
-  period_end: string | null;
-  file_url: string;
-  amenity: { name: string } | null;
-}
-
-export interface MaintenanceWorkLogRow {
-  id: string;
-  title: string;
-  description: string | null;
-  work_date: string;
-  photo_url: string | null;
-  file_url: string | null;
-  amenity: { name: string } | null;
+  evidence: MaintenanceRoutineEvidenceRow[];
 }
 
 async function resolveMaintenanceFileUrl(path: string): Promise<string | null> {
@@ -70,8 +50,6 @@ export function useMaintenance(primary: ActiveMembership | null) {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<MaintenanceTicketRow[]>([]);
   const [routines, setRoutines] = useState<MaintenanceRoutineRow[]>([]);
-  const [schedules, setSchedules] = useState<MaintenanceScheduleRow[]>([]);
-  const [workLogs, setWorkLogs] = useState<MaintenanceWorkLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -80,13 +58,11 @@ export function useMaintenance(primary: ActiveMembership | null) {
     if (!primary?.condominium_id || !primary.unit_id) {
       setTickets([]);
       setRoutines([]);
-      setSchedules([]);
-      setWorkLogs([]);
       setLoading(false);
       return;
     }
 
-    const [ticketsRes, routinesRes, schedulesRes, workLogsRes] = await Promise.all([
+    const [ticketsRes, routinesRes] = await Promise.all([
       supabase
         .from('maintenance_tickets')
         .select('id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at')
@@ -99,54 +75,43 @@ export function useMaintenance(primary: ActiveMembership | null) {
         .eq('is_active', true)
         .order('day_of_week', { ascending: true, nullsFirst: false })
         .order('sort_order', { ascending: true }),
-      supabase
-        .from('maintenance_schedules')
-        .select('id, title, description, period_start, period_end, file_url, amenity:amenities(name)')
-        .eq('condominium_id', primary.condominium_id)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      supabase
-        .from('maintenance_work_logs')
-        .select('id, title, description, work_date, photo_url, file_url, amenity:amenities(name)')
-        .eq('condominium_id', primary.condominium_id)
-        .order('work_date', { ascending: false })
-        .limit(20),
     ]);
 
     setTickets((ticketsRes.data as MaintenanceTicketRow[]) ?? []);
 
-    const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'images'>[];
+    const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
     const routineIds = routineRows.map((row) => row.id);
-    const { data: routineImages } = routineIds.length
+    const { data: routineEvidence } = routineIds.length
       ? await supabase
-          .from('maintenance_routine_images')
-          .select('id, routine_id, image_url, caption, sort_order')
+          .from('maintenance_routine_evidence')
+          .select('id, routine_id, evidence_date, image_url, sort_order')
           .in('routine_id', routineIds)
+          .order('evidence_date', { ascending: false })
           .order('sort_order', { ascending: true })
-      : { data: [] as { id: string; routine_id: string; image_url: string; caption: string | null; sort_order: number }[] };
+      : { data: [] as { id: string; routine_id: string; evidence_date: string; image_url: string; sort_order: number }[] };
 
-    const imagesByRoutine = new Map<string, MaintenanceRoutineImageRow[]>();
-    for (const image of routineImages ?? []) {
-      const resolved = await resolveMaintenanceFileUrl(image.image_url);
-      const list = imagesByRoutine.get(image.routine_id) ?? [];
-      list.push({
-        id: image.id,
-        image_url: image.image_url,
-        resolved_url: resolved ?? image.image_url,
-        caption: image.caption,
-        sort_order: image.sort_order,
-      });
-      imagesByRoutine.set(image.routine_id, list);
-    }
+    const evidenceByRoutine = new Map<string, MaintenanceRoutineEvidenceRow[]>();
+    await Promise.all(
+      (routineEvidence ?? []).map(async (row) => {
+        const resolved = await resolveMaintenanceFileUrl(row.image_url);
+        const list = evidenceByRoutine.get(row.routine_id) ?? [];
+        list.push({
+          id: row.id,
+          evidence_date: row.evidence_date,
+          image_url: row.image_url,
+          resolved_url: resolved ?? row.image_url,
+          sort_order: row.sort_order,
+        });
+        evidenceByRoutine.set(row.routine_id, list);
+      }),
+    );
 
     setRoutines(
       routineRows.map((row) => ({
         ...row,
-        images: imagesByRoutine.get(row.id) ?? [],
+        evidence: evidenceByRoutine.get(row.id) ?? [],
       })),
     );
-    setSchedules((schedulesRes.data as unknown as MaintenanceScheduleRow[]) ?? []);
-    setWorkLogs((workLogsRes.data as unknown as MaintenanceWorkLogRow[]) ?? []);
     setLoading(false);
   }, [primary?.condominium_id, primary?.unit_id]);
 
@@ -229,8 +194,6 @@ export function useMaintenance(primary: ActiveMembership | null) {
     tickets,
     routines,
     routineGroups,
-    schedules,
-    workLogs,
     loading,
     refreshing,
     actionError,

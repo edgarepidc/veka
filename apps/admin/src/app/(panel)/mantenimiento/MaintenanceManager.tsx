@@ -1,13 +1,15 @@
 'use client';
 
-import { useId, useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import {
+  MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_RECURRENCES,
   MAINTENANCE_TICKET_STATUSES,
   RECURRENCE_LABELS,
   STORAGE_BUCKETS,
   WEEKDAY_LABELS,
   WEEKDAY_ORDER,
+  groupEvidenceByDate,
   groupRoutinesByWeekday,
   maintenanceFilePath,
   matchesMaintenanceTicketFilter,
@@ -15,39 +17,37 @@ import {
   resolveStorageImageUrl,
   ticketCategoryLabel,
   ticketStatusLabel,
+  type MaintenancePeriodFilter,
   type MaintenanceRecurrence,
   type MaintenanceTicketFilter,
 } from '@veka/shared';
 
 import { MultiImageUpload } from '@/components/MultiImageUpload';
-import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import type {
   AmenityOption,
+  MaintenanceRoutineEvidenceRow,
   MaintenanceRoutineRow,
-  MaintenanceScheduleRow,
   MaintenanceTicketRow,
-  MaintenanceWorkLogRow,
 } from '@/lib/load-maintenance';
 
 import {
   createMaintenanceRoutine,
-  createWorkLog,
+  createMaintenanceRoutineEvidence,
   deleteMaintenanceRoutine,
   updateTicketStatus,
 } from './actions';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
-type Tab = 'tickets' | 'calendarios' | 'evidencia';
+type Tab = 'tickets' | 'mensual';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'tickets', label: 'Tickets' },
-  { id: 'calendarios', label: 'Calendarios' },
-  { id: 'evidencia', label: 'Evidencia' },
+  { id: 'mensual', label: 'Mantenimiento mensual' },
 ];
 
 const TICKET_FILTERS: { id: MaintenanceTicketFilter; label: string }[] = [
@@ -61,27 +61,59 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function RoutineEvidenceGallery({
+  evidence,
+  period,
+  onOpen,
+}: {
+  evidence: MaintenanceRoutineEvidenceRow[];
+  period: MaintenancePeriodFilter;
+  onOpen: (path: string) => void;
+}) {
+  const groups = groupEvidenceByDate(evidence, period);
+
+  if (groups.length === 0) {
+    return <p className="mt-2 text-xs text-subtle">Sin evidencia en este periodo.</p>;
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {groups.map((group) => (
+        <div key={group.date}>
+          <p className="text-xs font-semibold text-accent">{group.label}</p>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {group.items.map((item) => {
+              const url = resolveStorageImageUrl(SUPABASE_URL, item.image_url, STORAGE_BUCKETS.MAINTENANCE_FILES);
+              return url ? (
+                <button key={item.id} type="button" onClick={() => onOpen(item.image_url)} className="shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="h-16 w-24 rounded-lg border border-white/10 object-cover" />
+                </button>
+              ) : null;
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function MaintenanceManager({
   tickets,
-  schedules: _schedules,
   routines,
-  workLogs,
   amenities,
   condominiumId,
 }: {
   tickets: MaintenanceTicketRow[];
-  schedules: MaintenanceScheduleRow[];
   routines: MaintenanceRoutineRow[];
-  workLogs: MaintenanceWorkLogRow[];
   amenities: AmenityOption[];
   condominiumId: string;
 }) {
   const supabase = createClient();
-  const evidencePhotoId = useId().replace(/:/g, '');
-  const evidenceDocId = useId().replace(/:/g, '');
 
   const [tab, setTab] = useState<Tab>('tickets');
   const [ticketFilter, setTicketFilter] = useState<MaintenanceTicketFilter>('active');
+  const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [routineRecurrence, setRoutineRecurrence] = useState<MaintenanceRecurrence>('weekly');
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -213,83 +245,133 @@ export function MaintenanceManager({
         </div>
       ) : null}
 
-      {tab === 'calendarios' ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <GlassCard>
-            <SectionHeading help={HELP.mantenimiento}>Nueva actividad</SectionHeading>
-            <p className="mt-1 text-sm text-muted">
-              Programa tareas por día de la semana: limpieza de alberca, poda, recolección de basura, etc.
-            </p>
-            <form
-              action={(fd) => run(createMaintenanceRoutine, fd, 'Actividad agregada al calendario.')}
-              className="mt-4 space-y-3"
-            >
-              <input name="title" required placeholder="Ej. Mantenimiento de alberca" className="glass-input" />
-              <select name="amenity_id" className="glass-input">
-                <option value="" className="bg-slate-900">
-                  Área común (general)
-                </option>
-                {amenities.map((a) => (
-                  <option key={a.id} value={a.id} className="bg-slate-900">
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="recurrence"
-                value={routineRecurrence}
-                onChange={(event) => setRoutineRecurrence(event.target.value as MaintenanceRecurrence)}
-                className="glass-input"
+      {tab === 'mensual' ? (
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <GlassCard>
+              <SectionHeading help={HELP.mantenimiento}>Nueva actividad</SectionHeading>
+              <p className="mt-1 text-sm text-muted">
+                Define el área, qué se hace y cada cuándo (día de la semana y recurrencia).
+              </p>
+              <form
+                action={(fd) => run(createMaintenanceRoutine, fd, 'Actividad agregada.')}
+                className="mt-4 space-y-3"
               >
-                {MAINTENANCE_RECURRENCES.map((value) => (
-                  <option key={value} value={value} className="bg-slate-900">
-                    {RECURRENCE_LABELS[value]}
+                <input name="title" required placeholder="Ej. Mantenimiento de alberca" className="glass-input" />
+                <select name="amenity_id" className="glass-input">
+                  <option value="" className="bg-slate-900">
+                    Área común (general)
                   </option>
-                ))}
-              </select>
-              {routineRecurrence !== 'on_demand' ? (
-                <select name="day_of_week" required className="glass-input" defaultValue="1">
-                  {WEEKDAY_ORDER.map((day) => (
-                    <option key={day} value={day} className="bg-slate-900">
-                      {WEEKDAY_LABELS[day]}
+                  {amenities.map((a) => (
+                    <option key={a.id} value={a.id} className="bg-slate-900">
+                      {a.name}
                     </option>
                   ))}
                 </select>
-              ) : null}
-              {routineRecurrence === 'monthly' ? (
-                <input
-                  name="monthly_day"
-                  type="number"
-                  min={1}
-                  max={31}
-                  required
-                  placeholder="Día del mes (1-31)"
+                <select
+                  name="recurrence"
+                  value={routineRecurrence}
+                  onChange={(event) => setRoutineRecurrence(event.target.value as MaintenanceRecurrence)}
                   className="glass-input"
-                />
-              ) : null}
-              {routineRecurrence === 'biweekly' ? (
+                >
+                  {MAINTENANCE_RECURRENCES.map((value) => (
+                    <option key={value} value={value} className="bg-slate-900">
+                      {RECURRENCE_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+                {routineRecurrence !== 'on_demand' ? (
+                  <select name="day_of_week" required className="glass-input" defaultValue="1">
+                    {WEEKDAY_ORDER.map((day) => (
+                      <option key={day} value={day} className="bg-slate-900">
+                        {WEEKDAY_LABELS[day]}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {routineRecurrence === 'monthly' ? (
+                  <input
+                    name="monthly_day"
+                    type="number"
+                    min={1}
+                    max={31}
+                    required
+                    placeholder="Día del mes (1-31)"
+                    className="glass-input"
+                  />
+                ) : null}
+                {routineRecurrence === 'biweekly' ? (
+                  <input
+                    name="anchor_date"
+                    type="date"
+                    className="glass-input"
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                  />
+                ) : null}
+                <textarea name="description" rows={2} placeholder="Qué incluye el trabajo" className="glass-input" />
+                <button type="submit" disabled={pending} className="glass-btn-primary">
+                  Agregar actividad
+                </button>
+              </form>
+            </GlassCard>
+
+            <GlassCard>
+              <SectionHeading help={HELP.mantenimiento}>Registrar evidencia</SectionHeading>
+              <p className="mt-1 text-sm text-muted">
+                Sube fotos del trabajo realizado en una fecha concreta. Los residentes las verán etiquetadas por día.
+              </p>
+              <form
+                action={(fd) => run(createMaintenanceRoutineEvidence, fd, 'Evidencia registrada.')}
+                className="mt-4 space-y-3"
+              >
+                <select name="routine_id" required className="glass-input" defaultValue="">
+                  <option value="" disabled className="bg-slate-900">
+                    Selecciona actividad
+                  </option>
+                  {routines.map((routine) => (
+                    <option key={routine.id} value={routine.id} className="bg-slate-900">
+                      {routine.title}
+                    </option>
+                  ))}
+                </select>
                 <input
-                  name="anchor_date"
+                  name="evidence_date"
                   type="date"
-                  className="glass-input"
+                  required
                   defaultValue={new Date().toISOString().slice(0, 10)}
+                  className="glass-input"
                 />
-              ) : null}
-              <textarea name="description" rows={2} placeholder="Detalles (opcional)" className="glass-input" />
-              <MultiImageUpload
-                bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
-                label="Fotos de referencia o evidencia"
-                hint="Puedes subir varias imágenes. Los residentes las verán en un carrusel."
-                buildPath={(fileId, ext) => maintenanceFilePath(condominiumId, 'routines', fileId, ext)}
-              />
-              <button type="submit" disabled={pending} className="glass-btn-primary">
-                Agregar al calendario
-              </button>
-            </form>
-          </GlassCard>
+                <MultiImageUpload
+                  bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
+                  label="Fotos de evidencia"
+                  hint="Varias fotos del mismo día para la misma actividad."
+                  buildPath={(fileId, ext) => maintenanceFilePath(condominiumId, 'routine-evidence', fileId, ext)}
+                />
+                <button type="submit" disabled={pending} className="glass-btn-primary">
+                  Guardar evidencia
+                </button>
+              </form>
+            </GlassCard>
+          </div>
 
           <GlassCard>
-            <SectionHeading help={HELP.mantenimiento}>Calendario semanal</SectionHeading>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <SectionHeading help={HELP.mantenimiento}>Programa y evidencia</SectionHeading>
+              <div className="glass-tab-strip !mb-0">
+                {(Object.keys(MAINTENANCE_PERIOD_LABELS) as MaintenancePeriodFilter[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPeriodFilter(key)}
+                    className={`glass-tab !min-w-0 !flex-none px-4 text-xs ${periodFilter === key ? 'glass-tab-active' : ''}`}
+                  >
+                    {MAINTENANCE_PERIOD_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-subtle">{MAINTENANCE_PERIOD_LABELS[periodFilter]}</p>
+
             <div className="mt-4 space-y-4">
               {routines.length === 0 ? (
                 <p className="text-sm text-subtle">Sin actividades programadas todavía.</p>
@@ -305,8 +387,9 @@ export function MaintenanceManager({
                               <div>
                                 <p className="font-medium text-[var(--text)]">{routine.title}</p>
                                 <p className="text-xs text-subtle">
+                                  {routine.amenity?.name ?? 'Áreas comunes'}
+                                  {' · '}
                                   {recurrenceLabel(routine.recurrence)}
-                                  {routine.amenity?.name ? ` · ${routine.amenity.name}` : ''}
                                   {routine.monthly_day ? ` · día ${routine.monthly_day}` : ''}
                                 </p>
                                 {routine.description ? (
@@ -324,32 +407,11 @@ export function MaintenanceManager({
                                 </button>
                               </form>
                             </div>
-                            {routine.images.length > 0 ? (
-                              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                                {routine.images.map((image) => {
-                                  const url = resolveStorageImageUrl(
-                                    SUPABASE_URL,
-                                    image.image_url,
-                                    STORAGE_BUCKETS.MAINTENANCE_FILES,
-                                  );
-                                  return url ? (
-                                    <button
-                                      key={image.id}
-                                      type="button"
-                                      onClick={() => window.open(url, '_blank')}
-                                      className="shrink-0"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={url}
-                                        alt=""
-                                        className="h-16 w-24 rounded-lg border border-white/10 object-cover"
-                                      />
-                                    </button>
-                                  ) : null;
-                                })}
-                              </div>
-                            ) : null}
+                            <RoutineEvidenceGallery
+                              evidence={routine.evidence}
+                              period={periodFilter}
+                              onOpen={(path) => void openFile(path)}
+                            />
                           </li>
                         ))}
                       </ul>
@@ -358,103 +420,6 @@ export function MaintenanceManager({
                 )
               )}
             </div>
-          </GlassCard>
-        </div>
-      ) : null}
-
-      {tab === 'evidencia' ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <GlassCard>
-            <SectionHeading help={HELP.mantenimiento}>Registrar evidencia</SectionHeading>
-            <p className="mt-1 text-sm text-muted">Trabajos realizados en áreas comunes con foto o documento.</p>
-            <form action={(fd) => run(createWorkLog, fd, 'Evidencia registrada.')} className="mt-4 space-y-3">
-              <input name="title" required placeholder="Ej. Limpieza profunda alberca" className="glass-input" />
-              <select name="amenity_id" className="glass-input">
-                <option value="" className="bg-slate-900">
-                  Área común (general)
-                </option>
-                {amenities.map((a) => (
-                  <option key={a.id} value={a.id} className="bg-slate-900">
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <select name="ticket_id" className="glass-input">
-                <option value="" className="bg-slate-900">
-                  Sin ticket vinculado
-                </option>
-                {tickets.map((t) => (
-                  <option key={t.id} value={t.id} className="bg-slate-900">
-                    {t.title}
-                  </option>
-                ))}
-              </select>
-              <input
-                name="work_date"
-                type="date"
-                required
-                defaultValue={new Date().toISOString().slice(0, 10)}
-                className="glass-input"
-              />
-              <textarea name="description" rows={2} placeholder="Descripción del trabajo" className="glass-input" />
-              <FileUpload
-                bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
-                inputName="photo_url"
-                label="Foto del trabajo"
-                hint="Opcional si adjuntas documento."
-                buildPath={(ext) => maintenanceFilePath(condominiumId, 'evidence', evidencePhotoId, ext)}
-              />
-              <FileUpload
-                bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
-                inputName="file_url"
-                label="Documento adicional"
-                hint="PDF o imagen complementaria."
-                buildPath={(ext) => maintenanceFilePath(condominiumId, 'evidence', evidenceDocId, ext)}
-              />
-              <button type="submit" disabled={pending} className="glass-btn-primary">
-                Guardar evidencia
-              </button>
-            </form>
-          </GlassCard>
-
-          <GlassCard>
-            <SectionHeading help={HELP.mantenimiento}>Historial de trabajos</SectionHeading>
-            <ul className="mt-4 space-y-3">
-              {workLogs.length === 0 ? (
-                <li className="text-sm text-subtle">Sin evidencia registrada.</li>
-              ) : (
-                workLogs.map((log) => (
-                  <li key={log.id} className="glass-card-deep p-3 text-sm">
-                    <p className="font-medium text-[var(--text)]">{log.title}</p>
-                    <p className="text-xs text-subtle">
-                      {log.amenity?.name ?? 'General'} · {log.work_date}
-                      {log.ticket?.title ? ` · Ticket: ${log.ticket.title}` : ''}
-                    </p>
-                    {log.description ? <p className="mt-1 text-muted">{log.description}</p> : null}
-                    <div className="mt-2 flex flex-wrap gap-3">
-                      {log.photo_url ? (
-                        <button
-                          type="button"
-                          onClick={() => void openFile(log.photo_url!)}
-                          className="text-accent-2 hover:underline"
-                        >
-                          Ver foto
-                        </button>
-                      ) : null}
-                      {log.file_url ? (
-                        <button
-                          type="button"
-                          onClick={() => void openFile(log.file_url!)}
-                          className="text-accent-2 hover:underline"
-                        >
-                          Ver documento
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
           </GlassCard>
         </div>
       ) : null}
