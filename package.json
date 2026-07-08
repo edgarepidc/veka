@@ -43,6 +43,7 @@
     "apply:maintenance-routines": "node scripts/apply-maintenance-routines.mjs",
     "apply:maintenance-routine-evidence": "node scripts/apply-maintenance-routine-evidence.mjs",
     "apply:maintenance-cluster-scope-staff": "node scripts/apply-maintenance-cluster-scope-staff.mjs",
+    "apply:maintenance-staff-on-demand": "node scripts/apply-maintenance-staff-on-demand.mjs",
     "apply:profiles-condo-members-select": "node scripts/apply-profiles-condo-members-select.mjs",
     "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
