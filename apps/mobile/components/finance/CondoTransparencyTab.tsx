@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import {
   expenseCategoryLabel,
@@ -9,9 +9,9 @@ import {
 } from '@veka/shared';
 
 import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
+import { CondoStatsBar, CondoStatsChips } from '@/components/finance/CondoStatsViews';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionLabel } from '@/components/ui/Avatar';
-import { StatPill } from '@/components/ui/StatPill';
 import { FilterBar } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
@@ -41,6 +41,15 @@ export function CondoTransparencyTab({
   const theme = useTheme();
   const [period, setPeriod] = useState<FinancePeriod>('1m');
   const [clusterFilter, setClusterFilter] = useState<string>('all');
+  const [statsView, setStatsView] = useState<'chips' | 'bar'>('chips');
+
+  const statsViewOptions = useMemo(
+    () => [
+      { key: 'chips', label: 'Chips' },
+      { key: 'bar', label: 'Barra' },
+    ],
+    [],
+  );
 
   const filterItems = useMemo(() => {
     const items = [{ key: 'all', label: 'Todo lo visible' }];
@@ -101,32 +110,27 @@ export function CondoTransparencyTab({
 
       <View style={styles.section}>
         <FinancePeriodFilter period={period} onChange={setPeriod} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
-          {periodStats.compare.map((slice) => (
-            <StatPill
-              key={slice.label}
-              label={slice.label}
-              value={formatCurrency(slice.value)}
-              sub={financePeriodLabel(period).toLowerCase()}
-              valueColor={slice.color}
-            />
-          ))}
-          {periodStats.scopeCompare.map((slice) => (
-            <StatPill
-              key={slice.label}
-              label={slice.label}
-              value={formatCurrency(slice.value)}
-              sub="egresos"
-              valueColor={slice.color}
-            />
-          ))}
-          <StatPill
-            label="Fondos"
-            value={formatCurrency(totalFunds)}
-            sub="saldo actual"
-            valueColor={theme.accent2}
+        <Text style={[styles.statsHint, { color: theme.textSubtle }]}>
+          Elige la vista del resumen · {financePeriodLabel(period).toLowerCase()}
+        </Text>
+        <FilterBar items={statsViewOptions} active={statsView} onChange={(key) => setStatsView(key as 'chips' | 'bar')} />
+        {statsView === 'chips' ? (
+          <CondoStatsChips
+            compare={periodStats.compare}
+            scopeCompare={periodStats.scopeCompare}
+            totalFunds={totalFunds}
+            period={period}
           />
-        </ScrollView>
+        ) : (
+          <View style={{ paddingTop: 12 }}>
+            <CondoStatsBar
+              compare={periodStats.compare}
+              scopeCompare={periodStats.scopeCompare}
+              totalFunds={totalFunds}
+              period={period}
+            />
+          </View>
+        )}
       </View>
 
       <SectionLabel title="Fondos del condominio" />
@@ -206,7 +210,7 @@ export function CondoTransparencyTab({
 
 const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, marginBottom: 8 },
-  statsRow: { gap: 10, paddingTop: 12 },
+  statsHint: { fontSize: 11, marginTop: 10, marginBottom: 8 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
   cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
