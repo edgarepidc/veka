@@ -14,7 +14,7 @@ import { useTheme } from '@/hooks/useTheme';
 
 interface PrimaryButtonProps {
   label: string;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'success' | 'secondary' | 'muted' | 'danger';
   loading?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -30,20 +30,47 @@ export function PrimaryButton({
   onPress,
 }: PrimaryButtonProps) {
   const theme = useTheme();
-  const isSecondary = variant === 'secondary';
-  const isDanger = variant === 'danger';
 
-  const bg = isDanger ? theme.danger : isSecondary ? theme.surface : theme.accent;
-  const color = isSecondary ? theme.text : isDanger ? '#fff' : theme.onAccent;
-  const borderColor = isSecondary ? theme.border : 'transparent';
+  let bg = theme.accent;
+  let color = theme.onAccent;
+  let borderColor = 'transparent';
+
+  switch (variant) {
+    case 'success':
+      bg = theme.success;
+      color = theme.onAccent;
+      break;
+    case 'muted':
+      bg = theme.surfaceMuted;
+      color = theme.textMuted;
+      borderColor = theme.border;
+      break;
+    case 'secondary':
+      bg = theme.surface;
+      color = theme.text;
+      borderColor = theme.border;
+      break;
+    case 'danger':
+      bg = theme.danger;
+      color = '#fff';
+      break;
+    case 'primary':
+    default:
+      bg = theme.accent;
+      color = theme.onAccent;
+      break;
+  }
+
+  const inactive = disabled || loading;
 
   return (
     <PressableScale
-      disabled={disabled || loading}
+      disabled={inactive}
       onPress={onPress}
       style={[
         styles.button,
         Platform.OS === 'web' ? styles.webButton : undefined,
+        inactive && styles.inactive,
         {
           backgroundColor: bg,
           borderColor,
@@ -75,5 +102,6 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
     userSelect: 'none',
   } as ViewStyle,
+  inactive: { opacity: 0.55 },
   label: { fontSize: 15, fontWeight: '700' },
 });

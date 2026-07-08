@@ -355,11 +355,12 @@ export default function StaffMaintenanceScreen() {
         ) : null}
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={closeSheet} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Guardar evidencia"
+              variant="success"
               loading={submitting}
               onPress={() => void handleUploadEvidence()}
             />
@@ -447,11 +448,12 @@ export default function StaffMaintenanceScreen() {
         ) : null}
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={closeSheet} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Publicar tarjeta"
+              variant="success"
               loading={submitting}
               onPress={() => void handleCreateOnDemand()}
             />
@@ -470,11 +472,12 @@ export default function StaffMaintenanceScreen() {
         />
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={closeSheet} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Guardar cambios"
+              variant="success"
               loading={submitting}
               onPress={() => void handleUpdateOnDemand()}
             />

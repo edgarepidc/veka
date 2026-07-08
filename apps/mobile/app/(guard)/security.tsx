@@ -211,6 +211,7 @@ export default function GuardSecurityScreen() {
             />
             <PrimaryButton
               label={scanning ? 'Validando…' : 'Validar ingreso'}
+              variant="success"
               loading={scanning}
               onPress={() => void handleValidateRef()}
             />
@@ -322,11 +323,12 @@ export default function GuardSecurityScreen() {
         <GlassInput placeholder="Notas (opcional)" value={packageNotes} onChangeText={setPackageNotes} />
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={() => setPackageSheetOpen(false)} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={() => setPackageSheetOpen(false)} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Registrar y notificar"
+              variant="success"
               loading={submitting}
               onPress={() => void handleRegisterPackage()}
             />

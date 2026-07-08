@@ -137,7 +137,7 @@ export function ReservationDetailModal({
               ) : null}
               <PrimaryButton
                 label={cancelling ? 'Cancelando…' : 'Cancelar reserva'}
-                variant="secondary"
+                variant="muted"
                 disabled={cancelling || !canCancel}
                 onPress={handleCancel}
                 style={{ marginTop: onRebook ? 12 : 20 }}

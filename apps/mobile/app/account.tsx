@@ -103,6 +103,7 @@ export default function AccountScreen() {
           />
           <PrimaryButton
             label="Guardar teléfono"
+            variant="success"
             loading={savingPhone}
             onPress={() => void handleSavePhone()}
           />

@@ -98,6 +98,7 @@ export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrP
 
       <PrimaryButton
         label={busy === 'save' ? 'Guardando…' : 'Guardar pase en fotos'}
+        variant="success"
         onPress={() => void handleSave()}
         disabled={busy !== null}
       />

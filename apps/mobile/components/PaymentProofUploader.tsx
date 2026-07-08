@@ -116,6 +116,7 @@ export function PaymentProofUploader({
         </Text>
         <PrimaryButton
           label="Enviar comprobante"
+          variant="success"
           loading={uploading}
           onPress={() => void submitProof()}
           style={styles.actionBtn}
@@ -129,7 +130,7 @@ export function PaymentProofUploader({
         />
         <PrimaryButton
           label="Cancelar"
-          variant="secondary"
+          variant="muted"
           disabled={uploading}
           onPress={() => setPendingImage(null)}
         />

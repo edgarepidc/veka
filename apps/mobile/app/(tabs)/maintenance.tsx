@@ -357,11 +357,12 @@ export default function MaintenanceScreen() {
         ) : null}
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={() => setSheetOpen(false)} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={() => setSheetOpen(false)} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Enviar reporte"
+              variant="success"
               loading={submitting}
               onPress={() => void handleCreateTicket()}
             />

@@ -377,11 +377,12 @@ export default function SecurityScreen() {
         ) : null}
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
+            <PrimaryButton label="Cancelar" variant="muted" onPress={closeSheet} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton
               label="Generar QR"
+              variant="success"
               loading={submitting}
               onPress={() => void handleCreateVisit()}
               disabled={visitType === 'rental' && rentalBlocked}
