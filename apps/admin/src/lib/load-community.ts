@@ -1,3 +1,5 @@
+import { type ClusterRef } from '@veka/shared';
+
 import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
@@ -34,6 +36,7 @@ export interface CommunityPostRow {
   total_votes: number;
   eligible_voters: number;
   comments: CommunityCommentRow[];
+  clusters: ClusterRef[];
 }
 
 export interface CommunityDocumentRow {
@@ -42,6 +45,7 @@ export interface CommunityDocumentRow {
   category: string;
   file_url: string;
   created_at: string;
+  clusters: ClusterRef[];
 }
 
 async function countEligibleVoters(
@@ -88,7 +92,7 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
     (Array.isArray(row.poll_options) ? row.poll_options : []).map((opt: { id: string }) => opt.id),
   );
 
-  const [votesRes, commentsRes, eligibleFormal, eligibleInformal] = await Promise.all([
+  const [votesRes, commentsRes, eligibleFormal, eligibleInformal, postClustersRes] = await Promise.all([
     optionIds.length > 0
       ? supabase.from('poll_votes').select('poll_option_id').in('poll_option_id', optionIds)
       : Promise.resolve({ data: [] as { poll_option_id: string }[] }),
@@ -101,6 +105,12 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
       : Promise.resolve({ data: [] as CommunityCommentRow[] }),
     countEligibleVoters(supabase, condoId, true),
     countEligibleVoters(supabase, condoId, false),
+    postIds.length > 0
+      ? supabase
+          .from('post_clusters')
+          .select('post_id, cluster_id, cluster:clusters(name)')
+          .in('post_id', postIds)
+      : Promise.resolve({ data: [] as { post_id: string; cluster_id: string; cluster: { name: string } | { name: string }[] | null }[] }),
   ]);
 
   const voteCounts = new Map<string, number>();
@@ -114,6 +124,15 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
     const list = commentsByPost.get(comment.post_id) ?? [];
     list.push(comment as CommunityCommentRow);
     commentsByPost.set(comment.post_id, list);
+  }
+
+  const clustersByPost = new Map<string, ClusterRef[]>();
+  for (const row of postClustersRes.data ?? []) {
+    const clusterRaw = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+    const name = clusterRaw?.name ?? 'Torre';
+    const list = clustersByPost.get(row.post_id) ?? [];
+    list.push({ id: row.cluster_id, name });
+    clustersByPost.set(row.post_id, list);
   }
 
   return rows.map((row) => {
@@ -146,6 +165,7 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
       total_votes: totalVotes,
       eligible_voters: isFormal ? eligibleFormal : eligibleInformal,
       comments: commentsByPost.get(row.id) ?? [],
+      clusters: clustersByPost.get(row.id) ?? [],
     };
   });
 }
@@ -161,5 +181,27 @@ export async function loadCommunityDocuments(condominiumId?: string): Promise<Co
     .order('created_at', { ascending: false })
     .limit(30);
 
-  return (data ?? []) as CommunityDocumentRow[];
+  const rows = (data ?? []) as Omit<CommunityDocumentRow, 'clusters'>[];
+  const documentIds = rows.map((row) => row.id);
+
+  const { data: documentClusters } = documentIds.length
+    ? await supabase
+        .from('document_clusters')
+        .select('document_id, cluster_id, cluster:clusters(name)')
+        .in('document_id', documentIds)
+    : { data: [] as { document_id: string; cluster_id: string; cluster: { name: string } | { name: string }[] | null }[] };
+
+  const clustersByDocument = new Map<string, ClusterRef[]>();
+  for (const row of documentClusters ?? []) {
+    const clusterRaw = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+    const name = clusterRaw?.name ?? 'Torre';
+    const list = clustersByDocument.get(row.document_id) ?? [];
+    list.push({ id: row.cluster_id, name });
+    clustersByDocument.set(row.document_id, list);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    clusters: clustersByDocument.get(row.id) ?? [],
+  }));
 }

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getMemberUserIdsForScope } from '@/lib/community-notifications';
 
 export interface ChargeReminderInput {
   condominiumId: string;
@@ -426,6 +427,7 @@ export interface CommunityPostNotificationInput {
   postType: 'announcement' | 'poll' | 'photo';
   isPinned: boolean;
   excludeUserId?: string | null;
+  clusterIds?: string[] | null;
 }
 
 function communityPushCopy(input: CommunityPostNotificationInput): { title: string; message: string } {
@@ -458,7 +460,7 @@ export async function deliverCommunityPost(
   const admin = createAdminClient();
   const { title, message } = communityPushCopy(input);
 
-  const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+  const memberIds = await getMemberUserIdsForScope(admin, input.condominiumId, input.clusterIds);
   const targets = input.excludeUserId
     ? memberIds.filter((userId) => userId !== input.excludeUserId)
     : memberIds;
@@ -499,6 +501,7 @@ export interface CommunityPollClosedNotificationInput {
   condominiumId: string;
   postId: string;
   title: string;
+  clusterIds?: string[] | null;
 }
 
 export async function deliverCommunityPollClosed(
@@ -507,7 +510,7 @@ export async function deliverCommunityPollClosed(
   const admin = createAdminClient();
   const title = 'Encuesta cerrada — Veka';
   const message = `Resultados disponibles: ${input.title}`;
-  const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+  const memberIds = await getMemberUserIdsForScope(admin, input.condominiumId, input.clusterIds);
 
   let pushSent = 0;
   let emailSent = 0;

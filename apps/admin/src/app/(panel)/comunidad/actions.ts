@@ -4,6 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import {
+  attachDocumentClusters,
+  attachPostClusters,
+  resolveClusterScopeFromForm,
+  validateClusterIds,
+} from '@/lib/community-clusters';
 import { notifyCondoMembersInApp } from '@/lib/community-notifications';
 import { deliverCommunityPollClosed, deliverCommunityPost } from '@/lib/notifications';
 import { createClient } from '@/lib/supabase/server';
@@ -33,6 +39,12 @@ export async function createAnnouncement(formData: FormData) {
 
   if (!title) return { error: 'Título obligatorio.' };
 
+  const scope = resolveClusterScopeFromForm(formData);
+  if (scope.error) return { error: scope.error };
+
+  const clusterCheck = await validateClusterIds(supabase, condominiumId, scope.clusterIds);
+  if (clusterCheck.error) return { error: clusterCheck.error };
+
   const { data: post, error } = await supabase
     .from('posts')
     .insert({
@@ -52,6 +64,9 @@ export async function createAnnouncement(formData: FormData) {
 
   if (error || !post) return { error: error?.message ?? 'No se pudo publicar el aviso.' };
 
+  const attachResult = await attachPostClusters(supabase, post.id, scope.clusterIds);
+  if (attachResult.error) return { error: attachResult.error };
+
   const delivery = await deliverCommunityPost({
     condominiumId,
     postId: post.id,
@@ -60,6 +75,7 @@ export async function createAnnouncement(formData: FormData) {
     postType: 'announcement',
     isPinned,
     excludeUserId: user.id,
+    clusterIds: scope.clusterIds,
   });
 
   await notifyCondoMembersInApp({
@@ -69,6 +85,7 @@ export async function createAnnouncement(formData: FormData) {
     body: title,
     entityId: post.id,
     excludeUserId: user.id,
+    clusterIds: scope.clusterIds,
   });
 
   revalidatePath('/comunidad');
@@ -95,8 +112,15 @@ export async function uploadDocument(formData: FormData) {
   if (!category) return { error: 'Categoría obligatoria.' };
   if (!fileUrl) return { error: 'Sube el documento (PDF o imagen).' };
 
+  const scope = resolveClusterScopeFromForm(formData);
+  if (scope.error) return { error: scope.error };
+
+  const clusterCheck = await validateClusterIds(supabase, condominiumId, scope.clusterIds);
+  if (clusterCheck.error) return { error: clusterCheck.error };
+
+  const documentId = randomUUID();
   const { error } = await supabase.from('documents').insert({
-    id: randomUUID(),
+    id: documentId,
     condominium_id: condominiumId,
     title,
     category,
@@ -105,6 +129,9 @@ export async function uploadDocument(formData: FormData) {
   });
 
   if (error) return { error: error.message };
+
+  const attachResult = await attachDocumentClusters(supabase, documentId, scope.clusterIds);
+  if (attachResult.error) return { error: attachResult.error };
 
   revalidatePath('/comunidad');
   return { success: true, message: 'Documento publicado.' };
@@ -157,6 +184,12 @@ export async function createPoll(formData: FormData) {
     quorumPercent = parsed;
   }
 
+  const scope = resolveClusterScopeFromForm(formData);
+  if (scope.error) return { error: scope.error };
+
+  const clusterCheck = await validateClusterIds(supabase, condominiumId, scope.clusterIds);
+  if (clusterCheck.error) return { error: clusterCheck.error };
+
   const { data: post, error: postError } = await supabase
     .from('posts')
     .insert({
@@ -186,6 +219,9 @@ export async function createPoll(formData: FormData) {
 
   if (optionsError) return { error: optionsError.message };
 
+  const attachResult = await attachPostClusters(supabase, post.id, scope.clusterIds);
+  if (attachResult.error) return { error: attachResult.error };
+
   const delivery = await deliverCommunityPost({
     condominiumId,
     postId: post.id,
@@ -194,6 +230,7 @@ export async function createPoll(formData: FormData) {
     postType: 'poll',
     isPinned,
     excludeUserId: user.id,
+    clusterIds: scope.clusterIds,
   });
 
   await notifyCondoMembersInApp({
@@ -203,6 +240,7 @@ export async function createPoll(formData: FormData) {
     body: title,
     entityId: post.id,
     excludeUserId: user.id,
+    clusterIds: scope.clusterIds,
   });
 
   revalidatePath('/comunidad');
@@ -238,18 +276,26 @@ export async function closePoll(postId: string) {
 
   if (error) return { error: error.message };
 
+  const { data: clusterRows } = await supabase
+    .from('post_clusters')
+    .select('cluster_id')
+    .eq('post_id', postId);
+  const clusterIds = (clusterRows ?? []).map((row) => row.cluster_id as string);
+
   await notifyCondoMembersInApp({
     condominiumId,
     notificationType: 'community_poll_closed',
     title: 'Encuesta cerrada',
     body: post.title,
     entityId: postId,
+    clusterIds,
   });
 
   await deliverCommunityPollClosed({
     condominiumId,
     postId,
     title: post.title,
+    clusterIds,
   });
 
   revalidatePath('/comunidad');

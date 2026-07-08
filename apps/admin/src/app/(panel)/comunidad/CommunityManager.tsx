@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo, useState, useTransition, useEffect } from 'react';
-import { documentStoragePath, computePollQuorumResult, isImageStoragePath, isPollClosed, pollCloseLabel, postImagePath, STORAGE_BUCKETS } from '@veka/shared';
+import { documentStoragePath, computePollQuorumResult, formatClusterScopeLabel, isImageStoragePath, isPollClosed, pollCloseLabel, postImagePath, STORAGE_BUCKETS } from '@veka/shared';
+
+import { ClusterTargetPicker } from '@/components/ClusterTargetPicker';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -9,6 +11,7 @@ import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
+import type { ClusterOption } from '@/lib/community-clusters';
 
 import { createAnnouncement, archivePost, closePoll, createPoll, deleteComment, exportPollResults, unpinPost, uploadDocument } from './actions';
 
@@ -97,10 +100,12 @@ export function CommunityManager({
   posts,
   documents,
   condominiumId,
+  clusters,
 }: {
   posts: CommunityPostRow[];
   documents: CommunityDocumentRow[];
   condominiumId: string;
+  clusters: ClusterOption[];
 }) {
   const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
@@ -207,6 +212,7 @@ export function CommunityManager({
               hint="Imagen o PDF. Máximo 2 MB (imagen) o 5 MB (PDF)."
               uploadButtonLabel="Subir adjunto"
             />
+            <ClusterTargetPicker clusters={clusters} />
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
               Fijar en la parte superior
@@ -292,6 +298,8 @@ export function CommunityManager({
               Fijar en la parte superior
             </label>
 
+            <ClusterTargetPicker clusters={clusters} />
+
             <button type="submit" disabled={pending} className="glass-btn-primary">
               {pending ? 'Publicando…' : 'Publicar encuesta'}
             </button>
@@ -307,6 +315,7 @@ export function CommunityManager({
               label="Archivo"
               hint="PDF o imagen. Los residentes lo verán en la pestaña Documentos de la app."
             />
+            <ClusterTargetPicker clusters={clusters} />
             <button type="submit" disabled={pending} className="glass-btn-primary">
               {pending ? 'Publicando…' : 'Publicar documento'}
             </button>
@@ -363,10 +372,10 @@ export function CommunityManager({
               filteredDocuments.map((doc) => (
                 <li key={doc.id} className="glass-card-deep flex items-center justify-between gap-3 px-4 py-3">
                   <div>
-                    <p className="font-medium text-[var(--text)]">{doc.title}</p>
-                    <p className="text-xs text-subtle">
-                      {doc.category} · {timeAgo(doc.created_at)}
-                    </p>
+                  <p className="font-medium text-[var(--text)]">{doc.title}</p>
+                  <p className="text-xs text-subtle">
+                    {doc.category} · {formatClusterScopeLabel(doc.clusters)} · {timeAgo(doc.created_at)}
+                  </p>
                   </div>
                   <button
                     type="button"
@@ -428,6 +437,7 @@ export function CommunityManager({
                     </span>
                   ) : null}
                   {post.is_pinned ? <span className="text-[10px] text-accent">Fijado</span> : null}
+                  <span className="text-[10px] text-subtle">{formatClusterScopeLabel(post.clusters)}</span>
                   <span className="text-xs text-subtle">{timeAgo(post.created_at)}</span>
                 </div>
                 <p className="mt-2 font-medium text-[var(--text)]">{post.title}</p>

@@ -27,6 +27,34 @@ async function getCondoMemberUserIds(admin: SupabaseClient, condominiumId: strin
   return [...new Set((data ?? []).map((row) => row.user_id as string))];
 }
 
+export async function getMemberUserIdsForScope(
+  admin: SupabaseClient,
+  condominiumId: string,
+  clusterIds?: string[] | null,
+): Promise<string[]> {
+  if (!clusterIds || clusterIds.length === 0) {
+    return getCondoMemberUserIds(admin, condominiumId);
+  }
+
+  const { data } = await admin
+    .from('memberships')
+    .select('user_id, unit:units(cluster_id)')
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'active');
+
+  return [
+    ...new Set(
+      (data ?? [])
+        .filter((row) => {
+          const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+          const clusterId = unit?.cluster_id as string | null | undefined;
+          return clusterId != null && clusterIds.includes(clusterId);
+        })
+        .map((row) => row.user_id as string),
+    ),
+  ];
+}
+
 export async function createUserNotifications(
   inputs: CreateUserNotificationInput[],
 ): Promise<{ inserted: number }> {
@@ -56,9 +84,10 @@ export async function notifyCondoMembersInApp(input: {
   body?: string | null;
   entityId?: string | null;
   excludeUserId?: string | null;
+  clusterIds?: string[] | null;
 }): Promise<{ inserted: number }> {
   const admin = createAdminClient();
-  const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+  const memberIds = await getMemberUserIdsForScope(admin, input.condominiumId, input.clusterIds);
   const targets = input.excludeUserId
     ? memberIds.filter((id) => id !== input.excludeUserId)
     : memberIds;
