@@ -21,4 +21,5 @@ export * from './storage';
 export * from './team';
 export * from './types';
 export * from './units';
+export * from './community';
 export * from './visit-qr';

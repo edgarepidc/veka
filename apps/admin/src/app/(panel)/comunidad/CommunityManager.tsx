@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { documentStoragePath, STORAGE_BUCKETS } from '@veka/shared';
+import { documentStoragePath, isPollClosed, pollCloseLabel, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -10,7 +10,7 @@ import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
 
-import { createAnnouncement, createPoll, uploadDocument } from './actions';
+import { createAnnouncement, closePoll, createPoll, uploadDocument } from './actions';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -35,6 +35,14 @@ export function CommunityManager({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
+
+  function runClose(postId: string) {
+    setMessage(null);
+    start(async () => {
+      const result = await closePoll(postId);
+      setMessage(result.error ?? result.message ?? 'Encuesta cerrada.');
+    });
+  }
 
   function run(action: (formData: FormData) => Promise<{ error?: string; success?: boolean; message?: string }>, formData: FormData, ok: string) {
     setMessage(null);
@@ -143,6 +151,11 @@ export function CommunityManager({
               </label>
             </div>
 
+            <label className="block text-sm text-muted">
+              Cierre automático (opcional)
+              <input type="datetime-local" name="poll_closes_at" className="glass-input mt-1" />
+            </label>
+
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
               Fijar en la parte superior
@@ -182,7 +195,11 @@ export function CommunityManager({
           {posts.length === 0 ? (
             <li className="text-sm text-subtle">No hay publicaciones todavía.</li>
           ) : (
-            posts.map((post) => (
+            posts.map((post) => {
+              const pollClosed = post.post_type === 'poll' && isPollClosed(post);
+              const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
+
+              return (
               <li key={post.id} className="glass-card-deep px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="glass-tag-blue text-[10px]">
@@ -200,20 +217,53 @@ export function CommunityManager({
                       Al corriente
                     </span>
                   ) : null}
+                  {pollClosed ? (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-red-300">
+                      Cerrada
+                    </span>
+                  ) : null}
                   {post.is_pinned ? <span className="text-[10px] text-accent">Fijado</span> : null}
                   <span className="text-xs text-subtle">{timeAgo(post.created_at)}</span>
                 </div>
                 <p className="mt-2 font-medium text-[var(--text)]">{post.title}</p>
                 {post.body ? <p className="mt-1 text-sm text-muted">{post.body}</p> : null}
-                {post.poll_options.length > 0 ? (
-                  <ul className="mt-2 space-y-1 text-sm text-subtle">
-                    {post.poll_options.map((opt) => (
-                      <li key={opt.id}>· {opt.label}</li>
-                    ))}
-                  </ul>
+                {closeLabel ? <p className="mt-1 text-xs text-subtle">{closeLabel}</p> : null}
+                {post.post_type === 'poll' && post.poll_options.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                      Resultados · {post.total_votes} voto{post.total_votes === 1 ? '' : 's'}
+                    </p>
+                    {post.poll_options.map((opt) => {
+                      const pct = post.total_votes > 0 ? Math.round((opt.votes / post.total_votes) * 100) : 0;
+                      return (
+                        <div key={opt.id}>
+                          <div className="mb-1 flex items-center justify-between text-sm">
+                            <span className="text-[var(--text)]">{opt.label}</span>
+                            <span className="text-subtle">
+                              {opt.votes} ({pct}%)
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                            <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!pollClosed ? (
+                      <button
+                        type="button"
+                        onClick={() => runClose(post.id)}
+                        disabled={pending}
+                        className="glass-btn-secondary mt-2 text-xs"
+                      >
+                        Cerrar encuesta
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </li>
-            ))
+              );
+            })
           )}
         </ul>
       </GlassCard>

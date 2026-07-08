@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { canVoteInPoll, isDelinquentCharge, STORAGE_BUCKETS } from '@veka/shared';
+import { canVoteInPoll, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -14,6 +14,8 @@ export interface CommunityPost {
   is_pinned: boolean;
   is_formal: boolean;
   require_payment_current: boolean;
+  poll_closes_at: string | null;
+  poll_closed_at: string | null;
   created_at: string;
   author_id: string;
   author_name: string;
@@ -23,6 +25,18 @@ export interface CommunityPost {
   myReactions: string[];
   pollOptions?: { id: string; label: string; votes: number }[];
   myVote?: string | null;
+  comments: PostComment[];
+}
+
+export interface PostComment {
+  id: string;
+  post_id: string;
+  body: string;
+  created_at: string;
+  author_id: string;
+  author_name: string;
+  author_initials: string;
+  author_color: string;
 }
 
 export interface CommunityDocument {
@@ -90,7 +104,7 @@ export function useCommunity(primary: ActiveMembership | null) {
       supabase
         .from('posts')
         .select(
-          'id, title, body, post_type, is_pinned, is_formal, require_payment_current, created_at, author_id',
+          'id, title, body, post_type, is_pinned, is_formal, require_payment_current, poll_closes_at, poll_closed_at, created_at, author_id',
         )
         .eq('condominium_id', primary.condominium_id)
         .order('is_pinned', { ascending: false })
@@ -115,14 +129,24 @@ export function useCommunity(primary: ActiveMembership | null) {
 
     const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name ?? 'Residente']));
     const postIds = rawPosts.map((p) => p.id);
+    const commentPostIds = rawPosts
+      .filter((post) => post.post_type === 'announcement' || post.post_type === 'photo')
+      .map((post) => post.id);
 
-    const [reactionsRes, pollOptionsRes] = await Promise.all([
+    const [reactionsRes, pollOptionsRes, commentsRes] = await Promise.all([
       postIds.length
         ? supabase.from('post_reactions').select('post_id, emoji, user_id').in('post_id', postIds)
         : Promise.resolve({ data: [] as { post_id: string; emoji: string; user_id: string }[] }),
       postIds.length
         ? supabase.from('poll_options').select('id, post_id, label').in('post_id', postIds)
         : Promise.resolve({ data: [] as { id: string; post_id: string; label: string }[] }),
+      commentPostIds.length
+        ? supabase
+            .from('post_comments')
+            .select('id, post_id, body, created_at, author_id')
+            .in('post_id', commentPostIds)
+            .order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] as { id: string; post_id: string; body: string; created_at: string; author_id: string }[] }),
     ]);
 
     const optionIds = (pollOptionsRes.data ?? []).map((opt) => opt.id);
@@ -144,6 +168,36 @@ export function useCommunity(primary: ActiveMembership | null) {
     const myVotes = new Set(
       (votesRes.data ?? []).filter((v) => v.user_id === user?.id).map((v) => v.poll_option_id),
     );
+
+    const commentAuthorIds = [...new Set((commentsRes.data ?? []).map((comment) => comment.author_id))];
+    const missingAuthorIds = commentAuthorIds.filter((id) => !profileMap.has(id));
+    if (missingAuthorIds.length > 0) {
+      const { data: commentProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', missingAuthorIds);
+      for (const profile of commentProfiles ?? []) {
+        profileMap.set(profile.id, profile.full_name ?? 'Residente');
+      }
+    }
+
+    const commentsByPost = new Map<string, PostComment[]>();
+    for (const comment of commentsRes.data ?? []) {
+      const authorName = profileMap.get(comment.author_id) ?? 'Residente';
+      const mapped: PostComment = {
+        id: comment.id,
+        post_id: comment.post_id,
+        body: comment.body,
+        created_at: comment.created_at,
+        author_id: comment.author_id,
+        author_name: authorName,
+        author_initials: initials(authorName),
+        author_color: authorColor(comment.author_id),
+      };
+      const list = commentsByPost.get(comment.post_id) ?? [];
+      list.push(mapped);
+      commentsByPost.set(comment.post_id, list);
+    }
 
     const mappedPosts: CommunityPost[] = rawPosts.map((post) => {
       const name = profileMap.get(post.author_id) ?? 'Residente';
@@ -176,6 +230,8 @@ export function useCommunity(primary: ActiveMembership | null) {
         is_pinned: post.is_pinned,
         is_formal: post.is_formal ?? true,
         require_payment_current: post.require_payment_current ?? false,
+        poll_closes_at: post.poll_closes_at ?? null,
+        poll_closed_at: post.poll_closed_at ?? null,
         created_at: post.created_at,
         author_id: post.author_id,
         author_name: name,
@@ -185,6 +241,7 @@ export function useCommunity(primary: ActiveMembership | null) {
         myReactions,
         pollOptions,
         myVote: voted?.id ?? null,
+        comments: commentsByPost.get(post.id) ?? [],
       };
     });
 
@@ -271,6 +328,44 @@ export function useCommunity(primary: ActiveMembership | null) {
           );
         },
       )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'post_comments' },
+        (payload) => {
+          const row = payload.new as {
+            id?: string;
+            post_id?: string;
+            body?: string;
+            created_at?: string;
+            author_id?: string;
+          };
+          if (!row.id || !row.post_id || !row.body || !row.created_at || !row.author_id) return;
+
+          setPosts((current) =>
+            current.map((post) => {
+              if (post.id !== row.post_id) return post;
+              if (post.comments.some((comment) => comment.id === row.id)) return post;
+              const authorName = row.author_id === user?.id ? 'Tú' : 'Residente';
+              return {
+                ...post,
+                comments: [
+                  ...post.comments,
+                  {
+                    id: row.id!,
+                    post_id: row.post_id!,
+                    body: row.body!,
+                    created_at: row.created_at!,
+                    author_id: row.author_id!,
+                    author_name: authorName,
+                    author_initials: initials(authorName),
+                    author_color: authorColor(row.author_id!),
+                  },
+                ],
+              };
+            }),
+          );
+        },
+      )
       .subscribe();
 
     return () => {
@@ -334,6 +429,7 @@ export function useCommunity(primary: ActiveMembership | null) {
 
       const post = posts.find((p) => p.id === postId);
       if (!post?.pollOptions || post.myVote) return { error: 'Ya registraste tu voto.' };
+      if (isPollClosed(post)) return { error: 'Esta encuesta ya está cerrada.' };
       if (!canVoteInPost(post)) {
         return { error: 'No cumples los requisitos para votar en esta encuesta.' };
       }
@@ -361,6 +457,47 @@ export function useCommunity(primary: ActiveMembership | null) {
     [canVoteInPost, posts, user],
   );
 
+  const addComment = useCallback(
+    async (postId: string, body: string): Promise<{ error?: string }> => {
+      if (!user) return { error: 'Inicia sesión para comentar.' };
+      const trimmed = body.trim();
+      if (!trimmed) return { error: 'Escribe un comentario.' };
+
+      const post = posts.find((item) => item.id === postId);
+      if (!post || (post.post_type !== 'announcement' && post.post_type !== 'photo')) {
+        return { error: 'Solo puedes comentar en avisos.' };
+      }
+
+      const { data, error } = await supabase
+        .from('post_comments')
+        .insert({ post_id: postId, author_id: user.id, body: trimmed })
+        .select('id, post_id, body, created_at, author_id')
+        .single();
+
+      if (error || !data) return { error: 'No se pudo publicar el comentario.' };
+
+      const mapped: PostComment = {
+        id: data.id,
+        post_id: data.post_id,
+        body: data.body,
+        created_at: data.created_at,
+        author_id: data.author_id,
+        author_name: 'Tú',
+        author_initials: initials('Tú'),
+        author_color: authorColor(data.author_id),
+      };
+
+      setPosts((current) =>
+        current.map((item) =>
+          item.id === postId ? { ...item, comments: [...item.comments, mapped] } : item,
+        ),
+      );
+
+      return {};
+    },
+    [posts, user],
+  );
+
   const canVoteFormalPolls = canVoteInPoll(primary?.unit_relationship ?? null, true, {
     hasOutstandingDebt,
   });
@@ -373,6 +510,7 @@ export function useCommunity(primary: ActiveMembership | null) {
     refresh,
     toggleReaction,
     votePoll,
+    addComment,
     canVoteFormalPolls,
     canVoteInPost,
     hasOutstandingDebt,

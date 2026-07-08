@@ -8,7 +8,9 @@
   ],
   "scripts": {
     "dev": "turbo dev",
-    "dev:mobile": "npm run dev --workspace=@veka/mobile",
+    "dev:mobile": "node scripts/sync-mobile-env.mjs && npm run dev --workspace=@veka/mobile",
+    "dev:mobile:tunnel": "node scripts/sync-mobile-env.mjs && npm run dev:tunnel --workspace=@veka/mobile",
+    "dev:mobile:url": "npm run dev:url --workspace=@veka/mobile",
     "build:mobile:dev:ios": "npm run eas:build:dev:ios --workspace=@veka/mobile",
     "build:mobile:dev:android": "npm run eas:build:dev:android --workspace=@veka/mobile",
     "dev:admin": "npm run dev --workspace=@veka/admin",
@@ -34,6 +36,7 @@
     "apply:condo-transparency-income": "node scripts/apply-condo-transparency-income.mjs",
     "apply:condo-transparency-collection": "node scripts/apply-condo-transparency-collection.mjs",
     "apply:community-features": "node scripts/apply-community-features.mjs",
+    "apply:community-comments-poll-close": "node scripts/apply-community-comments-poll-close.mjs",
     "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
   "devDependencies": {

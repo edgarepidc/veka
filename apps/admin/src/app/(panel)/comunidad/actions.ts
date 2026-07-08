@@ -114,6 +114,7 @@ export async function createPoll(formData: FormData) {
   const isFormal = formData.get('is_formal') !== 'off';
   const isPinned = formData.get('is_pinned') === 'on';
   const requirePaymentCurrent = formData.get('require_payment_current') === 'on';
+  const pollClosesAtRaw = String(formData.get('poll_closes_at') ?? '').trim();
 
   const options = optionsRaw
     .split('\n')
@@ -122,6 +123,14 @@ export async function createPoll(formData: FormData) {
 
   if (!title) return { error: 'Título obligatorio.' };
   if (options.length < 2) return { error: 'Agrega al menos dos opciones de respuesta.' };
+
+  let pollClosesAt: string | null = null;
+  if (pollClosesAtRaw) {
+    const parsed = new Date(pollClosesAtRaw);
+    if (Number.isNaN(parsed.getTime())) return { error: 'Fecha de cierre inválida.' };
+    if (parsed.getTime() <= Date.now()) return { error: 'La fecha de cierre debe ser futura.' };
+    pollClosesAt = parsed.toISOString();
+  }
 
   const { data: post, error: postError } = await supabase
     .from('posts')
@@ -135,6 +144,7 @@ export async function createPoll(formData: FormData) {
       is_formal: isFormal,
       is_admin_only: false,
       require_payment_current: requirePaymentCurrent,
+      poll_closes_at: pollClosesAt,
     })
     .select('id')
     .single();
@@ -161,4 +171,37 @@ export async function createPoll(formData: FormData) {
 
   revalidatePath('/comunidad');
   return { success: true, message: formatPublishMessage('Encuesta publicada.', delivery.pushSent) };
+}
+
+export async function closePoll(postId: string) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('id, post_type, poll_closed_at')
+    .eq('id', postId)
+    .eq('condominium_id', condominiumId)
+    .single();
+
+  if (fetchError || !post) return { error: 'Encuesta no encontrada.' };
+  if (post.post_type !== 'poll') return { error: 'Solo aplica a encuestas.' };
+  if (post.poll_closed_at) return { error: 'La encuesta ya está cerrada.' };
+
+  const { error } = await supabase
+    .from('posts')
+    .update({ poll_closed_at: new Date().toISOString() })
+    .eq('id', postId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/comunidad');
+  return { success: true, message: 'Encuesta cerrada. Ya no se aceptan votos.' };
 }

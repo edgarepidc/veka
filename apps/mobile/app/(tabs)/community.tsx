@@ -8,11 +8,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { POLL_DEBT_MESSAGE } from '@veka/shared';
+import { isPollClosed, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -63,11 +64,12 @@ export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, canVoteInPost, hasOutstandingDebt } =
+  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
 
   function confirmVote(postId: string, optionId: string, label: string) {
     Alert.alert('Confirmar voto', `¿Registrar tu voto por "${label}"? No podrás cambiarlo después.`, [
@@ -81,6 +83,16 @@ export default function CommunityScreen() {
         },
       },
     ]);
+  }
+
+  async function submitComment(postId: string) {
+    const body = commentDrafts[postId] ?? '';
+    const result = await addComment(postId, body);
+    if (result.error) {
+      Alert.alert('Comentario', result.error);
+      return;
+    }
+    setCommentDrafts((current) => ({ ...current, [postId]: '' }));
   }
 
   const filteredPosts = useMemo(() => {
@@ -140,6 +152,8 @@ export default function CommunityScreen() {
                   const typeTag = postTypeTag(post.post_type);
                   const accent = postAccent(post.post_type, post.is_pinned);
                   const totalVotes = post.pollOptions?.reduce((sum, o) => sum + o.votes, 0) ?? 0;
+                  const pollClosed = post.post_type === 'poll' && isPollClosed(post);
+                  const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
 
                   return (
                     <GlassCard key={post.id} variant="accent" accent={accent} style={styles.postCard}>
@@ -163,8 +177,32 @@ export default function CommunityScreen() {
                         <Text style={[styles.postBody, { color: theme.textMuted }]}>{post.body}</Text>
                       ) : null}
 
+                      {post.post_type === 'poll' && closeLabel ? (
+                        <Text
+                          style={{
+                            color: pollClosed ? theme.danger : theme.textSubtle,
+                            fontSize: 11,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {closeLabel}
+                        </Text>
+                      ) : null}
+
                       {post.post_type === 'poll' && post.pollOptions ? (
                         <View style={styles.poll}>
+                          {pollClosed ? (
+                            <View
+                              style={[
+                                styles.debtBanner,
+                                { backgroundColor: `${theme.textSubtle}12`, borderColor: `${theme.textSubtle}33` },
+                              ]}
+                            >
+                              <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                                Esta encuesta ya no acepta votos. Solo puedes ver resultados.
+                              </Text>
+                            </View>
+                          ) : null}
                           {post.is_formal ? (
                             <Text style={{ color: theme.textSubtle, fontSize: 10, marginBottom: 6 }}>
                               Votación formal · solo residente propietario
@@ -193,7 +231,7 @@ export default function CommunityScreen() {
                           {post.pollOptions.map((opt) => {
                             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
                             const voted = post.myVote === opt.id;
-                            const pollLocked = !canVoteInPost(post) || !!post.myVote;
+                            const pollLocked = pollClosed || !canVoteInPost(post) || !!post.myVote;
                             return (
                               <Pressable
                                 key={opt.id}
@@ -225,6 +263,48 @@ export default function CommunityScreen() {
                           <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 4 }}>
                             {totalVotes} voto{totalVotes === 1 ? '' : 's'}
                           </Text>
+                        </View>
+                      ) : null}
+
+                      {post.post_type === 'announcement' || post.post_type === 'photo' ? (
+                        <View style={styles.comments}>
+                          <Text style={{ color: theme.textSubtle, fontSize: 11, fontWeight: '700', marginBottom: 8 }}>
+                            COMENTARIOS ({post.comments.length})
+                          </Text>
+                          {post.comments.map((comment) => (
+                            <View key={comment.id} style={[styles.commentRow, { borderColor: theme.glassBorder }]}>
+                              <Avatar initials={comment.author_initials} color={comment.author_color} size={28} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>
+                                  {comment.author_name}
+                                </Text>
+                                <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 18 }}>
+                                  {comment.body}
+                                </Text>
+                                <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 2 }}>
+                                  {timeAgo(comment.created_at)}
+                                </Text>
+                              </View>
+                            </View>
+                          ))}
+                          <View style={[styles.commentComposer, { borderColor: theme.glassBorder, backgroundColor: theme.glassDeep }]}>
+                            <TextInput
+                              value={commentDrafts[post.id] ?? ''}
+                              onChangeText={(value) =>
+                                setCommentDrafts((current) => ({ ...current, [post.id]: value }))
+                              }
+                              placeholder="Escribe un comentario…"
+                              placeholderTextColor={theme.textSubtle}
+                              style={{ flex: 1, color: theme.text, fontSize: 13, paddingVertical: 8 }}
+                              multiline
+                            />
+                            <Pressable
+                              onPress={() => void submitComment(post.id)}
+                              style={[styles.commentSend, { backgroundColor: theme.accent }]}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Enviar</Text>
+                            </Pressable>
+                          </View>
                         </View>
                       ) : null}
 
@@ -320,6 +400,28 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   debtLink: { alignSelf: 'flex-start' },
+  comments: { marginBottom: 12 },
+  commentRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  commentComposer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  commentSend: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rxnBtn: {
     flexDirection: 'row',
