@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { canVoteInPoll, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS } from '@veka/shared';
+import { canVoteInPoll, formatCommunityAuthorName, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -142,11 +142,34 @@ export function useCommunity(primary: ActiveMembership | null) {
 
     const rawPosts = postsRes.data ?? [];
     const authorIds = [...new Set(rawPosts.map((p) => p.author_id))];
-    const { data: profiles } = authorIds.length
-      ? await supabase.from('profiles').select('id, full_name').in('id', authorIds)
-      : { data: [] as { id: string; full_name: string | null }[] };
+    const [profilesRes, authorMembershipsRes] = await Promise.all([
+      authorIds.length
+        ? supabase.from('profiles').select('id, full_name').in('id', authorIds)
+        : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
+      authorIds.length
+        ? supabase
+            .from('memberships')
+            .select('user_id, role')
+            .eq('condominium_id', primary.condominium_id)
+            .eq('status', 'active')
+            .in('user_id', authorIds)
+        : Promise.resolve({ data: [] as { user_id: string; role: string }[] }),
+    ]);
 
-    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name ?? 'Residente']));
+    const roleMap = new Map(
+      (authorMembershipsRes.data ?? []).map((membership) => [membership.user_id, membership.role]),
+    );
+    const profileMap = new Map(
+      (profilesRes.data ?? []).map((profile) => [
+        profile.id,
+        formatCommunityAuthorName(profile.full_name, roleMap.get(profile.id)),
+      ]),
+    );
+    for (const authorId of authorIds) {
+      if (!profileMap.has(authorId)) {
+        profileMap.set(authorId, formatCommunityAuthorName(null, roleMap.get(authorId)));
+      }
+    }
     const postIds = rawPosts.map((p) => p.id);
     const commentPostIds = rawPosts
       .filter((post) => post.post_type === 'announcement' || post.post_type === 'photo')
@@ -195,8 +218,21 @@ export function useCommunity(primary: ActiveMembership | null) {
         .from('profiles')
         .select('id, full_name')
         .in('id', missingAuthorIds);
+      const { data: commentMemberships } = await supabase
+        .from('memberships')
+        .select('user_id, role')
+        .eq('condominium_id', primary.condominium_id)
+        .eq('status', 'active')
+        .in('user_id', missingAuthorIds);
+
+      const commentRoleMap = new Map(
+        (commentMemberships ?? []).map((membership) => [membership.user_id, membership.role]),
+      );
       for (const profile of commentProfiles ?? []) {
-        profileMap.set(profile.id, profile.full_name ?? 'Residente');
+        profileMap.set(
+          profile.id,
+          formatCommunityAuthorName(profile.full_name, commentRoleMap.get(profile.id)),
+        );
       }
     }
 
@@ -307,6 +343,9 @@ export function useCommunity(primary: ActiveMembership | null) {
               let myReactions = [...post.myReactions];
 
               if (payload.eventType === 'INSERT') {
+                if (row.user_id === user?.id && post.myReactions.includes(row.emoji!)) {
+                  return post;
+                }
                 reactions[row.emoji!] = (reactions[row.emoji!] ?? 0) + 1;
                 if (row.user_id === user?.id && !myReactions.includes(row.emoji!)) {
                   myReactions.push(row.emoji!);
@@ -338,6 +377,9 @@ export function useCommunity(primary: ActiveMembership | null) {
           setPosts((current) =>
             current.map((post) => {
               if (post.id !== postId || !post.pollOptions) return post;
+              if (row.user_id === user?.id && post.myVote === row.poll_option_id) {
+                return post;
+              }
               return {
                 ...post,
                 pollOptions: post.pollOptions.map((opt) =>

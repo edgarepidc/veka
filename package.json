@@ -39,6 +39,7 @@
     "apply:community-features": "node scripts/apply-community-features.mjs",
     "apply:community-comments-poll-close": "node scripts/apply-community-comments-poll-close.mjs",
     "apply:community-moderation-quorum-notifications": "node scripts/apply-community-moderation-quorum-notifications.mjs",
+    "apply:profiles-condo-members-select": "node scripts/apply-profiles-condo-members-select.mjs",
     "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
   "devDependencies": {

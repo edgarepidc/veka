@@ -30,6 +30,23 @@ export function pollCloseLabel(poll: PollCloseFields): string | null {
   return null;
 }
 
+const STAFF_AUTHOR_ROLES = new Set(['super_admin', 'admin', 'board_member', 'staff']);
+
+export function formatCommunityAuthorName(
+  fullName: string | null | undefined,
+  role: string | null | undefined,
+): string {
+  const name = fullName?.trim() || 'Residente';
+  if (role === 'admin' || role === 'super_admin') return `${name} - Administrador`;
+  if (role === 'board_member') return `${name} - Mesa directiva`;
+  if (role === 'staff') return `${name} - Staff`;
+  return name;
+}
+
+export function isStaffCommunityRole(role: string | null | undefined): boolean {
+  return role != null && STAFF_AUTHOR_ROLES.has(role);
+}
+
 export interface PollOptionVotes {
   id: string;
   label: string;
@@ -57,7 +74,9 @@ export interface PollQuorumResult {
 export function computePollQuorumResult(input: PollQuorumInput): PollQuorumResult {
   const { options, totalVotes, eligibleVoters, quorumPercent, isFormal, isClosed } = input;
   const participationPercent =
-    eligibleVoters > 0 ? Math.round((totalVotes / eligibleVoters) * 100) : 0;
+    eligibleVoters > 0
+      ? Math.min(100, Math.round((totalVotes / eligibleVoters) * 100))
+      : 0;
 
   const winning =
     options.length > 0
