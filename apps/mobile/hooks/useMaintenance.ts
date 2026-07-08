@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MaintenanceRecurrence, MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
-import { STORAGE_BUCKETS, groupRoutinesByWeekday, maintenanceFilePath } from '@veka/shared';
+import {
+  STORAGE_BUCKETS,
+  amenityAppliesToUnitCluster,
+  groupRoutinesByWeekday,
+  maintenanceFilePath,
+} from '@veka/shared';
 
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { notifyNewMaintenanceTicket } from '@/lib/notify-new-maintenance-ticket';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
+
+export type MaintenanceAppMode = 'resident' | 'staff';
 
 export interface MaintenanceTicketRow {
   id: string;
@@ -36,7 +43,7 @@ export interface MaintenanceRoutineRow {
   recurrence: MaintenanceRecurrence;
   monthly_day: number | null;
   sort_order: number;
-  amenity: { name: string } | null;
+  amenity: { name: string; cluster_id: string | null } | null;
   evidence: MaintenanceRoutineEvidenceRow[];
 }
 
@@ -46,7 +53,7 @@ async function resolveMaintenanceFileUrl(path: string): Promise<string | null> {
   return data?.signedUrl ?? null;
 }
 
-export function useMaintenance(primary: ActiveMembership | null) {
+export function useMaintenance(primary: ActiveMembership | null, mode: MaintenanceAppMode = 'resident') {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<MaintenanceTicketRow[]>([]);
   const [routines, setRoutines] = useState<MaintenanceRoutineRow[]>([]);
@@ -55,22 +62,36 @@ export function useMaintenance(primary: ActiveMembership | null) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!primary?.condominium_id || !primary.unit_id) {
+    if (!primary?.condominium_id) {
       setTickets([]);
       setRoutines([]);
       setLoading(false);
       return;
     }
 
+    if (mode === 'resident' && !primary.unit_id) {
+      setTickets([]);
+      setRoutines([]);
+      setLoading(false);
+      return;
+    }
+
+    const ticketsPromise =
+      mode === 'resident' && primary.unit_id
+        ? supabase
+            .from('maintenance_tickets')
+            .select('id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at')
+            .eq('unit_id', primary.unit_id)
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as MaintenanceTicketRow[], error: null });
+
     const [ticketsRes, routinesRes] = await Promise.all([
-      supabase
-        .from('maintenance_tickets')
-        .select('id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at')
-        .eq('unit_id', primary.unit_id)
-        .order('created_at', { ascending: false }),
+      ticketsPromise,
       supabase
         .from('maintenance_routines')
-        .select('id, title, description, day_of_week, recurrence, monthly_day, sort_order, amenity:amenities(name)')
+        .select(
+          'id, title, description, day_of_week, recurrence, monthly_day, sort_order, amenity:amenities(name, cluster_id)',
+        )
         .eq('condominium_id', primary.condominium_id)
         .eq('is_active', true)
         .order('day_of_week', { ascending: true, nullsFirst: false })
@@ -79,7 +100,15 @@ export function useMaintenance(primary: ActiveMembership | null) {
 
     setTickets((ticketsRes.data as MaintenanceTicketRow[]) ?? []);
 
-    const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
+    let routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
+
+    if (mode === 'resident') {
+      const unitClusterId = primary.unit?.cluster?.id ?? null;
+      routineRows = routineRows.filter((row) =>
+        amenityAppliesToUnitCluster(row.amenity?.cluster_id, unitClusterId),
+      );
+    }
+
     const routineIds = routineRows.map((row) => row.id);
     const { data: routineEvidence } = routineIds.length
       ? await supabase
@@ -113,7 +142,7 @@ export function useMaintenance(primary: ActiveMembership | null) {
       })),
     );
     setLoading(false);
-  }, [primary?.condominium_id, primary?.unit_id]);
+  }, [mode, primary?.condominium_id, primary?.unit?.cluster?.id, primary?.unit_id]);
 
   useEffect(() => {
     setLoading(true);
@@ -186,6 +215,62 @@ export function useMaintenance(primary: ActiveMembership | null) {
     [primary, refresh, user],
   );
 
+  const uploadEvidence = useCallback(
+    async (input: {
+      routineId: string;
+      evidenceDate: string;
+      photos: { uri: string; mimeType?: string; name?: string }[];
+    }) => {
+      if (!user || !primary?.condominium_id) {
+        return { error: 'Sin condominio asignado.' };
+      }
+      if (!input.routineId) return { error: 'Selecciona la actividad.' };
+      if (!input.evidenceDate) return { error: 'Indica la fecha del trabajo.' };
+      if (input.photos.length === 0) return { error: 'Sube al menos una foto.' };
+
+      setActionError(null);
+
+      const imageUrls: string[] = [];
+      for (let index = 0; index < input.photos.length; index += 1) {
+        const photo = input.photos[index]!;
+        const ext = photo.name?.split('.').pop() ?? 'jpg';
+        const fileId = `${Date.now()}-${index}`;
+        const path = maintenanceFilePath(primary.condominium_id, 'routine-evidence', fileId, ext);
+        const bytes = await readUriAsArrayBuffer(photo.uri);
+        const { error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKETS.MAINTENANCE_FILES)
+          .upload(path, bytes, {
+            contentType: photo.mimeType ?? 'image/jpeg',
+            upsert: false,
+          });
+        if (uploadError) {
+          setActionError(uploadError.message);
+          return { error: uploadError.message };
+        }
+        imageUrls.push(path);
+      }
+
+      const { error } = await supabase.from('maintenance_routine_evidence').insert(
+        imageUrls.map((imageUrl, index) => ({
+          routine_id: input.routineId,
+          evidence_date: input.evidenceDate,
+          image_url: imageUrl,
+          sort_order: index,
+          created_by: user.id,
+        })),
+      );
+
+      if (error) {
+        setActionError(error.message);
+        return { error: error.message };
+      }
+
+      await refresh();
+      return { error: null };
+    },
+    [primary?.condominium_id, refresh, user],
+  );
+
   const getSignedUrl = useCallback(async (path: string) => resolveMaintenanceFileUrl(path), []);
 
   const routineGroups = groupRoutinesByWeekday(routines);
@@ -199,6 +284,7 @@ export function useMaintenance(primary: ActiveMembership | null) {
     actionError,
     refresh,
     createTicket,
+    uploadEvidence,
     getSignedUrl,
   };
 }

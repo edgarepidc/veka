@@ -34,3 +34,30 @@ export async function pickImageFromLibrary(): Promise<PickedImage | null> {
     name: `photo.${ext}`,
   };
 }
+
+/** Opens the photo library and allows selecting multiple images. */
+export async function pickImagesFromLibrary(): Promise<PickedImage[]> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert('Permiso requerido', 'Necesitamos acceso a tus fotos para adjuntar imágenes.');
+    return [];
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.85,
+    allowsMultipleSelection: true,
+  });
+
+  if (result.canceled || result.assets.length === 0) return [];
+
+  return result.assets.map((asset, index) => {
+    const mime = asset.mimeType ?? 'image/jpeg';
+    const ext = imageExtensionFromMime(mime);
+    return {
+      uri: asset.uri,
+      mimeType: mime,
+      name: `photo-${index}.${ext}`,
+    };
+  });
+}

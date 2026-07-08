@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { Alert, Keyboard, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatResidentProfileLabel } from '@veka/shared';
+import { formatResidentProfileLabel, isMaintenanceFieldRole, STAFF_ROLE_LABELS } from '@veka/shared';
+import type { MembershipRole } from '@veka/shared';
 
 import { AvatarUploader } from '@/components/AvatarUploader';
 import { AppearancePicker } from '@/components/ui/AppearancePicker';
@@ -33,7 +34,9 @@ export default function AccountScreen() {
     'Residente';
 
   const initials = displayName.slice(0, 2).toUpperCase();
-  const occupancyLabel = formatResidentProfileLabel(primary?.unit_relationship ?? null);
+  const occupancyLabel = isMaintenanceFieldRole(primary?.role ?? '')
+    ? STAFF_ROLE_LABELS[(primary?.role ?? 'staff') as MembershipRole]
+    : formatResidentProfileLabel(primary?.unit_relationship ?? null);
   const clusterName = primary?.unit?.cluster?.name ?? 'Sin asignar';
 
   useEffect(() => {

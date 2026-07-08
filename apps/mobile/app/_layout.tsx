@@ -14,6 +14,8 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useMembership } from '@/hooks/useMembership';
+import { isMaintenanceFieldRole } from '@veka/shared';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -53,22 +55,39 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const { session, loading, user } = useAuth();
+  const { primary, loading: membershipLoading } = useMembership();
   const segments = useSegments();
   const router = useRouter();
 
   usePushNotifications(user?.id);
 
+  const isStaffApp = Boolean(primary && isMaintenanceFieldRole(primary.role));
+
   useEffect(() => {
-    if (loading) return;
+    if (loading || membershipLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inStaffGroup = segments[0] === '(staff)';
 
     if (!session && !inAuthGroup) {
       router.replace('/login');
-    } else if (session && inAuthGroup) {
+      return;
+    }
+
+    if (session && inAuthGroup) {
+      router.replace(isStaffApp ? '/(staff)/maintenance' : '/');
+      return;
+    }
+
+    if (session && isStaffApp && !inStaffGroup && segments[0] !== 'account') {
+      router.replace('/(staff)/maintenance');
+      return;
+    }
+
+    if (session && !isStaffApp && inStaffGroup) {
       router.replace('/');
     }
-  }, [session, loading, segments, router]);
+  }, [session, loading, membershipLoading, segments, router, isStaffApp]);
 
   return (
     <Stack
@@ -79,6 +98,7 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(staff)" />
       <Stack.Screen
         name="account"
         options={{

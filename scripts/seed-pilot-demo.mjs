@@ -16,11 +16,15 @@ const root = join(__dirname, '..');
 const CONDOMINIUM_ID = '22222222-2222-2222-2222-222222222222';
 const UNIT_ID = '44444444-4444-4444-4444-444444444402';
 const DEMO_EMAIL = 'diazcruzee@outlook.com';
+const STAFF_DEMO_EMAIL = 'diazcruzee+jardinero@outlook.com';
+const STAFF_DEMO_PASSWORD = 'VekaJardinero1!';
+const STAFF_DEMO_NAME = 'Carlos Jardín';
 
 const IDS = {
   ticket: '66666666-6666-6666-6666-666666666601',
   schedule: '66666666-6666-6666-6666-666666666602',
   workLog: '66666666-6666-6666-6666-666666666603',
+  staffMembership: '77777777-7777-7777-7777-777777777701',
   routinePool: '66666666-6666-6666-6666-666666666610',
   routineGarden: '66666666-6666-6666-6666-666666666611',
   routineTrash: '66666666-6666-6666-6666-666666666612',
@@ -87,6 +91,87 @@ async function connectDb(projectRef, dbPassword) {
   throw new Error(lastError || 'No se pudo conectar a la base de datos');
 }
 
+async function ensureStaffDemoUser(db, env) {
+  const projectRef = env.SUPABASE_PROJECT_REF;
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    console.warn('⚠ Sin SUPABASE_SERVICE_ROLE_KEY: se omite usuario demo de jardinero.');
+    return null;
+  }
+
+  const supabaseUrl = env.SUPABASE_URL ?? `https://${projectRef}.supabase.co`;
+
+  let staffUserId;
+  const [existing] = await db`
+    select id from auth.users where email = ${STAFF_DEMO_EMAIL} limit 1
+  `;
+
+  if (existing) {
+    staffUserId = existing.id;
+    console.log(`→ Usuario jardinero ya existe (${STAFF_DEMO_EMAIL})`);
+  } else {
+    console.log('→ Creando usuario demo de jardinero…');
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: STAFF_DEMO_EMAIL,
+        password: STAFF_DEMO_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: STAFF_DEMO_NAME },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`No se pudo crear el usuario jardinero: ${body}`);
+    }
+
+    const created = await res.json();
+    staffUserId = created.id;
+  }
+
+  await db`
+    insert into public.profiles (id, full_name)
+    values (${staffUserId}, ${STAFF_DEMO_NAME})
+    on conflict (id) do update set full_name = excluded.full_name
+  `;
+
+  const [existingMembership] = await db`
+    select id from public.memberships
+    where user_id = ${staffUserId}
+      and condominium_id = ${CONDOMINIUM_ID}
+      and unit_id is null
+    limit 1
+  `;
+
+  if (existingMembership) {
+    await db`
+      update public.memberships
+      set role = 'staff', status = 'active'
+      where id = ${existingMembership.id}
+    `;
+  } else {
+    await db`
+      insert into public.memberships (id, user_id, condominium_id, unit_id, role, status)
+      values (
+        ${IDS.staffMembership},
+        ${staffUserId},
+        ${CONDOMINIUM_ID},
+        null,
+        'staff',
+        'active'
+      )
+    `;
+  }
+
+  return { email: STAFF_DEMO_EMAIL, password: STAFF_DEMO_PASSWORD };
+}
+
 const env = loadEnv();
 const projectRef = env.SUPABASE_PROJECT_REF;
 const dbPassword = env.SUPABASE_DB_PASSWORD;
@@ -128,6 +213,8 @@ try {
   if (!poolId || !salonId) {
     throw new Error('Faltan amenidades Alberca o Salón de eventos en Las Palmas');
   }
+
+  const staffCredentials = await ensureStaffDemoUser(db, env);
 
   console.log('→ Insertando ticket de mantenimiento…');
   await db`
@@ -391,6 +478,11 @@ try {
   `;
 
   console.log('\n✅ Datos demo del piloto insertados en Las Palmas (idempotente).');
+  if (staffCredentials) {
+    console.log('\n👷 Personal de mantenimiento (app mobile):');
+    console.log(`   Correo: ${staffCredentials.email}`);
+    console.log(`   Contraseña: ${staffCredentials.password}`);
+  }
 } finally {
   await db.end({ timeout: 5 });
 }

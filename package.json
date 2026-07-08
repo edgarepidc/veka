@@ -42,6 +42,7 @@
     "apply:community-cluster-targeting": "node scripts/apply-community-cluster-targeting.mjs",
     "apply:maintenance-routines": "node scripts/apply-maintenance-routines.mjs",
     "apply:maintenance-routine-evidence": "node scripts/apply-maintenance-routine-evidence.mjs",
+    "apply:maintenance-cluster-scope-staff": "node scripts/apply-maintenance-cluster-scope-staff.mjs",
     "apply:profiles-condo-members-select": "node scripts/apply-profiles-condo-members-select.mjs",
     "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
