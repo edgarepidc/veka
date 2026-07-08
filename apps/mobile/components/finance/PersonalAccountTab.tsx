@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   chargeBalanceDue,
@@ -103,20 +103,23 @@ export function PersonalAccountTab({
 
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+      <View style={styles.statsRow}>
         <StatPill
+          dense
           label="Próximo pago"
           value={paymentTarget ? formatCurrency(paymentTotal) : '—'}
           sub={paymentTarget ? `Vence ${paymentTarget.dueDate}` : 'Al día'}
           valueColor={paymentTarget?.kind === 'installment' ? theme.accent2 : theme.accent}
         />
         <StatPill
+          dense
           label="Saldo total"
           value={formatCurrency(balanceDue)}
           sub={balanceDue > 0 ? 'pendiente' : 'al corriente'}
           valueColor={balanceDue > 0 ? theme.danger : theme.accent}
         />
         <StatPill
+          dense
           label="En revisión"
           value={String(
             payments.filter((p) =>
@@ -126,7 +129,7 @@ export function PersonalAccountTab({
           sub="pagos"
           valueColor={theme.accent3}
         />
-      </ScrollView>
+      </View>
 
       {activePlan ? (
         <View style={styles.section}>
@@ -390,7 +393,12 @@ export function PersonalAccountTab({
 }
 
 const styles = StyleSheet.create({
-  statsRow: { gap: 10, paddingHorizontal: 20, paddingBottom: 16 },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
