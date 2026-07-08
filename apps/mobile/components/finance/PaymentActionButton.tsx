@@ -85,10 +85,14 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingVertical: 13,
     paddingHorizontal: 16,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
   iconCircle: {
     width: 32,
     height: 32,
@@ -96,6 +100,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.2)',
+    flexShrink: 0,
   },
   label: { fontSize: 15, fontWeight: '700' },
 });
