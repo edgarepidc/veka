@@ -9,6 +9,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  DEFAULT_RENTAL_STAY_DAYS,
+  RENTAL_OVERDUE_BLOCK_MESSAGE,
+  formatVisitVehicle,
+} from '@veka/shared';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,13 +56,18 @@ export default function SecurityScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
   const { primary, loading: membershipLoading } = useMembership();
-  const { visits, packages, loading, refreshing, actionError, refresh, createVisit } = useSecurity(primary);
+  const { visits, packages, loading, refreshing, actionError, rentalBlocked, refresh, createVisit } =
+    useSecurity(primary);
 
   const [tab, setTab] = useState('visitas');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [visitorName, setVisitorName] = useState('');
   const [visitorPhone, setVisitorPhone] = useState('');
   const [visitType, setVisitType] = useState<VisitRow['visit_type']>('visit');
+  const [stayDays, setStayDays] = useState(String(DEFAULT_RENTAL_STAY_DAYS));
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [rentalNotes, setRentalNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
 
@@ -78,8 +88,19 @@ export default function SecurityScreen() {
     setSheetOpen(false);
   }
 
+  function resetForm() {
+    setVisitorName('');
+    setVisitorPhone('');
+    setVisitType('visit');
+    setStayDays(String(DEFAULT_RENTAL_STAY_DAYS));
+    setVehiclePlate('');
+    setVehicleModel('');
+    setRentalNotes('');
+  }
+
   async function handleCreateVisit() {
     if (!visitorName.trim()) return;
+    if (visitType === 'rental' && rentalBlocked) return;
     Keyboard.dismiss();
     setSubmitting(true);
     const result = await createVisit({
@@ -87,13 +108,15 @@ export default function SecurityScreen() {
       visitorPhone,
       visitType,
       hoursValid: 24,
+      stayDays: visitType === 'rental' ? Number(stayDays) : undefined,
+      vehiclePlate: visitType === 'rental' ? vehiclePlate : undefined,
+      vehicleModel: visitType === 'rental' ? vehicleModel : undefined,
+      notes: visitType === 'rental' ? rentalNotes : undefined,
     });
     setSubmitting(false);
     if (!result.error) {
       setSheetOpen(false);
-      setVisitorName('');
-      setVisitorPhone('');
-      setVisitType('visit');
+      resetForm();
       if (result.visitId) setSelectedVisitId(result.visitId);
       setTab('qr');
     }
@@ -169,9 +192,18 @@ export default function SecurityScreen() {
                         </View>
                         <Text style={{ color: theme.textMuted, fontSize: 13 }}>
                           {visitTypeLabel(visit.visit_type)} · {formatVisitRange(visit.valid_from, visit.valid_until)}
+                          {visit.visit_type === 'rental' && visit.stay_days ? ` · ${visit.stay_days} día(s)` : ''}
                         </Text>
                         {visit.visitor_phone ? (
                           <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4 }}>{visit.visitor_phone}</Text>
+                        ) : null}
+                        {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model) ? (
+                          <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4 }}>
+                            {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model)}
+                          </Text>
+                        ) : null}
+                        {visit.notes ? (
+                          <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>{visit.notes}</Text>
                         ) : null}
                       </GlassCard>
                     </Pressable>
@@ -258,15 +290,18 @@ export default function SecurityScreen() {
           keyboardType="phone-pad"
         />
         <View style={styles.typeRow}>
-          {(['visit', 'service', 'rental'] as const).map((type) => (
+          {(['visit', 'service', 'rental'] as const).map((type) => {
+            const disabled = type === 'rental' && rentalBlocked;
+            return (
             <Pressable
               key={type}
-              onPress={() => setVisitType(type)}
+              onPress={() => !disabled && setVisitType(type)}
               style={[
                 styles.typeChip,
                 {
                   backgroundColor: visitType === type ? `${theme.accent}22` : theme.glassDeep,
                   borderColor: visitType === type ? theme.accent : theme.glassBorder,
+                  opacity: disabled ? 0.45 : 1,
                 },
               ]}
             >
@@ -274,14 +309,51 @@ export default function SecurityScreen() {
                 {visitTypeLabel(type)}
               </Text>
             </Pressable>
-          ))}
+            );
+          })}
         </View>
+        {rentalBlocked ? (
+          <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 8 }}>{RENTAL_OVERDUE_BLOCK_MESSAGE}</Text>
+        ) : null}
+        {visitType === 'rental' ? (
+          <>
+            <GlassInput
+              placeholder="Días de estancia"
+              value={stayDays}
+              onChangeText={setStayDays}
+              keyboardType="number-pad"
+            />
+            <GlassInput
+              placeholder="Placas del vehículo (opcional)"
+              value={vehiclePlate}
+              onChangeText={setVehiclePlate}
+              autoCapitalize="characters"
+            />
+            <GlassInput
+              placeholder="Marca, modelo y color del auto"
+              value={vehicleModel}
+              onChangeText={setVehicleModel}
+            />
+            <GlassInput
+              placeholder="Comentarios adicionales de la renta"
+              value={rentalNotes}
+              onChangeText={setRentalNotes}
+              multiline
+              style={keyboardFormSheetStyles.textArea}
+            />
+          </>
+        ) : null}
         <View style={keyboardFormSheetStyles.actions}>
           <View style={keyboardFormSheetStyles.actionBtn}>
             <PrimaryButton label="Cancelar" variant="secondary" onPress={closeSheet} />
           </View>
           <View style={keyboardFormSheetStyles.actionBtn}>
-            <PrimaryButton label="Generar QR" loading={submitting} onPress={() => void handleCreateVisit()} />
+            <PrimaryButton
+              label="Generar QR"
+              loading={submitting}
+              onPress={() => void handleCreateVisit()}
+              disabled={visitType === 'rental' && rentalBlocked}
+            />
           </View>
         </View>
       </KeyboardFormSheet>

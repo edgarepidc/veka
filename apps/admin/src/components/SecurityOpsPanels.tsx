@@ -1,5 +1,6 @@
 'use client';
 
+import { formatVisitVehicle } from '@veka/shared';
 import { useState, useTransition } from 'react';
 
 import { checkOutVisit, deliverPackage } from '@/app/(panel)/seguridad/actions';
@@ -78,7 +79,18 @@ export function SecurityOpsPanels({
                   </p>
                   <p className="mt-1 text-xs text-subtle">
                     Válido {formatTime(visit.valid_from)} – {formatTime(visit.valid_until)}
+                    {visit.visit_type === 'rental' && visit.stay_days
+                      ? ` · ${visit.stay_days} día(s)`
+                      : ''}
                   </p>
+                  {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model) ? (
+                    <p className="mt-1 text-xs text-muted">
+                      Vehículo: {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model)}
+                    </p>
+                  ) : null}
+                  {visit.notes ? (
+                    <p className="mt-1 text-xs text-muted">{visit.notes}</p>
+                  ) : null}
                   <p className="mt-1 text-xs font-semibold text-accent">{visitStatus(visit)}</p>
                 </div>
                 {visit.checked_in_at && !visit.checked_out_at ? (

@@ -1,11 +1,14 @@
 import { PackageRegisterPanel } from '@/components/PackageRegisterPanel';
 import { SecurityOpsPanels } from '@/components/SecurityOpsPanels';
+import { SecuritySettingsPanel } from '@/components/SecuritySettingsPanel';
 import { VisitCheckInPanel } from '@/components/VisitCheckInPanel';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { loadSeguridadData } from '@/lib/load-seguridad';
+import { parseCondominiumSettings } from '@/lib/condominium-settings';
 import { requireSecuritySession } from '@/lib/require-security';
 import { createClient } from '@/lib/supabase/server';
+import { parseSecuritySettings } from '@veka/shared';
 
 export default async function SeguridadPage() {
   const session = await requireSecuritySession();
@@ -23,14 +26,17 @@ export default async function SeguridadPage() {
   }
 
   const supabase = await createClient();
-  const [{ data: units }, ops] = await Promise.all([
+  const [{ data: units }, { data: condo }, ops] = await Promise.all([
     supabase
       .from('units')
       .select('id, identifier')
       .eq('condominium_id', condominiumId)
       .order('identifier'),
+    supabase.from('condominiums').select('settings').eq('id', condominiumId).maybeSingle(),
     loadSeguridadData(condominiumId),
   ]);
+
+  const securitySettings = parseSecuritySettings(parseCondominiumSettings(condo?.settings).security);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -38,6 +44,12 @@ export default async function SeguridadPage() {
         title="Seguridad"
         highlight="y acceso"
         subtitle="Paquetería, visitas del día y validación de pases QR."
+      />
+
+      <SecuritySettingsPanel
+        condominiumId={condominiumId}
+        settings={securitySettings}
+        canEdit={session.isAdmin}
       />
 
       <VisitCheckInPanel condominiumId={condominiumId} />

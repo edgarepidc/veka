@@ -1,5 +1,5 @@
 import type { ApprovalSettings } from '@veka/shared';
-import { type SpacesSettings } from '@veka/shared';
+import { type SecuritySettings, type SpacesSettings } from '@veka/shared';
 
 export interface CondominiumBranding {
   logo_url?: string;
@@ -11,6 +11,7 @@ export interface CondominiumSettings {
   branding?: CondominiumBranding;
   approvals?: ApprovalSettings;
   spaces?: SpacesSettings;
+  security?: SecuritySettings;
 }
 
 export function parseCondominiumSettings(raw: unknown): CondominiumSettings {

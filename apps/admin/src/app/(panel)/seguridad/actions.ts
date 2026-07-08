@@ -5,7 +5,50 @@ import { revalidatePath } from 'next/cache';
 import { parseVisitQrPayload } from '@veka/shared';
 
 import { deliverUnitPushNotification } from '@/lib/unit-push';
+import { parseCondominiumSettings } from '@/lib/condominium-settings';
+import { assertAdminAction } from '@/lib/require-admin';
+import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
+
+function checkbox(formData: FormData, name: string): boolean {
+  const value = formData.get(name);
+  return value === 'on' || value === 'true' || value === '1';
+}
+
+export async function updateSecuritySettings(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
+  const condoResult = await requireActiveCondominiumId(formData.get('condominium_id')?.toString());
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('condominiums')
+    .select('settings')
+    .eq('id', condominiumId)
+    .maybeSingle();
+
+  const current = parseCondominiumSettings(existing?.settings);
+  const settings = {
+    ...current,
+    security: {
+      ...current.security,
+      block_rental_visits_if_overdue: checkbox(formData, 'block_rental_visits_if_overdue'),
+    },
+  };
+
+  const { error } = await supabase
+    .from('condominiums')
+    .update({ settings, updated_at: new Date().toISOString() })
+    .eq('id', condominiumId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/seguridad');
+  return { success: true };
+}
 
 export async function checkInVisit(input: { condominiumId: string; payload: string }) {
   const supabase = await createClient();
@@ -21,7 +64,7 @@ export async function checkInVisit(input: { condominiumId: string; payload: stri
   const { data: visit, error } = await supabase
     .from('visits')
     .select(
-      'id, visitor_name, visit_type, valid_from, valid_until, checked_in_at, checked_out_at, unit:units (identifier)',
+      'id, visitor_name, visit_type, valid_from, valid_until, stay_days, vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at, unit:units (identifier)',
     )
     .eq('condominium_id', input.condominiumId)
     .eq('qr_token', parsed.token)

@@ -10,12 +10,12 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { isGuardFieldRole, isMaintenanceFieldRole } from '@veka/shared';
 
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useMembership } from '@/hooks/useMembership';
-import { isMaintenanceFieldRole } from '@veka/shared';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -61,13 +61,15 @@ function RootLayoutNav() {
 
   usePushNotifications(user?.id);
 
-  const isStaffApp = Boolean(primary && isMaintenanceFieldRole(primary.role));
+  const isMaintenanceApp = Boolean(primary && isMaintenanceFieldRole(primary.role));
+  const isGuardApp = Boolean(primary && isGuardFieldRole(primary.role));
 
   useEffect(() => {
     if (loading || membershipLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inStaffGroup = segments[0] === '(staff)';
+    const inGuardGroup = segments[0] === '(guard)';
 
     if (!session && !inAuthGroup) {
       router.replace('/login');
@@ -75,19 +77,31 @@ function RootLayoutNav() {
     }
 
     if (session && inAuthGroup) {
-      router.replace(isStaffApp ? '/(staff)/maintenance' : '/');
+      if (isMaintenanceApp) router.replace('/(staff)/maintenance');
+      else if (isGuardApp) router.replace('/(guard)/security');
+      else router.replace('/');
       return;
     }
 
-    if (session && isStaffApp && !inStaffGroup && segments[0] !== 'account') {
+    if (session && isMaintenanceApp && !inStaffGroup && segments[0] !== 'account') {
       router.replace('/(staff)/maintenance');
       return;
     }
 
-    if (session && !isStaffApp && inStaffGroup) {
+    if (session && isGuardApp && !inGuardGroup && segments[0] !== 'account') {
+      router.replace('/(guard)/security');
+      return;
+    }
+
+    if (session && !isMaintenanceApp && inStaffGroup) {
+      router.replace('/');
+      return;
+    }
+
+    if (session && !isGuardApp && inGuardGroup) {
       router.replace('/');
     }
-  }, [session, loading, membershipLoading, segments, router, isStaffApp]);
+  }, [session, loading, membershipLoading, segments, router, isMaintenanceApp, isGuardApp]);
 
   return (
     <Stack
@@ -99,6 +113,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(staff)" />
+      <Stack.Screen name="(guard)" />
       <Stack.Screen
         name="account"
         options={{

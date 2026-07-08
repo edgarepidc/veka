@@ -1,4 +1,4 @@
-import { encodeVisitQrPayload, visitTypeLabelEs } from '@veka/shared';
+import { encodeVisitQrPayload, formatVisitVehicle, visitTypeLabelEs } from '@veka/shared';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -65,6 +65,15 @@ export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrP
           <Text style={styles.exportVisitor}>{visit.visitor_name}</Text>
           <Text style={styles.exportMeta}>{visitTypeLabelEs(visit.visit_type)}</Text>
           {visit.visitor_phone ? <Text style={styles.exportMeta}>{visit.visitor_phone}</Text> : null}
+          {visit.visit_type === 'rental' && visit.stay_days ? (
+            <Text style={styles.exportMeta}>Estancia: {visit.stay_days} día(s)</Text>
+          ) : null}
+          {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model) ? (
+            <Text style={styles.exportMeta}>
+              Vehículo: {formatVisitVehicle(visit.vehicle_plate, visit.vehicle_model)}
+            </Text>
+          ) : null}
+          {visit.notes ? <Text style={styles.exportMeta}>{visit.notes}</Text> : null}
 
           <Text style={styles.exportValidity}>
             Válido: {formatPassDateTime(visit.valid_from)} – {formatPassDateTime(visit.valid_until)}

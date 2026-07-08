@@ -7,6 +7,10 @@ export interface VisitRow {
   visit_type: 'visit' | 'service' | 'rental';
   valid_from: string;
   valid_until: string;
+  stay_days: number | null;
+  vehicle_plate: string | null;
+  vehicle_model: string | null;
+  notes: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
   unit: { identifier: string } | null;
@@ -40,7 +44,7 @@ export async function loadSeguridadData(condominiumId?: string): Promise<{
     supabase
       .from('visits')
       .select(
-        'id, visitor_name, visit_type, valid_from, valid_until, checked_in_at, checked_out_at, unit:units(identifier)',
+        'id, visitor_name, visit_type, valid_from, valid_until, stay_days, vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at, unit:units(identifier)',
       )
       .eq('condominium_id', condoId)
       .lte('valid_from', endOfDay.toISOString())

@@ -19,12 +19,16 @@ const DEMO_EMAIL = 'diazcruzee@outlook.com';
 const STAFF_DEMO_EMAIL = 'diazcruzee+jardinero@outlook.com';
 const STAFF_DEMO_PASSWORD = 'VekaJardinero1!';
 const STAFF_DEMO_NAME = 'Carlos Jardín';
+const GUARD_DEMO_EMAIL = 'diazcruzee+guardia@outlook.com';
+const GUARD_DEMO_PASSWORD = 'VekaGuardia1!';
+const GUARD_DEMO_NAME = 'Roberto Caseta';
 
 const IDS = {
   ticket: '66666666-6666-6666-6666-666666666601',
   schedule: '66666666-6666-6666-6666-666666666602',
   workLog: '66666666-6666-6666-6666-666666666603',
   staffMembership: '77777777-7777-7777-7777-777777777701',
+  guardMembership: '77777777-7777-7777-7777-777777777702',
   routinePool: '66666666-6666-6666-6666-666666666610',
   routineGarden: '66666666-6666-6666-6666-666666666611',
   routineTrash: '66666666-6666-6666-6666-666666666612',
@@ -172,6 +176,87 @@ async function ensureStaffDemoUser(db, env) {
   return { email: STAFF_DEMO_EMAIL, password: STAFF_DEMO_PASSWORD };
 }
 
+async function ensureGuardDemoUser(db, env) {
+  const projectRef = env.SUPABASE_PROJECT_REF;
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) {
+    console.warn('⚠ Sin SUPABASE_SERVICE_ROLE_KEY: se omite usuario demo de guardia.');
+    return null;
+  }
+
+  const supabaseUrl = env.SUPABASE_URL ?? `https://${projectRef}.supabase.co`;
+
+  let guardUserId;
+  const [existing] = await db`
+    select id from auth.users where email = ${GUARD_DEMO_EMAIL} limit 1
+  `;
+
+  if (existing) {
+    guardUserId = existing.id;
+    console.log(`→ Usuario guardia ya existe (${GUARD_DEMO_EMAIL})`);
+  } else {
+    console.log('→ Creando usuario demo de guardia…');
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: GUARD_DEMO_EMAIL,
+        password: GUARD_DEMO_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: GUARD_DEMO_NAME },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`No se pudo crear el usuario guardia: ${body}`);
+    }
+
+    const created = await res.json();
+    guardUserId = created.id;
+  }
+
+  await db`
+    insert into public.profiles (id, full_name)
+    values (${guardUserId}, ${GUARD_DEMO_NAME})
+    on conflict (id) do update set full_name = excluded.full_name
+  `;
+
+  const [existingMembership] = await db`
+    select id from public.memberships
+    where user_id = ${guardUserId}
+      and condominium_id = ${CONDOMINIUM_ID}
+      and unit_id is null
+    limit 1
+  `;
+
+  if (existingMembership) {
+    await db`
+      update public.memberships
+      set role = 'guard', status = 'active'
+      where id = ${existingMembership.id}
+    `;
+  } else {
+    await db`
+      insert into public.memberships (id, user_id, condominium_id, unit_id, role, status)
+      values (
+        ${IDS.guardMembership},
+        ${guardUserId},
+        ${CONDOMINIUM_ID},
+        null,
+        'guard',
+        'active'
+      )
+    `;
+  }
+
+  return { email: GUARD_DEMO_EMAIL, password: GUARD_DEMO_PASSWORD };
+}
+
 const env = loadEnv();
 const projectRef = env.SUPABASE_PROJECT_REF;
 const dbPassword = env.SUPABASE_DB_PASSWORD;
@@ -215,6 +300,7 @@ try {
   }
 
   const staffCredentials = await ensureStaffDemoUser(db, env);
+  const guardCredentials = await ensureGuardDemoUser(db, env);
 
   console.log('→ Insertando ticket de mantenimiento…');
   await db`
@@ -482,6 +568,11 @@ try {
     console.log('\n👷 Personal de mantenimiento (app mobile):');
     console.log(`   Correo: ${staffCredentials.email}`);
     console.log(`   Contraseña: ${staffCredentials.password}`);
+  }
+  if (guardCredentials) {
+    console.log('\n🛡️ Guardia de seguridad (app mobile):');
+    console.log(`   Correo: ${guardCredentials.email}`);
+    console.log(`   Contraseña: ${guardCredentials.password}`);
   }
 } finally {
   await db.end({ timeout: 5 });
