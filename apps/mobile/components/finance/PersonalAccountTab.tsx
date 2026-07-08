@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -21,6 +21,11 @@ import type { ActivePaymentPlan } from '@veka/shared';
 
 import { OnlinePaymentButton } from '@/components/OnlinePaymentButton';
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
+import {
+  FinanceCompareChart,
+  FinanceMonthlyChart,
+  FinancePeriodFilter,
+} from '@/components/finance/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { SectionLabel } from '@/components/ui/Avatar';
@@ -28,6 +33,8 @@ import { Tag } from '@/components/ui/Tag';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import type { FinanceCharge, FinancePayment } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
+import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
+import { personalPeriodStats } from '@/lib/finance-stats';
 import { mapChargeTone, mapPaymentTone } from '@/lib/tagTone';
 import { supabase } from '@/lib/supabase';
 
@@ -72,9 +79,35 @@ export function PersonalAccountTab({
   onRefresh,
 }: PersonalAccountTabProps) {
   const theme = useTheme();
+  const [period, setPeriod] = useState<FinancePeriod>('1m');
   const paymentTotal = paymentTarget?.maxAmount ?? 0;
   const payAmount = Number(payAmountInput.replace(/,/g, ''));
   const planProgress = activePlan ? planInstallmentsProgress(activePlan.installments) : null;
+
+  const periodStats = useMemo(
+    () =>
+      personalPeriodStats(charges, payments, period, {
+        paid: theme.accent,
+        owed: theme.danger,
+      }),
+    [charges, payments, period, theme.accent, theme.danger],
+  );
+
+  const filteredCharges = useMemo(
+    () => charges.filter((charge) => inFinancePeriod(charge.due_date, period)),
+    [charges, period],
+  );
+
+  const filteredPayments = useMemo(
+    () =>
+      payments.filter((payment) => inFinancePeriod(payment.paid_at ?? payment.created_at, period)),
+    [payments, period],
+  );
+
+  const filteredStatementLines = useMemo(
+    () => statement.lines.filter((line) => inFinancePeriod(line.date, period)),
+    [statement.lines, period],
+  );
 
   const openProof = useCallback((path: string | null) => {
     if (!path) return;
@@ -107,6 +140,19 @@ export function PersonalAccountTab({
           color={theme.accent3}
         />
       </ScrollView>
+
+      <View style={styles.section}>
+        <FinancePeriodFilter period={period} onChange={setPeriod} />
+        <GlassCard>
+          <FinanceCompareChart title="Resumen del período" items={periodStats.compare} />
+          <View style={{ height: 18 }} />
+          <FinanceMonthlyChart
+            title="Tendencia mensual"
+            paidBuckets={periodStats.paidMonthly}
+            owedBuckets={periodStats.owedMonthly}
+          />
+        </GlassCard>
+      </View>
 
       {activePlan ? (
         <View style={styles.section}>
@@ -244,10 +290,10 @@ export function PersonalAccountTab({
       <SectionLabel title="Mi estado de cuenta" />
       <View style={styles.section}>
         <GlassCard>
-          {statement.lines.length === 0 ? (
-            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin movimientos registrados.</Text>
+          {filteredStatementLines.length === 0 ? (
+            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin movimientos en este período.</Text>
           ) : (
-            statement.lines.map((line) => (
+            filteredStatementLines.map((line) => (
               <View key={line.id} style={styles.ledgerRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cardTitle, { color: theme.text, fontSize: 14 }]}>{line.concept}</Text>
@@ -276,7 +322,12 @@ export function PersonalAccountTab({
 
       <SectionLabel title="Mis cargos" />
       <View style={styles.section}>
-        {charges.map((charge) => {
+        {filteredCharges.length === 0 ? (
+          <GlassCard>
+            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin cargos en este período.</Text>
+          </GlassCard>
+        ) : (
+        filteredCharges.map((charge) => {
           const balance = chargeBalanceDue(charge);
           const paid = charge.amount - balance;
           return (
@@ -306,17 +357,18 @@ export function PersonalAccountTab({
               </Text>
             </GlassCard>
           );
-        })}
+        })
+        )}
       </View>
 
       <SectionLabel title="Mis pagos" />
       <View style={styles.section}>
-        {payments.length === 0 ? (
+        {filteredPayments.length === 0 ? (
           <GlassCard>
-            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Aún no hay pagos registrados.</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin pagos en este período.</Text>
           </GlassCard>
         ) : (
-          payments.map((payment) => (
+          filteredPayments.map((payment) => (
             <GlassCard key={payment.id} style={styles.cardGap}>
               <View style={styles.cardTop}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>

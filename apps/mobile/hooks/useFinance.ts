@@ -10,6 +10,7 @@ import {
 import type { FeeSourceRef } from '@veka/shared';
 
 import type { ActiveMembership } from '@/hooks/useMembership';
+import { filterVisibleCondoExpenses } from '@/lib/finance-stats';
 import { supabase } from '@/lib/supabase';
 
 export interface FinanceCharge {
@@ -114,7 +115,6 @@ export function useFinance(primary: ActiveMembership | null) {
   const [funds, setFunds] = useState<CondoFund[]>([]);
   const [expenses, setExpenses] = useState<CondoExpense[]>([]);
   const [bankAccounts, setBankAccounts] = useState<CondoBankAccount[]>([]);
-  const [clusters, setClusters] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,13 +127,12 @@ export function useFinance(primary: ActiveMembership | null) {
       setFunds([]);
       setExpenses([]);
       setBankAccounts([]);
-      setClusters([]);
       setLoading(false);
       setError(null);
       return;
     }
 
-    const [chargesRes, paymentsRes, fundsRes, expensesRes, planRes, banksRes, clustersRes] =
+    const [chargesRes, paymentsRes, fundsRes, expensesRes, planRes, banksRes] =
       await Promise.all([
         supabase
           .from('charges')
@@ -160,7 +159,7 @@ export function useFinance(primary: ActiveMembership | null) {
           )
           .eq('condominium_id', primary.condominium_id)
           .order('expense_date', { ascending: false })
-          .limit(40),
+          .limit(200),
         supabase
           .from('payment_plans')
           .select(
@@ -175,11 +174,6 @@ export function useFinance(primary: ActiveMembership | null) {
           .eq('condominium_id', primary.condominium_id)
           .eq('is_active', true)
           .order('name'),
-        supabase
-          .from('clusters')
-          .select('id, name')
-          .eq('condominium_id', primary.condominium_id)
-          .order('name'),
       ]);
 
     const queryError =
@@ -188,8 +182,7 @@ export function useFinance(primary: ActiveMembership | null) {
       fundsRes.error ??
       expensesRes.error ??
       planRes.error ??
-      banksRes.error ??
-      clustersRes.error;
+      banksRes.error;
 
     if (queryError) {
       setError(queryError.message);
@@ -271,7 +264,6 @@ export function useFinance(primary: ActiveMembership | null) {
       ),
     );
     setBankAccounts((banksRes.data as CondoBankAccount[]) ?? []);
-    setClusters((clustersRes.data as { id: string; name: string }[]) ?? []);
     setLoading(false);
   }, [primary?.condominium_id, primary?.unit_id]);
 
@@ -330,7 +322,16 @@ export function useFinance(primary: ActiveMembership | null) {
     [charges, payments],
   );
 
-  const expenseGroups = useMemo(() => groupExpenses(expenses), [expenses]);
+  const expenseGroups = useMemo(() => {
+    const myClusterId = primary?.unit?.cluster?.id ?? null;
+    const visible = filterVisibleCondoExpenses(expenses, myClusterId);
+    return groupExpenses(visible);
+  }, [expenses, primary?.unit?.cluster?.id]);
+
+  const visibleExpenses = useMemo(() => {
+    const myClusterId = primary?.unit?.cluster?.id ?? null;
+    return filterVisibleCondoExpenses(expenses, myClusterId);
+  }, [expenses, primary?.unit?.cluster?.id]);
 
   const pendingPaymentsCount = useMemo(
     () =>
@@ -344,13 +345,13 @@ export function useFinance(primary: ActiveMembership | null) {
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
-    return expenses
+    return visibleExpenses
       .filter((expense) => {
         const date = new Date(expense.expense_date);
         return date.getMonth() === month && date.getFullYear() === year && expense.status === 'paid';
       })
       .reduce((sum, expense) => sum + expense.amount, 0);
-  }, [expenses]);
+  }, [visibleExpenses]);
 
   return {
     charges,
@@ -358,9 +359,9 @@ export function useFinance(primary: ActiveMembership | null) {
     payments,
     funds,
     expenses,
+    visibleExpenses,
     expenseGroups,
     bankAccounts,
-    clusters,
     paymentTarget,
     balanceDue,
     statement,

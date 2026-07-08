@@ -117,11 +117,11 @@ export default function FinanceScreen() {
           <CondoTransparencyTab
             condominiumName={primary.condominium?.name ?? 'Condominio'}
             clusterName={primary.unit?.cluster?.name ?? null}
+            myClusterId={primary.unit?.cluster?.id ?? null}
             unitIdentifier={primary.unit?.identifier ?? '—'}
             funds={finance.funds}
+            visibleExpenses={finance.visibleExpenses}
             expenseGroups={finance.expenseGroups}
-            monthExpenseTotal={finance.monthExpenseTotal}
-            clusters={finance.clusters}
           />
         )}
       </ScrollView>

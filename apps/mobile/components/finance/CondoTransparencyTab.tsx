@@ -8,57 +8,80 @@ import {
   fundTypeLabel,
 } from '@veka/shared';
 
+import {
+  FinanceCompareChart,
+  FinancePeriodFilter,
+} from '@/components/finance/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionLabel } from '@/components/ui/Avatar';
 import { FilterBar } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
-import type { CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
+import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
+import { financePeriodLabel, inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
+import { condoPeriodStats } from '@/lib/finance-stats';
 
 interface CondoTransparencyTabProps {
   condominiumName: string;
   clusterName: string | null;
+  myClusterId: string | null;
   unitIdentifier: string;
   funds: CondoFund[];
+  visibleExpenses: CondoExpense[];
   expenseGroups: CondoExpenseGroup[];
-  monthExpenseTotal: number;
-  clusters: { id: string; name: string }[];
 }
 
 export function CondoTransparencyTab({
   condominiumName,
   clusterName,
+  myClusterId,
   unitIdentifier,
   funds,
+  visibleExpenses,
   expenseGroups,
-  monthExpenseTotal,
-  clusters,
 }: CondoTransparencyTabProps) {
   const theme = useTheme();
-  const myClusterId = clusters.find((c) => c.name === clusterName)?.id ?? null;
-  const [clusterFilter, setClusterFilter] = useState<string>(myClusterId ?? 'all');
+  const [period, setPeriod] = useState<FinancePeriod>('1m');
+  const [clusterFilter, setClusterFilter] = useState<string>('all');
 
   const filterItems = useMemo(() => {
-    const items = [{ key: 'all', label: 'Todo' }];
+    const items = [{ key: 'all', label: 'Todo lo visible' }];
+    items.push({ key: 'general', label: 'General' });
     if (myClusterId && clusterName) {
       items.push({ key: myClusterId, label: `Mi edificio (${clusterName})` });
     }
-    for (const cluster of clusters) {
-      if (cluster.id !== myClusterId) {
-        items.push({ key: cluster.id, label: cluster.name });
-      }
-    }
-    items.push({ key: 'general', label: 'General' });
     return items;
-  }, [clusterName, clusters, myClusterId]);
+  }, [clusterName, myClusterId]);
+
+  const periodStats = useMemo(
+    () =>
+      condoPeriodStats(visibleExpenses, period, myClusterId, {
+        paid: theme.accent,
+        pending: theme.accent3,
+        general: theme.accent2,
+        building: theme.accent,
+      }),
+    [visibleExpenses, period, myClusterId, theme.accent, theme.accent2, theme.accent3],
+  );
 
   const filteredGroups = useMemo(() => {
-    if (clusterFilter === 'all') return expenseGroups;
+    const groups = expenseGroups
+      .map((group) => ({
+        ...group,
+        expenses: group.expenses.filter((expense) => inFinancePeriod(expense.expense_date, period)),
+      }))
+      .filter((group) => group.expenses.length > 0)
+      .map((group) => ({
+        ...group,
+        totalAmount: group.expenses.reduce((sum, expense) => sum + expense.amount, 0),
+      }));
+
+    if (clusterFilter === 'all') return groups;
     if (clusterFilter === 'general') {
-      return expenseGroups.filter((group) => group.clusterId === null);
+      return groups.filter((group) => group.clusterId === null);
     }
-    return expenseGroups.filter((group) => group.clusterId === clusterFilter);
-  }, [clusterFilter, expenseGroups]);
+    return groups.filter((group) => group.clusterId === clusterFilter);
+  }, [clusterFilter, expenseGroups, period]);
 
   const totalFunds = funds.reduce((sum, fund) => sum + fund.balance, 0);
 
@@ -72,8 +95,18 @@ export function CondoTransparencyTab({
             {clusterName ? `Tu edificio: ${clusterName} · Unidad ${unitIdentifier}` : `Unidad ${unitIdentifier}`}
           </Text>
           <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 8, lineHeight: 18 }}>
-            Resumen de fondos y egresos del condominio. No incluye datos de otras unidades ni nómina detallada.
+            Solo ves egresos del condominio general y de tu edificio. No incluye adeudos de otras unidades ni
+            nómina detallada.
           </Text>
+        </GlassCard>
+      </View>
+
+      <View style={styles.section}>
+        <FinancePeriodFilter period={period} onChange={setPeriod} />
+        <GlassCard>
+          <FinanceCompareChart title={`Egresos · ${financePeriodLabel(period)}`} items={periodStats.compare} />
+          <View style={{ height: 18 }} />
+          <FinanceCompareChart title="Por alcance" items={periodStats.scopeCompare} />
         </GlassCard>
       </View>
 
@@ -104,17 +137,19 @@ export function CondoTransparencyTab({
         </GlassCard>
       </View>
 
-      <SectionLabel title="Egresos del mes" />
+      <SectionLabel title="Egresos del período" />
       <View style={styles.section}>
         <GlassCard>
           <Text style={{ color: theme.text, fontWeight: '700', fontSize: 22 }}>
-            {formatCurrency(monthExpenseTotal)}
+            {formatCurrency(periodStats.periodPaidTotal)}
           </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 13 }}>Comprobados / pagados este mes</Text>
+          <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+            Comprobados / pagados · {financePeriodLabel(period).toLowerCase()}
+          </Text>
         </GlassCard>
       </View>
 
-      <SectionLabel title="Egresos por edificio" />
+      <SectionLabel title="Detalle por edificio" />
       <View style={styles.section}>
         <FilterBar items={filterItems} active={clusterFilter} onChange={setClusterFilter} />
         {filteredGroups.length === 0 ? (
@@ -130,7 +165,7 @@ export function CondoTransparencyTab({
                   {formatCurrency(group.totalAmount)}
                 </Text>
               </View>
-              {group.expenses.slice(0, 6).map((expense) => (
+              {group.expenses.slice(0, 8).map((expense) => (
                 <View key={expense.id} style={styles.expenseRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>{expense.concept}</Text>
@@ -149,9 +184,9 @@ export function CondoTransparencyTab({
                   </View>
                 </View>
               ))}
-              {group.expenses.length > 6 ? (
+              {group.expenses.length > 8 ? (
                 <Text style={{ color: theme.textSubtle, fontSize: 11, marginTop: 6 }}>
-                  +{group.expenses.length - 6} egresos más en este grupo
+                  +{group.expenses.length - 8} egresos más en este grupo
                 </Text>
               ) : null}
             </GlassCard>
