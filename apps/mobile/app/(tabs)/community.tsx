@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPollClosed, computePollQuorumResult, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
+import { isPollClosed, computePollQuorumResult, isImageStoragePath, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -318,9 +318,19 @@ export default function CommunityScreen() {
                       ) : null}
 
                       {post.image_url ? (
-                        <Pressable onPress={() => void Linking.openURL(post.image_url!)}>
-                          <Image source={{ uri: post.image_url }} style={styles.postImage} resizeMode="cover" />
-                        </Pressable>
+                        isImageStoragePath(post.image_url) ? (
+                          <Pressable onPress={() => void Linking.openURL(post.image_url!)}>
+                            <Image source={{ uri: post.image_url }} style={styles.postImage} resizeMode="cover" />
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            onPress={() => void Linking.openURL(post.image_url!)}
+                            style={[styles.attachmentBtn, { borderColor: theme.glassBorder, backgroundColor: theme.glassDeep }]}
+                          >
+                            <Text style={{ fontSize: 18 }}>📄</Text>
+                            <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '600' }}>Abrir adjunto PDF</Text>
+                          </Pressable>
+                        )
                       ) : null}
 
                       {post.post_type === 'poll' && closeLabel ? (
@@ -587,6 +597,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  attachmentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
   },
   poll: { gap: 8, marginBottom: 12 },
   pollOption: { borderRadius: 12, borderWidth: 1, overflow: 'hidden', padding: 10 },

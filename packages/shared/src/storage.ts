@@ -44,6 +44,10 @@ export function postImagePath(condominiumId: string, postId: string, ext: string
   return `${condominiumId}/posts/${postId}.${ext}`;
 }
 
+export function isImageStoragePath(path: string): boolean {
+  return /\.(jpg|jpeg|png|webp|gif)$/i.test(path);
+}
+
 export function publicStorageUrl(supabaseUrl: string, bucket: string, path: string): string {
   const base = supabaseUrl.replace(/\/$/, '');
   const encoded = path

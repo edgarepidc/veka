@@ -28,6 +28,7 @@ export async function createAnnouncement(formData: FormData) {
 
   const title = String(formData.get('title') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
+  const attachmentUrl = String(formData.get('attachment_url') ?? '').trim();
   const isPinned = formData.get('is_pinned') === 'on';
 
   if (!title) return { error: 'Título obligatorio.' };
@@ -40,6 +41,7 @@ export async function createAnnouncement(formData: FormData) {
       post_type: 'announcement',
       title,
       body: body || null,
+      image_url: attachmentUrl || null,
       is_pinned: isPinned,
       is_formal: false,
       is_admin_only: false,
@@ -71,68 +73,6 @@ export async function createAnnouncement(formData: FormData) {
 
   revalidatePath('/comunidad');
   return { success: true, message: formatPublishMessage('Aviso publicado.', delivery.pushSent) };
-}
-
-export async function createPhotoPost(formData: FormData) {
-  const condoResult = await requireActiveCondominiumId();
-  if (typeof condoResult !== 'string') return { error: condoResult.error };
-  const condominiumId = condoResult;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: 'No autorizado' };
-
-  const title = String(formData.get('title') ?? '').trim();
-  const body = String(formData.get('body') ?? '').trim();
-  const imageUrl = String(formData.get('image_url') ?? '').trim();
-  const isPinned = formData.get('is_pinned') === 'on';
-
-  if (!title) return { error: 'Título obligatorio.' };
-  if (!imageUrl) return { error: 'Sube una imagen.' };
-
-  const { data: post, error } = await supabase
-    .from('posts')
-    .insert({
-      condominium_id: condominiumId,
-      author_id: user.id,
-      post_type: 'photo',
-      title,
-      body: body || null,
-      image_url: imageUrl,
-      is_pinned: isPinned,
-      is_formal: false,
-      is_admin_only: false,
-      require_payment_current: false,
-    })
-    .select('id')
-    .single();
-
-  if (error || !post) return { error: error?.message ?? 'No se pudo publicar la foto.' };
-
-  const delivery = await deliverCommunityPost({
-    condominiumId,
-    postId: post.id,
-    title,
-    body: body || null,
-    postType: 'photo',
-    isPinned,
-    excludeUserId: user.id,
-  });
-
-  await notifyCondoMembersInApp({
-    condominiumId,
-    notificationType: 'community_announcement',
-    title: 'Nueva publicación con foto',
-    body: title,
-    entityId: post.id,
-    excludeUserId: user.id,
-  });
-
-  revalidatePath('/comunidad');
-  return { success: true, message: formatPublishMessage('Foto publicada.', delivery.pushSent) };
 }
 
 export async function uploadDocument(formData: FormData) {

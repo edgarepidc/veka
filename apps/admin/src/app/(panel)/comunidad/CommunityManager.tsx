@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition, useEffect } from 'react';
-import { documentStoragePath, computePollQuorumResult, isPollClosed, pollCloseLabel, postImagePath, STORAGE_BUCKETS } from '@veka/shared';
+import { documentStoragePath, computePollQuorumResult, isImageStoragePath, isPollClosed, pollCloseLabel, postImagePath, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -10,7 +10,7 @@ import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
 
-import { createAnnouncement, archivePost, closePoll, createPhotoPost, createPoll, deleteComment, exportPollResults, unpinPost, uploadDocument } from './actions';
+import { createAnnouncement, archivePost, closePoll, createPoll, deleteComment, exportPollResults, unpinPost, uploadDocument } from './actions';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -22,8 +22,9 @@ function timeAgo(iso: string): string {
   return `hace ${days}d`;
 }
 
-function PostImagePreview({ path }: { path: string }) {
+function PostAttachmentPreview({ path }: { path: string }) {
   const [url, setUrl] = useState<string | null>(null);
+  const isImage = isImageStoragePath(path);
 
   useEffect(() => {
     if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -38,12 +39,25 @@ function PostImagePreview({ path }: { path: string }) {
 
   if (!url) return null;
 
+  if (isImage) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="mt-3 max-h-48 w-full rounded-xl border border-white/10 object-cover"
+      />
+    );
+  }
+
   return (
-    <img
-      src={url}
-      alt=""
-      className="mt-3 max-h-48 w-full rounded-xl border border-white/10 object-cover"
-    />
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-accent"
+    >
+      📄 Ver PDF adjunto
+    </a>
   );
 }
 
@@ -59,7 +73,7 @@ export function CommunityManager({
   const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [tab, setTab] = useState<'announcement' | 'photo' | 'poll' | 'document'>('announcement');
+  const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
 
   function runAction(action: () => Promise<{ error?: string; success?: boolean; message?: string; text?: string }>, ok: string) {
     setMessage(null);
@@ -112,13 +126,6 @@ export function CommunityManager({
           </button>
           <button
             type="button"
-            onClick={() => setTab('photo')}
-            className={`glass-tab ${tab === 'photo' ? 'glass-tab-active' : ''}`}
-          >
-            Foto
-          </button>
-          <button
-            type="button"
             onClick={() => setTab('poll')}
             className={`glass-tab ${tab === 'poll' ? 'glass-tab-active' : ''}`}
           >
@@ -137,31 +144,19 @@ export function CommunityManager({
           <form action={(fd) => run(createAnnouncement, fd, 'Aviso publicado.')} className="space-y-3">
             <input name="title" required placeholder="Título del aviso" className="glass-input" />
             <textarea name="body" rows={4} placeholder="Contenido (opcional)" className="glass-input min-h-[100px]" />
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
-              Fijar en la parte superior
-            </label>
-            <button type="submit" disabled={pending} className="glass-btn-primary">
-              {pending ? 'Publicando…' : 'Publicar aviso'}
-            </button>
-          </form>
-        ) : tab === 'photo' ? (
-          <form action={(fd) => run(createPhotoPost, fd, 'Foto publicada.')} className="space-y-3">
-            <input name="title" required placeholder="Título de la publicación" className="glass-input" />
-            <textarea name="body" rows={3} placeholder="Descripción (opcional)" className="glass-input min-h-[80px]" />
             <FileUpload
               bucket={STORAGE_BUCKETS.POSTS}
               buildPath={(ext) => postImagePath(condominiumId, crypto.randomUUID(), ext)}
-              inputName="image_url"
-              label="Imagen"
-              hint="JPG, PNG o WebP. Máximo 2 MB."
+              inputName="attachment_url"
+              label="Adjunto (opcional)"
+              hint="Imagen o PDF. Máximo 2 MB (imagen) o 5 MB (PDF)."
             />
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
               Fijar en la parte superior
             </label>
             <button type="submit" disabled={pending} className="glass-btn-primary">
-              {pending ? 'Publicando…' : 'Publicar foto'}
+              {pending ? 'Publicando…' : 'Publicar aviso'}
             </button>
           </form>
         ) : tab === 'poll' ? (
@@ -324,7 +319,7 @@ export function CommunityManager({
                 <p className="mt-2 font-medium text-[var(--text)]">{post.title}</p>
                 {post.body ? <p className="mt-1 text-sm text-muted">{post.body}</p> : null}
                 {post.image_url ? (
-                  <PostImagePreview path={post.image_url} />
+                  <PostAttachmentPreview path={post.image_url} />
                 ) : null}
                 {closeLabel ? <p className="mt-1 text-xs text-subtle">{closeLabel}</p> : null}
                 {post.post_type === 'poll' && post.quorum_percent ? (
