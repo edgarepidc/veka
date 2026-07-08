@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { PaymentActionButton } from '@/components/finance/PaymentActionButton';
 import { useTheme } from '@/hooks/useTheme';
 import { formatCurrency } from '@veka/shared';
 import { type PickedImage, pickImageFromLibrary } from '@/lib/pick-image';
@@ -137,7 +138,12 @@ export function PaymentProofUploader({
   }
 
   return (
-    <PrimaryButton label="Adjuntar comprobante" onPress={() => void pickProof()} />
+    <PaymentActionButton
+      label="Adjuntar comprobante"
+      icon="document-attach-outline"
+      colors={[theme.purple, theme.accent]}
+      onPress={() => void pickProof()}
+    />
   );
 }
 

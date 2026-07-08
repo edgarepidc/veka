@@ -31,6 +31,7 @@ import type { ActiveMembership } from '@/hooks/useMembership';
 import type { FinanceCharge, FinancePayment } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
+import { chargeAccentTone, paymentAccentTone } from '@/lib/finance-accent';
 import { mapChargeTone, mapPaymentTone } from '@/lib/tagTone';
 import { supabase } from '@/lib/supabase';
 
@@ -100,6 +101,13 @@ export function PersonalAccountTab({
     if (!path) return;
     void openPaymentProof(path);
   }, []);
+
+  const payAccent = useMemo(() => {
+    if (!paymentTarget) return 'green' as const;
+    if (paymentTarget.kind === 'installment') return 'blue' as const;
+    const charge = charges.find((c) => c.id === paymentTarget.chargeId);
+    return charge ? chargeAccentTone(charge.status) : 'blue';
+  }, [charges, paymentTarget]);
 
   return (
     <>
@@ -171,7 +179,7 @@ export function PersonalAccountTab({
 
       {paymentTarget ? (
         <View style={styles.section}>
-          <GlassCard variant="accent" accent="blue">
+          <GlassCard variant="accent" accent={payAccent}>
             <View style={styles.cardTop}>
               <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>
                 {paymentTarget.kind === 'installment' ? 'PRÓXIMA PARCIALIDAD' : 'PAGAR'}
@@ -312,7 +320,7 @@ export function PersonalAccountTab({
           const balance = chargeBalanceDue(charge);
           const paid = charge.amount - balance;
           return (
-            <GlassCard key={charge.id} style={styles.cardGap}>
+            <GlassCard key={charge.id} variant="accent" accent={chargeAccentTone(charge.status)} style={styles.cardGap}>
               <View style={styles.cardTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>{chargeDisplayTitle(charge)}</Text>
@@ -350,7 +358,12 @@ export function PersonalAccountTab({
           </GlassCard>
         ) : (
           filteredPayments.map((payment) => (
-            <GlassCard key={payment.id} style={styles.cardGap}>
+            <GlassCard
+              key={payment.id}
+              variant="accent"
+              accent={paymentAccentTone(payment.status)}
+              style={styles.cardGap}
+            >
               <View style={styles.cardTop}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>
                   {formatCurrency(payment.amount)}

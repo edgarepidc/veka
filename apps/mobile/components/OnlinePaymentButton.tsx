@@ -2,8 +2,9 @@ import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { PaymentActionButton } from '@/components/finance/PaymentActionButton';
 import { formatCurrency } from '@veka/shared';
+import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_URL = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'http://localhost:3000';
@@ -27,6 +28,7 @@ export function OnlinePaymentButton({
   disabled,
   onStarted,
 }: OnlinePaymentButtonProps) {
+  const theme = useTheme();
   const [loadingMethod, setLoadingMethod] = useState<GatewayMethod | null>(null);
 
   const startCheckout = useCallback(
@@ -93,22 +95,28 @@ export function OnlinePaymentButton({
 
   return (
     <>
-      <PrimaryButton
+      <PaymentActionButton
         label="Pagar con tarjeta"
+        icon="card-outline"
+        colors={[theme.accent, theme.accent2]}
         loading={loadingMethod === 'card'}
         disabled={disabled}
         onPress={() => void startCheckout('card')}
       />
       <View style={{ height: 8 }} />
-      <PrimaryButton
+      <PaymentActionButton
         label="Pagar en Oxxo"
+        icon="storefront-outline"
+        colors={[theme.danger, theme.accent3]}
         loading={loadingMethod === 'oxxo'}
         disabled={disabled}
         onPress={() => void startCheckout('oxxo')}
       />
       <View style={{ height: 8 }} />
-      <PrimaryButton
+      <PaymentActionButton
         label="Pagar con SPEI"
+        icon="swap-horizontal-outline"
+        colors={[theme.success, theme.accent2]}
         loading={loadingMethod === 'spei'}
         disabled={disabled}
         onPress={() => void startCheckout('spei')}
