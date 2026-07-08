@@ -14,7 +14,15 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPollClosed, computePollQuorumResult, isImageStoragePath, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
+import {
+  computePollQuorumResult,
+  formatClusterScopeLabel,
+  isImageStoragePath,
+  isPollClosed,
+  POLL_DEBT_MESSAGE,
+  pollCloseLabel,
+  type ClusterRef,
+} from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -60,6 +68,10 @@ function docAccent(category: string): SurfaceAccentTone {
   if (value.includes('minuta')) return 'purple';
   if (value.includes('estado')) return 'green';
   return 'orange';
+}
+
+function scopeTagTone(clusters: ClusterRef[]): 'gray' | 'blue' {
+  return clusters.length === 0 ? 'gray' : 'blue';
 }
 
 export default function CommunityScreen() {
@@ -306,6 +318,10 @@ export default function CommunityScreen() {
                         <Tag label={typeTag.label} tone={typeTag.tone} />
                       </View>
 
+                      <View style={styles.scopeRow}>
+                        <Tag label={formatClusterScopeLabel(post.clusters)} tone={scopeTagTone(post.clusters)} />
+                      </View>
+
                       {post.is_pinned ? (
                         <View style={[styles.pinned, { borderColor: `${theme.accent}44`, backgroundColor: `${theme.accent}11` }]}>
                           <Text style={{ color: theme.accent, fontSize: 10, fontWeight: '700' }}>📌 FIJADO</Text>
@@ -546,7 +562,10 @@ export default function CommunityScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.docTitle, { color: theme.text }]}>{doc.title}</Text>
-                        <Text style={{ color: theme.textSubtle, fontSize: 10 }}>{doc.category}</Text>
+                        <View style={styles.docMeta}>
+                          <Text style={{ color: theme.textSubtle, fontSize: 10 }}>{doc.category}</Text>
+                          <Tag label={formatClusterScopeLabel(doc.clusters)} tone={scopeTagTone(doc.clusters)} />
+                        </View>
                       </View>
                       <Text style={{ color: theme.accent2, fontSize: 16 }}>›</Text>
                     </Pressable>
@@ -585,8 +604,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   postCard: { marginBottom: 12 },
-  postHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  postHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   postMeta: { flex: 1 },
+  scopeRow: { marginBottom: 8 },
   postName: { fontSize: 13, fontWeight: '600' },
   pinned: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 },
   postTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
@@ -658,4 +678,5 @@ const styles = StyleSheet.create({
   docRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   docIcon: { width: 42, height: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   docTitle: { fontSize: 13, fontWeight: '600' },
+  docMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 },
 });

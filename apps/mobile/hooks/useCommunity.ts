@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { canVoteInPoll, formatCommunityAuthorName, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS } from '@veka/shared';
+import { canVoteInPoll, formatCommunityAuthorName, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS, type ClusterRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -29,6 +29,7 @@ export interface CommunityPost {
   myVote?: string | null;
   eligibleVoters: number;
   comments: PostComment[];
+  clusters: ClusterRef[];
 }
 
 export interface PostComment {
@@ -48,6 +49,7 @@ export interface CommunityDocument {
   category: string;
   file_url: string;
   created_at: string;
+  clusters: ClusterRef[];
 }
 
 const AUTHOR_COLORS = ['#34d399', '#38bdf8', '#fb923c', '#a78bfa', '#f87171'];
@@ -182,7 +184,7 @@ export function useCommunity(primary: ActiveMembership | null) {
       .filter((post) => post.post_type === 'announcement' || post.post_type === 'photo')
       .map((post) => post.id);
 
-    const [reactionsRes, pollOptionsRes, commentsRes] = await Promise.all([
+    const [reactionsRes, pollOptionsRes, commentsRes, postClustersRes] = await Promise.all([
       postIds.length
         ? supabase.from('post_reactions').select('post_id, emoji, user_id').in('post_id', postIds)
         : Promise.resolve({ data: [] as { post_id: string; emoji: string; user_id: string }[] }),
@@ -196,6 +198,18 @@ export function useCommunity(primary: ActiveMembership | null) {
             .in('post_id', commentPostIds)
             .order('created_at', { ascending: true })
         : Promise.resolve({ data: [] as { id: string; post_id: string; body: string; created_at: string; author_id: string }[] }),
+      postIds.length
+        ? supabase
+            .from('post_clusters')
+            .select('post_id, cluster_id, cluster:clusters(name)')
+            .in('post_id', postIds)
+        : Promise.resolve({
+            data: [] as {
+              post_id: string;
+              cluster_id: string;
+              cluster: { name: string } | { name: string }[] | null;
+            }[],
+          }),
     ]);
 
     const optionIds = (pollOptionsRes.data ?? []).map((opt) => opt.id);
@@ -261,6 +275,15 @@ export function useCommunity(primary: ActiveMembership | null) {
       commentsByPost.set(comment.post_id, list);
     }
 
+    const clustersByPost = new Map<string, ClusterRef[]>();
+    for (const row of postClustersRes.data ?? []) {
+      const clusterRaw = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+      const name = clusterRaw?.name ?? 'Torre';
+      const list = clustersByPost.get(row.post_id) ?? [];
+      list.push({ id: row.cluster_id, name });
+      clustersByPost.set(row.post_id, list);
+    }
+
     const mappedPosts: CommunityPost[] = await Promise.all(
       rawPosts.map(async (post) => {
       const name = profileMap.get(post.author_id) ?? 'Residente';
@@ -309,17 +332,36 @@ export function useCommunity(primary: ActiveMembership | null) {
         myVote: voted?.id ?? null,
         eligibleVoters: (post.is_formal ?? true) ? eligibleFormal : eligibleInformal,
         comments: commentsByPost.get(post.id) ?? [],
+        clusters: clustersByPost.get(post.id) ?? [],
       };
     }),
     );
 
     setPosts(mappedPosts);
 
-    const rawDocs = (docsRes.data as CommunityDocument[]) ?? [];
+    const rawDocs = (docsRes.data ?? []) as Omit<CommunityDocument, 'clusters'>[];
+    const documentIds = rawDocs.map((doc) => doc.id);
+    const { data: documentClusters } = documentIds.length
+      ? await supabase
+          .from('document_clusters')
+          .select('document_id, cluster_id, cluster:clusters(name)')
+          .in('document_id', documentIds)
+      : { data: [] as { document_id: string; cluster_id: string; cluster: { name: string } | { name: string }[] | null }[] };
+
+    const clustersByDocument = new Map<string, ClusterRef[]>();
+    for (const row of documentClusters ?? []) {
+      const clusterRaw = Array.isArray(row.cluster) ? row.cluster[0] : row.cluster;
+      const name = clusterRaw?.name ?? 'Torre';
+      const list = clustersByDocument.get(row.document_id) ?? [];
+      list.push({ id: row.cluster_id, name });
+      clustersByDocument.set(row.document_id, list);
+    }
+
     const resolvedDocs = await Promise.all(
       rawDocs.map(async (doc) => ({
         ...doc,
         file_url: await resolveDocumentUrl(doc.file_url),
+        clusters: clustersByDocument.get(doc.id) ?? [],
       })),
     );
     setDocuments(resolvedDocs);
