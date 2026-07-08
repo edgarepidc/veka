@@ -14,6 +14,7 @@ export * from './finance-dashboard';
 export * from './finance-scope';
 export * from './late-fees';
 export * from './maintenance';
+export * from './maintenance-routines';
 export * from './recurring-fees';
 export * from './roles';
 export * from './spaces';

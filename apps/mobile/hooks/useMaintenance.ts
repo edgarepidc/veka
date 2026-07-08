@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
-import { STORAGE_BUCKETS, maintenanceFilePath } from '@veka/shared';
+import type { MaintenanceRecurrence, MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
+import { STORAGE_BUCKETS, groupRoutinesByWeekday, maintenanceFilePath } from '@veka/shared';
 
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { notifyNewMaintenanceTicket } from '@/lib/notify-new-maintenance-ticket';
@@ -18,6 +18,26 @@ export interface MaintenanceTicketRow {
   admin_notes: string | null;
   created_at: string;
   resolved_at: string | null;
+}
+
+export interface MaintenanceRoutineImageRow {
+  id: string;
+  image_url: string;
+  resolved_url: string;
+  caption: string | null;
+  sort_order: number;
+}
+
+export interface MaintenanceRoutineRow {
+  id: string;
+  title: string;
+  description: string | null;
+  day_of_week: number | null;
+  recurrence: MaintenanceRecurrence;
+  monthly_day: number | null;
+  sort_order: number;
+  amenity: { name: string } | null;
+  images: MaintenanceRoutineImageRow[];
 }
 
 export interface MaintenanceScheduleRow {
@@ -40,9 +60,16 @@ export interface MaintenanceWorkLogRow {
   amenity: { name: string } | null;
 }
 
+async function resolveMaintenanceFileUrl(path: string): Promise<string | null> {
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const { data } = await supabase.storage.from(STORAGE_BUCKETS.MAINTENANCE_FILES).createSignedUrl(path, 3600);
+  return data?.signedUrl ?? null;
+}
+
 export function useMaintenance(primary: ActiveMembership | null) {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<MaintenanceTicketRow[]>([]);
+  const [routines, setRoutines] = useState<MaintenanceRoutineRow[]>([]);
   const [schedules, setSchedules] = useState<MaintenanceScheduleRow[]>([]);
   const [workLogs, setWorkLogs] = useState<MaintenanceWorkLogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,18 +79,26 @@ export function useMaintenance(primary: ActiveMembership | null) {
   const load = useCallback(async () => {
     if (!primary?.condominium_id || !primary.unit_id) {
       setTickets([]);
+      setRoutines([]);
       setSchedules([]);
       setWorkLogs([]);
       setLoading(false);
       return;
     }
 
-    const [ticketsRes, schedulesRes, workLogsRes] = await Promise.all([
+    const [ticketsRes, routinesRes, schedulesRes, workLogsRes] = await Promise.all([
       supabase
         .from('maintenance_tickets')
         .select('id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at')
         .eq('unit_id', primary.unit_id)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('maintenance_routines')
+        .select('id, title, description, day_of_week, recurrence, monthly_day, sort_order, amenity:amenities(name)')
+        .eq('condominium_id', primary.condominium_id)
+        .eq('is_active', true)
+        .order('day_of_week', { ascending: true, nullsFirst: false })
+        .order('sort_order', { ascending: true }),
       supabase
         .from('maintenance_schedules')
         .select('id, title, description, period_start, period_end, file_url, amenity:amenities(name)')
@@ -79,6 +114,37 @@ export function useMaintenance(primary: ActiveMembership | null) {
     ]);
 
     setTickets((ticketsRes.data as MaintenanceTicketRow[]) ?? []);
+
+    const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'images'>[];
+    const routineIds = routineRows.map((row) => row.id);
+    const { data: routineImages } = routineIds.length
+      ? await supabase
+          .from('maintenance_routine_images')
+          .select('id, routine_id, image_url, caption, sort_order')
+          .in('routine_id', routineIds)
+          .order('sort_order', { ascending: true })
+      : { data: [] as { id: string; routine_id: string; image_url: string; caption: string | null; sort_order: number }[] };
+
+    const imagesByRoutine = new Map<string, MaintenanceRoutineImageRow[]>();
+    for (const image of routineImages ?? []) {
+      const resolved = await resolveMaintenanceFileUrl(image.image_url);
+      const list = imagesByRoutine.get(image.routine_id) ?? [];
+      list.push({
+        id: image.id,
+        image_url: image.image_url,
+        resolved_url: resolved ?? image.image_url,
+        caption: image.caption,
+        sort_order: image.sort_order,
+      });
+      imagesByRoutine.set(image.routine_id, list);
+    }
+
+    setRoutines(
+      routineRows.map((row) => ({
+        ...row,
+        images: imagesByRoutine.get(row.id) ?? [],
+      })),
+    );
     setSchedules((schedulesRes.data as unknown as MaintenanceScheduleRow[]) ?? []);
     setWorkLogs((workLogsRes.data as unknown as MaintenanceWorkLogRow[]) ?? []);
     setLoading(false);
@@ -155,14 +221,14 @@ export function useMaintenance(primary: ActiveMembership | null) {
     [primary, refresh, user],
   );
 
-  const getSignedUrl = useCallback(async (path: string) => {
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    const { data } = await supabase.storage.from(STORAGE_BUCKETS.MAINTENANCE_FILES).createSignedUrl(path, 3600);
-    return data?.signedUrl ?? null;
-  }, []);
+  const getSignedUrl = useCallback(async (path: string) => resolveMaintenanceFileUrl(path), []);
+
+  const routineGroups = groupRoutinesByWeekday(routines);
 
   return {
     tickets,
+    routines,
+    routineGroups,
     schedules,
     workLogs,
     loading,

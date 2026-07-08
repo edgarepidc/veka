@@ -21,6 +21,12 @@ const IDS = {
   ticket: '66666666-6666-6666-6666-666666666601',
   schedule: '66666666-6666-6666-6666-666666666602',
   workLog: '66666666-6666-6666-6666-666666666603',
+  routinePool: '66666666-6666-6666-6666-666666666610',
+  routineGarden: '66666666-6666-6666-6666-666666666611',
+  routineTrash: '66666666-6666-6666-6666-666666666612',
+  routinePoolDeep: '66666666-6666-6666-6666-666666666613',
+  routinePumps: '66666666-6666-6666-6666-666666666614',
+  routineElevator: '66666666-6666-6666-6666-666666666615',
   postAnnouncement: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
   postPoll: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
   pollOptionYes: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb011',
@@ -141,6 +147,87 @@ try {
   `;
 
   console.log('→ Insertando calendario y evidencia de mantenimiento…');
+  await db`
+    insert into public.maintenance_routines (
+      id, condominium_id, amenity_id, title, description, day_of_week, recurrence, created_by
+    ) values (
+      ${IDS.routinePool},
+      ${CONDOMINIUM_ID},
+      ${poolId},
+      'Mantenimiento de alberca',
+      'Limpieza de agua, revisión de filtros y cloro.',
+      1,
+      'weekly',
+      ${userId}
+    )
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_routines (
+      id, condominium_id, title, description, day_of_week, recurrence, created_by
+    ) values
+      (${IDS.routineGarden}, ${CONDOMINIUM_ID}, 'Poda de áreas comunes', 'Jardinería en camellones y áreas verdes.', 2, 'weekly', ${userId}),
+      (${IDS.routineTrash}, ${CONDOMINIUM_ID}, 'Recolección de basura', 'Ronda en áreas comunes y contenedores.', 3, 'weekly', ${userId})
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_routines (
+      id, condominium_id, amenity_id, title, description, day_of_week, recurrence, anchor_date, created_by
+    ) values (
+      ${IDS.routinePoolDeep},
+      ${CONDOMINIUM_ID},
+      ${poolId},
+      'Limpieza profunda de alberca',
+      'Aspirado y lavado de muros.',
+      6,
+      'biweekly',
+      current_date,
+      ${userId}
+    )
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_routines (
+      id, condominium_id, title, description, day_of_week, recurrence, monthly_day, created_by
+    ) values (
+      ${IDS.routinePumps},
+      ${CONDOMINIUM_ID},
+      'Revisión de bombas de agua',
+      'Inspección de cuarto de máquinas.',
+      5,
+      'monthly',
+      15,
+      ${userId}
+    )
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_routines (
+      id, condominium_id, title, description, recurrence, created_by
+    ) values (
+      ${IDS.routineElevator},
+      ${CONDOMINIUM_ID},
+      'Reparación de elevador',
+      'Solo cuando falla o hay revisión externa.',
+      'on_demand',
+      ${userId}
+    )
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_routine_images (id, routine_id, image_url, sort_order)
+    values
+      ('66666666-6666-6666-6666-666666666621', ${IDS.routinePool}, 'https://picsum.photos/seed/veka-pool-1/800/500', 0),
+      ('66666666-6666-6666-6666-666666666622', ${IDS.routinePool}, 'https://picsum.photos/seed/veka-pool-2/800/500', 1),
+      ('66666666-6666-6666-6666-666666666623', ${IDS.routineGarden}, 'https://picsum.photos/seed/veka-garden/800/500', 0)
+    on conflict (id) do nothing
+  `;
+
   await db`
     insert into public.maintenance_schedules (
       id, condominium_id, amenity_id, title, description, period_start, period_end, file_url, file_name, created_by

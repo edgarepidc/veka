@@ -14,6 +14,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MAINTENANCE_TICKET_CATEGORIES,
+  recurrenceLabel,
   ticketCategoryLabel,
   ticketStatusLabel,
 } from '@veka/shared';
@@ -26,6 +27,7 @@ import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/Keyb
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
+import { ImageCarousel } from '@/components/ui/ImageCarousel';
 import { Tag } from '@/components/ui/Tag';
 import { useMaintenance } from '@/hooks/useMaintenance';
 import { useMembership } from '@/hooks/useMembership';
@@ -43,7 +45,7 @@ export default function MaintenanceScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { tickets, schedules, workLogs, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
+  const { tickets, routines, routineGroups, workLogs, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
     useMaintenance(primary);
   const params = useLocalSearchParams<{ ticketId?: string | string[] }>();
   const ticketIdParam = Array.isArray(params.ticketId) ? params.ticketId[0] : params.ticketId;
@@ -230,26 +232,44 @@ export default function MaintenanceScreen() {
 
         {tab === 'calendarios' ? (
           <View style={styles.section}>
-            {schedules.length === 0 ? (
+            {routines.length === 0 ? (
               <GlassCard>
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin calendarios publicados.</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 14 }}>
+                  Sin actividades programadas. El administrador publicará el calendario semanal aquí.
+                </Text>
               </GlassCard>
             ) : (
-              schedules.map((schedule) => (
-                <GlassCard key={schedule.id} style={styles.mt}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>{schedule.title}</Text>
-                  <Text style={[styles.meta, { color: theme.textSubtle }]}>
-                    {schedule.amenity?.name ?? 'Áreas comunes'}
-                    {schedule.period_start ? ` · ${schedule.period_start}` : ''}
-                  </Text>
-                  {schedule.description ? (
-                    <Text style={[styles.body, { color: theme.textMuted }]}>{schedule.description}</Text>
-                  ) : null}
-                  <Pressable onPress={() => void openFile(schedule.file_url)}>
-                    <Text style={[styles.link, { color: theme.accent }]}>Ver calendario</Text>
-                  </Pressable>
-                </GlassCard>
-              ))
+              routineGroups.map((group) =>
+                group.items.length === 0 ? null : (
+                  <View key={group.label} style={styles.mt}>
+                    <Text style={[styles.dayHeading, { color: theme.accent }]}>{group.label}</Text>
+                    {group.items.map((routine) => (
+                      <GlassCard key={routine.id} style={styles.routineCard}>
+                        <View style={styles.row}>
+                          <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{routine.title}</Text>
+                          <Tag label={recurrenceLabel(routine.recurrence)} tone="blue" />
+                        </View>
+                        <Text style={[styles.meta, { color: theme.textSubtle }]}>
+                          {routine.amenity?.name ?? 'Áreas comunes'}
+                          {routine.monthly_day ? ` · día ${routine.monthly_day} del mes` : ''}
+                        </Text>
+                        {routine.description ? (
+                          <Text style={[styles.body, { color: theme.textMuted }]}>{routine.description}</Text>
+                        ) : null}
+                        {routine.images.length > 0 ? (
+                          <ImageCarousel
+                            images={routine.images.map((image) => ({
+                              id: image.id,
+                              url: image.resolved_url,
+                            }))}
+                            onOpen={(url) => void Linking.openURL(url)}
+                          />
+                        ) : null}
+                      </GlassCard>
+                    ))}
+                  </View>
+                ),
+              )
             )}
           </View>
         ) : null}
@@ -370,4 +390,6 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 8, fontSize: 14, lineHeight: 20 },
   chips: { marginVertical: 4 },
   chip: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
+  dayHeading: { fontSize: 13, fontWeight: '800', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
+  routineCard: { marginBottom: 10 },
 });

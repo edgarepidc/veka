@@ -278,7 +278,108 @@ from auth.users u
 where u.email = 'diazcruzee@outlook.com'
 on conflict (id) do nothing;
 
--- Demo maintenance schedule (pool) and work evidence
+-- Demo maintenance routines (weekly calendar)
+insert into public.maintenance_routines (
+  id, condominium_id, amenity_id, title, description, day_of_week, recurrence, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666610',
+  '22222222-2222-2222-2222-222222222222',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01',
+  'Mantenimiento de alberca',
+  'Limpieza de agua, revisión de filtros y cloro.',
+  1,
+  'weekly',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routines (
+  id, condominium_id, title, description, day_of_week, recurrence, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666611',
+  '22222222-2222-2222-2222-222222222222',
+  'Poda de áreas comunes',
+  'Jardinería en camellones y áreas verdes.',
+  2,
+  'weekly',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routines (
+  id, condominium_id, title, description, day_of_week, recurrence, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666612',
+  '22222222-2222-2222-2222-222222222222',
+  'Recolección de basura',
+  'Ronda en áreas comunes y contenedores.',
+  3,
+  'weekly',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routines (
+  id, condominium_id, amenity_id, title, description, day_of_week, recurrence, anchor_date, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666613',
+  '22222222-2222-2222-2222-222222222222',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01',
+  'Limpieza profunda de alberca',
+  'Aspirado y lavado de muros.',
+  6,
+  'biweekly',
+  current_date,
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routines (
+  id, condominium_id, title, description, day_of_week, recurrence, monthly_day, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666614',
+  '22222222-2222-2222-2222-222222222222',
+  'Revisión de bombas de agua',
+  'Inspección de cuarto de máquinas.',
+  5,
+  'monthly',
+  15,
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routines (
+  id, condominium_id, title, description, recurrence, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666615',
+  '22222222-2222-2222-2222-222222222222',
+  'Reparación de elevador',
+  'Solo cuando falla o hay revisión externa.',
+  'on_demand',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_routine_images (id, routine_id, image_url, sort_order)
+values
+  ('66666666-6666-6666-6666-666666666621', '66666666-6666-6666-6666-666666666610', 'https://picsum.photos/seed/veka-pool-1/800/500', 0),
+  ('66666666-6666-6666-6666-666666666622', '66666666-6666-6666-6666-666666666610', 'https://picsum.photos/seed/veka-pool-2/800/500', 1),
+  ('66666666-6666-6666-6666-666666666623', '66666666-6666-6666-6666-666666666611', 'https://picsum.photos/seed/veka-garden/800/500', 0)
+on conflict (id) do nothing;
+
+-- Legacy schedule row (optional PDF calendar)
 insert into public.maintenance_schedules (
   id, condominium_id, amenity_id, title, description, period_start, period_end, file_url, file_name, created_by
 )

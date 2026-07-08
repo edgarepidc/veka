@@ -17,7 +17,7 @@ Tras `npm run db:reset` o `npm run seed:pilot-demo` en producción:
 - **Espacios:** reserva confirmada Alberca (mañana 18:00), reserva pendiente Salón (+10 días)
 - **Seguridad:** visita activa (Carlos Méndez, QR fijo), paquete Amazon en caseta
 - **Documentos:** reglamento interno y minuta asamblea (PDF demo)
-- **Mantenimiento:** ticket abierto de plomería en A-102; calendario de alberca; evidencia de inspección
+- **Mantenimiento:** ticket abierto de plomería en A-102; calendario semanal (alberca, poda, basura, etc.) con fotos en carrusel; evidencia de inspección
 
 ## Checklist de demostración
 
@@ -28,7 +28,7 @@ Tras `npm run db:reset` o `npm run seed:pilot-demo` en producción:
 3. **Comunidad** — aviso fijado, votar encuesta formal, abrir documentos
 4. **Espacios** — ver disponibilidad, reserva confirmada y pendiente; crear reserva que requiera aprobación
 5. **Seguridad** — pestaña Visitas (QR activo), pestaña Paquetes (Amazon en caseta)
-6. **Mantenimiento** — ticket abierto; calendarios y evidencia; recibir push al cambiar estado desde admin
+6. **Mantenimiento** — calendario semanal con carrusel de fotos; ticket abierto; recibir push al cambiar estado
 
 ### Panel admin
 

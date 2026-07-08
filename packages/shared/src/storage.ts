@@ -29,7 +29,7 @@ export function expenseEvidencePath(condominiumId: string, fileId: string, ext: 
 
 export function maintenanceFilePath(
   condominiumId: string,
-  folder: 'schedules' | 'evidence' | 'tickets',
+  folder: 'schedules' | 'evidence' | 'tickets' | 'routines',
   fileId: string,
   ext: string,
 ): string {

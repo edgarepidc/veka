@@ -1,6 +1,32 @@
 import { getLoaderCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
-import type { MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
+import type {
+  MaintenanceRecurrence,
+  MaintenanceTicketCategory,
+  MaintenanceTicketStatus,
+} from '@veka/shared';
+
+export interface MaintenanceRoutineImageRow {
+  id: string;
+  image_url: string;
+  caption: string | null;
+  sort_order: number;
+}
+
+export interface MaintenanceRoutineRow {
+  id: string;
+  title: string;
+  description: string | null;
+  day_of_week: number | null;
+  recurrence: MaintenanceRecurrence;
+  monthly_day: number | null;
+  anchor_date: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  amenity: { name: string } | null;
+  images: MaintenanceRoutineImageRow[];
+}
 
 export interface MaintenanceTicketRow {
   id: string;
@@ -49,6 +75,7 @@ export interface AmenityOption {
 export async function loadMaintenanceData(condominiumId?: string): Promise<{
   tickets: MaintenanceTicketRow[];
   schedules: MaintenanceScheduleRow[];
+  routines: MaintenanceRoutineRow[];
   workLogs: MaintenanceWorkLogRow[];
   amenities: AmenityOption[];
   condominiumId: string;
@@ -56,7 +83,7 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
   const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
-  const [ticketsRes, schedulesRes, workLogsRes, amenitiesRes] = await Promise.all([
+  const [ticketsRes, schedulesRes, routinesRes, workLogsRes, amenitiesRes] = await Promise.all([
     supabase
       .from('maintenance_tickets')
       .select(
@@ -72,6 +99,14 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
       .eq('condominium_id', condoId)
       .order('created_at', { ascending: false }),
     supabase
+      .from('maintenance_routines')
+      .select(
+        'id, title, description, day_of_week, recurrence, monthly_day, anchor_date, is_active, sort_order, created_at, amenity:amenities(name)',
+      )
+      .eq('condominium_id', condoId)
+      .order('day_of_week', { ascending: true, nullsFirst: false })
+      .order('sort_order', { ascending: true }),
+    supabase
       .from('maintenance_work_logs')
       .select(
         'id, title, description, work_date, photo_url, file_url, file_name, created_at, amenity:amenities(name), ticket:maintenance_tickets(title)',
@@ -86,10 +121,36 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
       .order('name'),
   ]);
 
+  const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'images'>[];
+  const routineIds = routineRows.map((row) => row.id);
+  const { data: routineImages } = routineIds.length
+    ? await supabase
+        .from('maintenance_routine_images')
+        .select('id, routine_id, image_url, caption, sort_order')
+        .in('routine_id', routineIds)
+        .order('sort_order', { ascending: true })
+    : { data: [] as { id: string; routine_id: string; image_url: string; caption: string | null; sort_order: number }[] };
+
+  const imagesByRoutine = new Map<string, MaintenanceRoutineImageRow[]>();
+  for (const image of routineImages ?? []) {
+    const list = imagesByRoutine.get(image.routine_id) ?? [];
+    list.push({
+      id: image.id,
+      image_url: image.image_url,
+      caption: image.caption,
+      sort_order: image.sort_order,
+    });
+    imagesByRoutine.set(image.routine_id, list);
+  }
+
   return {
     condominiumId: condoId,
     tickets: (ticketsRes.data ?? []) as unknown as MaintenanceTicketRow[],
     schedules: (schedulesRes.data ?? []) as unknown as MaintenanceScheduleRow[],
+    routines: routineRows.map((row) => ({
+      ...row,
+      images: imagesByRoutine.get(row.id) ?? [],
+    })),
     workLogs: (workLogsRes.data ?? []) as unknown as MaintenanceWorkLogRow[],
     amenities: (amenitiesRes.data ?? []) as AmenityOption[],
   };

@@ -66,6 +66,9 @@ export const MAINTENANCE_TICKET_CATEGORIES = [
 ] as const;
 export type MaintenanceTicketCategory = (typeof MAINTENANCE_TICKET_CATEGORIES)[number];
 
+export const MAINTENANCE_RECURRENCES = ['weekly', 'biweekly', 'monthly', 'on_demand'] as const;
+export type MaintenanceRecurrence = (typeof MAINTENANCE_RECURRENCES)[number];
+
 export const FEE_SCOPES = ['general', 'cluster', 'extraordinary'] as const;
 export type FeeScope = (typeof FEE_SCOPES)[number];
 
