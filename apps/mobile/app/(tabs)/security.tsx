@@ -25,6 +25,7 @@ import { ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
+import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
@@ -187,7 +188,13 @@ export default function SecurityScreen() {
 
           {tab === 'visitas' ? (
             <>
-              <PrimaryButton label="+ Nueva visita" onPress={() => setSheetOpen(true)} style={{ marginBottom: 14 }} />
+              <GradientActionButton
+                label="Nueva visita"
+                icon="person-add-outline"
+                variant="blue"
+                onPress={() => setSheetOpen(true)}
+                style={styles.createAction}
+              />
               {actionError ? <Text style={{ color: theme.danger, marginBottom: 8 }}>{actionError}</Text> : null}
               {visits.length === 0 ? (
                 <GlassCard>
@@ -390,6 +397,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: {},
   section: { paddingHorizontal: 20 },
+  createAction: { marginTop: 14, marginBottom: 14 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },

@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 
+import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
-import { PaymentActionButton } from '@/components/finance/PaymentActionButton';
 import { useTheme } from '@/hooks/useTheme';
 import { formatCurrency } from '@veka/shared';
 import { type PickedImage, pickImageFromLibrary } from '@/lib/pick-image';
@@ -138,10 +138,10 @@ export function PaymentProofUploader({
   }
 
   return (
-    <PaymentActionButton
+    <GradientActionButton
       label="Adjuntar comprobante"
       icon="document-attach-outline"
-      colors={[theme.purple, theme.accent]}
+      variant="purple"
       onPress={() => void pickProof()}
     />
   );

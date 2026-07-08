@@ -5,6 +5,7 @@ import type { AppTheme } from '@/constants/theme';
 export const SURFACE_RADIUS = {
   card: 16,
   button: 12,
+  action: 14,
   input: 12,
   pill: 999,
   sheet: 20,

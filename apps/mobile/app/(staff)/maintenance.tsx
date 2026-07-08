@@ -26,6 +26,7 @@ import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
+import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar } from '@/components/ui/TabStrip';
@@ -210,7 +211,12 @@ export default function StaffMaintenanceScreen() {
 
         <View style={styles.buttonRow}>
           <View style={styles.buttonHalf}>
-            <PrimaryButton label="Nuevo a demanda" onPress={openCreateSheet} />
+            <GradientActionButton
+              label="Nuevo a demanda"
+              icon="add-circle-outline"
+              variant="purple"
+              onPress={openCreateSheet}
+            />
           </View>
           <View style={styles.buttonHalf}>
             <PrimaryButton label="Registrar evidencia" variant="secondary" onPress={() => openEvidenceSheet()} />

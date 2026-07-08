@@ -27,6 +27,7 @@ import { ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
+import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
@@ -185,7 +186,13 @@ export default function MaintenanceScreen() {
 
         {tab === 'tickets' ? (
           <View style={styles.section}>
-            <PrimaryButton label="Nuevo reporte" onPress={() => setSheetOpen(true)} />
+            <GradientActionButton
+              label="Nuevo reporte"
+              icon="construct-outline"
+              variant="purple"
+              onPress={() => setSheetOpen(true)}
+              style={styles.createAction}
+            />
             {tickets.length === 0 ? (
               <GlassCard style={styles.mt}>
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>No tienes tickets todavía.</Text>
@@ -369,6 +376,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 20 },
   section: { marginTop: 16 },
+  createAction: { marginBottom: 12 },
   mt: { marginTop: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   cardTitle: { fontSize: 16, fontWeight: '700', flex: 1 },

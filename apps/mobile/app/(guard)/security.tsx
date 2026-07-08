@@ -18,6 +18,7 @@ import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
+import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
@@ -173,7 +174,13 @@ export default function GuardSecurityScreen() {
         </View>
 
         <View style={styles.section}>
-          <PrimaryButton label="Registrar paquete" onPress={() => setPackageSheetOpen(true)} />
+          <GradientActionButton
+            label="Registrar paquete"
+            icon="cube-outline"
+            variant="orange"
+            onPress={() => setPackageSheetOpen(true)}
+            style={styles.createAction}
+          />
         </View>
 
         {actionError ? <Text style={[styles.error, { color: theme.danger }]}>{actionError}</Text> : null}
@@ -337,6 +344,7 @@ const styles = StyleSheet.create({
   headerWrap: { flex: 1 },
   avatarBtn: { marginTop: 4 },
   section: { marginTop: 16 },
+  createAction: { marginBottom: 4 },
   cardGap: { marginBottom: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   cardTitle: { fontSize: 16, fontWeight: '700' },
