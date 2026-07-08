@@ -14,6 +14,7 @@ export interface CommunityPost {
   is_pinned: boolean;
   is_formal: boolean;
   require_payment_current: boolean;
+  quorum_percent: number | null;
   poll_closes_at: string | null;
   poll_closed_at: string | null;
   created_at: string;
@@ -25,6 +26,7 @@ export interface CommunityPost {
   myReactions: string[];
   pollOptions?: { id: string; label: string; votes: number }[];
   myVote?: string | null;
+  eligibleVoters: number;
   comments: PostComment[];
 }
 
@@ -100,13 +102,14 @@ export function useCommunity(primary: ActiveMembership | null) {
       return;
     }
 
-    const [postsRes, docsRes, debt] = await Promise.all([
+    const [postsRes, docsRes, debt, eligibleFormalRes, eligibleInformalRes] = await Promise.all([
       supabase
         .from('posts')
         .select(
-          'id, title, body, post_type, is_pinned, is_formal, require_payment_current, poll_closes_at, poll_closed_at, created_at, author_id',
+          'id, title, body, post_type, is_pinned, is_formal, require_payment_current, quorum_percent, poll_closes_at, poll_closed_at, created_at, author_id',
         )
         .eq('condominium_id', primary.condominium_id)
+        .eq('is_archived', false)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(30),
@@ -117,7 +120,23 @@ export function useCommunity(primary: ActiveMembership | null) {
         .order('created_at', { ascending: false })
         .limit(20),
       fetchOutstandingDebt(primary.unit_id),
+      supabase
+        .from('memberships')
+        .select('id', { count: 'exact', head: true })
+        .eq('condominium_id', primary.condominium_id)
+        .eq('status', 'active')
+        .not('unit_id', 'is', null)
+        .or('unit_relationship.is.null,unit_relationship.eq.owner'),
+      supabase
+        .from('memberships')
+        .select('id', { count: 'exact', head: true })
+        .eq('condominium_id', primary.condominium_id)
+        .eq('status', 'active')
+        .not('unit_id', 'is', null),
     ]);
+
+    const eligibleFormal = eligibleFormalRes.count ?? 0;
+    const eligibleInformal = eligibleInformalRes.count ?? 0;
 
     setHasOutstandingDebt(debt);
 
@@ -230,6 +249,7 @@ export function useCommunity(primary: ActiveMembership | null) {
         is_pinned: post.is_pinned,
         is_formal: post.is_formal ?? true,
         require_payment_current: post.require_payment_current ?? false,
+        quorum_percent: post.quorum_percent != null ? Number(post.quorum_percent) : null,
         poll_closes_at: post.poll_closes_at ?? null,
         poll_closed_at: post.poll_closed_at ?? null,
         created_at: post.created_at,
@@ -241,6 +261,7 @@ export function useCommunity(primary: ActiveMembership | null) {
         myReactions,
         pollOptions,
         myVote: voted?.id ?? null,
+        eligibleVoters: (post.is_formal ?? true) ? eligibleFormal : eligibleInformal,
         comments: commentsByPost.get(post.id) ?? [],
       };
     });
@@ -488,9 +509,11 @@ export function useCommunity(primary: ActiveMembership | null) {
       };
 
       setPosts((current) =>
-        current.map((item) =>
-          item.id === postId ? { ...item, comments: [...item.comments, mapped] } : item,
-        ),
+        current.map((item) => {
+          if (item.id !== postId) return item;
+          if (item.comments.some((comment) => comment.id === mapped.id)) return item;
+          return { ...item, comments: [...item.comments, mapped] };
+        }),
       );
 
       return {};

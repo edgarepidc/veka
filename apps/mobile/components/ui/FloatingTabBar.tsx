@@ -8,6 +8,7 @@ import Animated, {
 
 import { TabBarIcon } from '@/components/ui/TabBarIcon';
 import { SURFACE_RADIUS, surfaceBarStyle } from '@/constants/surface';
+import { useCommunityNotifications } from '@/providers/CommunityNotificationsProvider';
 import { useTheme } from '@/hooks/useTheme';
 
 const LENS_SPRING = { damping: 20, stiffness: 260, mass: 0.85 };
@@ -67,6 +68,7 @@ function TabActiveLens({
 
 export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const theme = useTheme();
+  const { unreadCount } = useCommunityNotifications();
   const [tabLayouts, setTabLayouts] = useState<TabLayout[]>([]);
 
   const onTabLayout = useCallback((index: number, event: LayoutChangeEvent) => {
@@ -102,7 +104,14 @@ export function FloatingTabBar({ state, descriptors, navigation }: TabBarProps) 
               }}
               style={styles.item}
             >
-              <TabBarIcon routeName={route.name} focused={isFocused} size={23} />
+              <View style={styles.iconWrap}>
+                <TabBarIcon routeName={route.name} focused={isFocused} size={23} />
+                {route.name === 'community' && unreadCount > 0 ? (
+                  <View style={[styles.badge, { backgroundColor: theme.danger, borderColor: theme.background }]}>
+                    <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text
                 style={[
                   styles.label,
@@ -152,6 +161,28 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     minWidth: 48,
     zIndex: 1,
+  },
+  iconWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
   },
   label: {
     fontSize: 9,

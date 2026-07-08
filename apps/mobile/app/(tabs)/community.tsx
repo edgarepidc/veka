@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { isPollClosed, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
+import { isPollClosed, computePollQuorumResult, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -23,6 +23,7 @@ import { Tag } from '@/components/ui/Tag';
 import type { SurfaceAccentTone } from '@/constants/surface';
 import { useCommunity } from '@/hooks/useCommunity';
 import { useMembership } from '@/hooks/useMembership';
+import { useCommunityNotifications } from '@/providers/CommunityNotificationsProvider';
 import { useTheme } from '@/hooks/useTheme';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉'];
@@ -66,10 +67,13 @@ export default function CommunityScreen() {
   const { primary, loading: membershipLoading } = useMembership();
   const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
+  const { notifications, unreadCount, markRead, markAllRead } = useCommunityNotifications();
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
+  const [showInbox, setShowInbox] = useState(false);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [sendingComment, setSendingComment] = useState<Record<string, boolean>>({});
 
   function confirmVote(postId: string, optionId: string, label: string) {
     Alert.alert('Confirmar voto', `¿Registrar tu voto por "${label}"? No podrás cambiarlo después.`, [
@@ -86,13 +90,20 @@ export default function CommunityScreen() {
   }
 
   async function submitComment(postId: string) {
-    const body = commentDrafts[postId] ?? '';
-    const result = await addComment(postId, body);
-    if (result.error) {
-      Alert.alert('Comentario', result.error);
-      return;
+    const body = (commentDrafts[postId] ?? '').trim();
+    if (!body || sendingComment[postId]) return;
+
+    setSendingComment((current) => ({ ...current, [postId]: true }));
+    try {
+      const result = await addComment(postId, body);
+      if (result.error) {
+        Alert.alert('Comentario', result.error);
+        return;
+      }
+      setCommentDrafts((current) => ({ ...current, [postId]: '' }));
+    } finally {
+      setSendingComment((current) => ({ ...current, [postId]: false }));
     }
-    setCommentDrafts((current) => ({ ...current, [postId]: '' }));
   }
 
   const filteredPosts = useMemo(() => {
@@ -116,6 +127,55 @@ export default function CommunityScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader title="Comunidad" highlight="vecinal" subtitle={primary?.condominium?.name} />
+
+        {unreadCount > 0 ? (
+          <View style={styles.section}>
+            <Pressable
+              onPress={() => setShowInbox((value) => !value)}
+              style={[
+                styles.inboxToggle,
+                { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}44` },
+              ]}
+            >
+              <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>
+                {showInbox ? 'Ocultar notificaciones' : `${unreadCount} notificación${unreadCount === 1 ? '' : 'es'} nueva${unreadCount === 1 ? '' : 's'}`}
+              </Text>
+            </Pressable>
+            {showInbox ? (
+              <GlassCard style={{ marginTop: 10 }}>
+                <View style={styles.inboxHeader}>
+                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }}>Bandeja</Text>
+                  <Pressable onPress={() => void markAllRead()}>
+                    <Text style={{ color: theme.accent, fontSize: 12, fontWeight: '600' }}>Marcar todo leído</Text>
+                  </Pressable>
+                </View>
+                {notifications.slice(0, 8).map((item) => (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => void markRead(item.id)}
+                    style={[
+                      styles.inboxItem,
+                      {
+                        borderColor: theme.glassBorder,
+                        backgroundColor: item.read_at ? 'transparent' : `${theme.accent}11`,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: theme.text, fontSize: 13, fontWeight: item.read_at ? '500' : '700' }}>
+                      {item.title}
+                    </Text>
+                    {item.body ? (
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>
+                        {item.body}
+                      </Text>
+                    ) : null}
+                    <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 4 }}>{timeAgo(item.created_at)}</Text>
+                  </Pressable>
+                ))}
+              </GlassCard>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <TabStrip
@@ -154,6 +214,17 @@ export default function CommunityScreen() {
                   const totalVotes = post.pollOptions?.reduce((sum, o) => sum + o.votes, 0) ?? 0;
                   const pollClosed = post.post_type === 'poll' && isPollClosed(post);
                   const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
+                  const quorumResult =
+                    post.post_type === 'poll' && post.pollOptions
+                      ? computePollQuorumResult({
+                          options: post.pollOptions,
+                          totalVotes,
+                          eligibleVoters: post.eligibleVoters,
+                          quorumPercent: post.quorum_percent,
+                          isFormal: post.is_formal,
+                          isClosed: pollClosed,
+                        })
+                      : null;
 
                   return (
                     <GlassCard key={post.id} variant="accent" accent={accent} style={styles.postCard}>
@@ -228,6 +299,22 @@ export default function CommunityScreen() {
                               </Pressable>
                             </View>
                           ) : null}
+                          {quorumResult ? (
+                            <Text
+                              style={{
+                                color:
+                                  quorumResult.statusTone === 'success'
+                                    ? theme.success
+                                    : quorumResult.statusTone === 'warning'
+                                      ? theme.warning
+                                      : theme.textSubtle,
+                                fontSize: 11,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {quorumResult.statusLabel}
+                            </Text>
+                          ) : null}
                           {post.pollOptions.map((opt) => {
                             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
                             const voted = post.myVote === opt.id;
@@ -300,9 +387,20 @@ export default function CommunityScreen() {
                             />
                             <Pressable
                               onPress={() => void submitComment(post.id)}
-                              style={[styles.commentSend, { backgroundColor: theme.accent }]}
+                              disabled={!((commentDrafts[post.id] ?? '').trim()) || sendingComment[post.id]}
+                              style={[
+                                styles.commentSend,
+                                {
+                                  backgroundColor:
+                                    !((commentDrafts[post.id] ?? '').trim()) || sendingComment[post.id]
+                                      ? theme.textSubtle
+                                      : theme.accent,
+                                },
+                              ]}
                             >
-                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Enviar</Text>
+                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                                {sendingComment[post.id] ? 'Enviando…' : 'Enviar'}
+                              </Text>
                             </Pressable>
                           </View>
                         </View>
@@ -381,6 +479,24 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: {},
   section: { paddingHorizontal: 20 },
+  inboxToggle: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  inboxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  inboxItem: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
   postCard: { marginBottom: 12 },
   postHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   postMeta: { flex: 1 },

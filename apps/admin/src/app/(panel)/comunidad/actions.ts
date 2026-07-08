@@ -4,8 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import { notifyCondoMembersInApp } from '@/lib/community-notifications';
 import { deliverCommunityPost } from '@/lib/notifications';
 import { createClient } from '@/lib/supabase/server';
+import { formatPollMinutesExport, isPollClosed } from '@veka/shared';
 
 function formatPublishMessage(base: string, pushSent: number): string {
   if (pushSent <= 0) return base;
@@ -56,6 +58,17 @@ export async function createAnnouncement(formData: FormData) {
     postType: 'announcement',
     isPinned,
   });
+
+  if (isPinned) {
+    await notifyCondoMembersInApp({
+      condominiumId,
+      notificationType: 'community_announcement',
+      title: 'Nuevo aviso importante',
+      body: title,
+      entityId: post.id,
+      excludeUserId: user.id,
+    });
+  }
 
   revalidatePath('/comunidad');
   return { success: true, message: formatPublishMessage('Aviso publicado.', delivery.pushSent) };
@@ -115,6 +128,7 @@ export async function createPoll(formData: FormData) {
   const isPinned = formData.get('is_pinned') === 'on';
   const requirePaymentCurrent = formData.get('require_payment_current') === 'on';
   const pollClosesAtRaw = String(formData.get('poll_closes_at') ?? '').trim();
+  const quorumPercentRaw = String(formData.get('quorum_percent') ?? '').trim();
 
   const options = optionsRaw
     .split('\n')
@@ -132,6 +146,16 @@ export async function createPoll(formData: FormData) {
     pollClosesAt = parsed.toISOString();
   }
 
+  let quorumPercent: number | null = null;
+  if (quorumPercentRaw) {
+    const parsed = Number(quorumPercentRaw);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 100) {
+      return { error: 'El quórum debe ser un porcentaje entre 1 y 100.' };
+    }
+    if (!isFormal) return { error: 'El quórum solo aplica a encuestas formales.' };
+    quorumPercent = parsed;
+  }
+
   const { data: post, error: postError } = await supabase
     .from('posts')
     .insert({
@@ -145,6 +169,7 @@ export async function createPoll(formData: FormData) {
       is_admin_only: false,
       require_payment_current: requirePaymentCurrent,
       poll_closes_at: pollClosesAt,
+      quorum_percent: quorumPercent,
     })
     .select('id')
     .single();
@@ -169,6 +194,15 @@ export async function createPoll(formData: FormData) {
     isPinned,
   });
 
+  await notifyCondoMembersInApp({
+    condominiumId,
+    notificationType: 'community_poll',
+    title: 'Nueva encuesta',
+    body: title,
+    entityId: post.id,
+    excludeUserId: user.id,
+  });
+
   revalidatePath('/comunidad');
   return { success: true, message: formatPublishMessage('Encuesta publicada.', delivery.pushSent) };
 }
@@ -186,7 +220,7 @@ export async function closePoll(postId: string) {
 
   const { data: post, error: fetchError } = await supabase
     .from('posts')
-    .select('id, post_type, poll_closed_at')
+    .select('id, title, post_type, poll_closed_at')
     .eq('id', postId)
     .eq('condominium_id', condominiumId)
     .single();
@@ -202,6 +236,147 @@ export async function closePoll(postId: string) {
 
   if (error) return { error: error.message };
 
+  await notifyCondoMembersInApp({
+    condominiumId,
+    notificationType: 'community_poll_closed',
+    title: 'Encuesta cerrada',
+    body: post.title,
+    entityId: postId,
+  });
+
   revalidatePath('/comunidad');
   return { success: true, message: 'Encuesta cerrada. Ya no se aceptan votos.' };
+}
+
+export async function unpinPost(postId: string) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('posts')
+    .update({ is_pinned: false })
+    .eq('id', postId)
+    .eq('condominium_id', condoResult);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/comunidad');
+  return { success: true, message: 'Publicación desfijada.' };
+}
+
+export async function archivePost(postId: string) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('posts')
+    .update({
+      is_archived: true,
+      archived_at: new Date().toISOString(),
+      is_pinned: false,
+    })
+    .eq('id', postId)
+    .eq('condominium_id', condoResult);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/comunidad');
+  return { success: true, message: 'Publicación archivada. Ya no aparece en la app.' };
+}
+
+export async function deleteComment(commentId: string) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+
+  const supabase = await createClient();
+  const { data: comment, error: fetchError } = await supabase
+    .from('post_comments')
+    .select('id, post_id')
+    .eq('id', commentId)
+    .single();
+
+  if (fetchError || !comment) return { error: 'Comentario no encontrado.' };
+
+  const { data: post, error: postError } = await supabase
+    .from('posts')
+    .select('condominium_id')
+    .eq('id', comment.post_id)
+    .single();
+
+  if (postError || !post) return { error: 'Publicación no encontrada.' };
+  if (post.condominium_id !== condoResult) return { error: 'No autorizado.' };
+
+  const { error } = await supabase.from('post_comments').delete().eq('id', commentId);
+  if (error) return { error: error.message };
+
+  revalidatePath('/comunidad');
+  return { success: true, message: 'Comentario eliminado.' };
+}
+
+export async function exportPollResults(postId: string) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+
+  const supabase = await createClient();
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select(
+      'id, title, body, is_formal, quorum_percent, poll_closes_at, poll_closed_at, created_at, post_type, poll_options(id, label)',
+    )
+    .eq('id', postId)
+    .eq('condominium_id', condoResult)
+    .single();
+
+  if (fetchError || !post) return { error: 'Encuesta no encontrada.' };
+  if (post.post_type !== 'poll') return { error: 'Solo aplica a encuestas.' };
+  if (!isPollClosed(post)) return { error: 'Cierra la encuesta antes de exportar el acta.' };
+
+  const options = (Array.isArray(post.poll_options) ? post.poll_options : []) as { id: string; label: string }[];
+  const optionIds = options.map((opt) => opt.id);
+
+  const { data: votes } = optionIds.length
+    ? await supabase.from('poll_votes').select('poll_option_id').in('poll_option_id', optionIds)
+    : { data: [] as { poll_option_id: string }[] };
+
+  const voteCounts = new Map<string, number>();
+  for (const vote of votes ?? []) {
+    voteCounts.set(vote.poll_option_id, (voteCounts.get(vote.poll_option_id) ?? 0) + 1);
+  }
+
+  const pollOptions = options.map((opt) => ({
+    id: opt.id,
+    label: opt.label,
+    votes: voteCounts.get(opt.id) ?? 0,
+  }));
+  const totalVotes = pollOptions.reduce((sum, opt) => sum + opt.votes, 0);
+
+  let eligibleQuery = supabase
+    .from('memberships')
+    .select('id', { count: 'exact', head: true })
+    .eq('condominium_id', condoResult)
+    .eq('status', 'active')
+    .not('unit_id', 'is', null);
+
+  if (post.is_formal ?? true) {
+    eligibleQuery = eligibleQuery.or('unit_relationship.is.null,unit_relationship.eq.owner');
+  }
+
+  const { count: eligibleVoters } = await eligibleQuery;
+
+  const text = formatPollMinutesExport({
+    title: post.title,
+    body: post.body,
+    isFormal: post.is_formal ?? true,
+    createdAt: post.created_at,
+    pollClosesAt: post.poll_closes_at,
+    pollClosedAt: post.poll_closed_at,
+    quorumPercent: post.quorum_percent != null ? Number(post.quorum_percent) : null,
+    options: pollOptions,
+    totalVotes,
+    eligibleVoters: eligibleVoters ?? 0,
+  });
+
+  return { success: true, text };
 }

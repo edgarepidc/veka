@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { documentStoragePath, isPollClosed, pollCloseLabel, STORAGE_BUCKETS } from '@veka/shared';
+import { documentStoragePath, computePollQuorumResult, isPollClosed, pollCloseLabel, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -10,7 +10,7 @@ import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
 
-import { createAnnouncement, closePoll, createPoll, uploadDocument } from './actions';
+import { createAnnouncement, archivePost, closePoll, createPoll, deleteComment, exportPollResults, unpinPost, uploadDocument } from './actions';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -36,12 +36,25 @@ export function CommunityManager({
   const [pending, start] = useTransition();
   const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
 
-  function runClose(postId: string) {
+  function runAction(action: () => Promise<{ error?: string; success?: boolean; message?: string; text?: string }>, ok: string) {
     setMessage(null);
     start(async () => {
-      const result = await closePoll(postId);
-      setMessage(result.error ?? result.message ?? 'Encuesta cerrada.');
+      const result = await action();
+      if (result.text) {
+        const blob = new Blob([result.text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `encuesta-${Date.now()}.txt`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+      setMessage(result.error ?? result.message ?? ok);
     });
+  }
+
+  function runClose(postId: string) {
+    runAction(() => closePoll(postId), 'Encuesta cerrada.');
   }
 
   function run(action: (formData: FormData) => Promise<{ error?: string; success?: boolean; message?: string }>, formData: FormData, ok: string) {
@@ -156,6 +169,22 @@ export function CommunityManager({
               <input type="datetime-local" name="poll_closes_at" className="glass-input mt-1" />
             </label>
 
+            <label className="block text-sm text-muted">
+              Quórum formal (opcional, %)
+              <input
+                type="number"
+                name="quorum_percent"
+                min={1}
+                max={100}
+                step={1}
+                placeholder="Ej. 50"
+                className="glass-input mt-1"
+              />
+              <span className="mt-1 block text-xs text-subtle">
+                Solo encuestas formales. Compara participación vs. electores elegibles.
+              </span>
+            </label>
+
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
               Fijar en la parte superior
@@ -198,13 +227,29 @@ export function CommunityManager({
             posts.map((post) => {
               const pollClosed = post.post_type === 'poll' && isPollClosed(post);
               const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
+              const quorumResult =
+                post.post_type === 'poll'
+                  ? computePollQuorumResult({
+                      options: post.poll_options,
+                      totalVotes: post.total_votes,
+                      eligibleVoters: post.eligible_voters,
+                      quorumPercent: post.quorum_percent,
+                      isFormal: post.is_formal,
+                      isClosed: pollClosed,
+                    })
+                  : null;
 
               return (
-              <li key={post.id} className="glass-card-deep px-4 py-3">
+              <li key={post.id} className={`glass-card-deep px-4 py-3 ${post.is_archived ? 'opacity-60' : ''}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="glass-tag-blue text-[10px]">
                     {post.post_type === 'poll' ? 'Encuesta' : 'Aviso'}
                   </span>
+                  {post.is_archived ? (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-subtle">
+                      Archivado
+                    </span>
+                  ) : null}
                   {post.post_type === 'poll' ? (
                     <span
                       className={`text-[10px] font-semibold uppercase tracking-wide ${post.is_formal ? 'text-amber-200' : 'text-sky-200'}`}
@@ -228,6 +273,44 @@ export function CommunityManager({
                 <p className="mt-2 font-medium text-[var(--text)]">{post.title}</p>
                 {post.body ? <p className="mt-1 text-sm text-muted">{post.body}</p> : null}
                 {closeLabel ? <p className="mt-1 text-xs text-subtle">{closeLabel}</p> : null}
+                {post.post_type === 'poll' && post.quorum_percent ? (
+                  <p className="mt-1 text-xs text-subtle">Quórum requerido: {post.quorum_percent}%</p>
+                ) : null}
+                {quorumResult ? (
+                  <p
+                    className={`mt-1 text-xs font-medium ${
+                      quorumResult.statusTone === 'success'
+                        ? 'text-emerald-300'
+                        : quorumResult.statusTone === 'warning'
+                          ? 'text-amber-300'
+                          : 'text-subtle'
+                    }`}
+                  >
+                    {quorumResult.statusLabel}
+                  </p>
+                ) : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {post.is_pinned && !post.is_archived ? (
+                    <button
+                      type="button"
+                      onClick={() => runAction(() => unpinPost(post.id), 'Desfijado.')}
+                      disabled={pending}
+                      className="glass-btn-secondary text-xs"
+                    >
+                      Quitar fijado
+                    </button>
+                  ) : null}
+                  {!post.is_archived ? (
+                    <button
+                      type="button"
+                      onClick={() => runAction(() => archivePost(post.id), 'Archivado.')}
+                      disabled={pending}
+                      className="glass-btn-secondary text-xs"
+                    >
+                      Archivar
+                    </button>
+                  ) : null}
+                </div>
                 {post.post_type === 'poll' && post.poll_options.length > 0 ? (
                   <div className="mt-3 space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
@@ -258,7 +341,42 @@ export function CommunityManager({
                       >
                         Cerrar encuesta
                       </button>
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => runAction(() => exportPollResults(post.id), 'Acta exportada.')}
+                        disabled={pending}
+                        className="glass-btn-secondary mt-2 text-xs"
+                      >
+                        Exportar acta
+                      </button>
+                    )}
+                  </div>
+                ) : null}
+                {post.comments.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                      Comentarios ({post.comments.length})
+                    </p>
+                    {post.comments.map((comment) => (
+                      <div
+                        key={comment.id}
+                        className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm text-[var(--text)]">{comment.body}</p>
+                          <p className="text-xs text-subtle">{timeAgo(comment.created_at)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => runAction(() => deleteComment(comment.id), 'Comentario eliminado.')}
+                          disabled={pending}
+                          className="glass-btn-secondary shrink-0 text-xs text-red-200"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
               </li>
