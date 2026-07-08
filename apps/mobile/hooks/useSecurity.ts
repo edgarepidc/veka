@@ -6,6 +6,8 @@ import {
   normalizeStayDays,
   parseSecuritySettings,
   rentalVisitWindow,
+  stayDaysInDateRange,
+  visitWindowFromDateRange,
 } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
@@ -115,7 +117,8 @@ export function useSecurity(primary: ActiveMembership | null) {
       visitorName: string;
       visitorPhone?: string;
       visitType: VisitRow['visit_type'];
-      hoursValid?: number;
+      startDate: string;
+      endDate?: string;
       stayDays?: number;
       vehiclePlate?: string;
       vehicleModel?: string;
@@ -132,16 +135,22 @@ export function useSecurity(primary: ActiveMembership | null) {
         return { error: RENTAL_OVERDUE_BLOCK_MESSAGE };
       }
 
-      const now = new Date();
-      let validFrom = now.toISOString();
-      let validUntil = new Date(now.getTime() + (input.hoursValid ?? 24) * 60 * 60 * 1000).toISOString();
+      let validFrom: string;
+      let validUntil: string;
       let stayDays: number | null = null;
 
       if (input.visitType === 'rental') {
         stayDays = normalizeStayDays(input.stayDays);
-        const window = rentalVisitWindow(stayDays, now);
+        const window = rentalVisitWindow(stayDays, input.startDate);
         validFrom = window.validFrom;
         validUntil = window.validUntil;
+      } else {
+        const endKey = input.endDate ?? input.startDate;
+        const window = visitWindowFromDateRange(input.startDate, endKey);
+        validFrom = window.validFrom;
+        validUntil = window.validUntil;
+        const dayCount = stayDaysInDateRange(input.startDate, endKey);
+        if (dayCount > 1) stayDays = dayCount;
       }
 
       const { data, error } = await supabase

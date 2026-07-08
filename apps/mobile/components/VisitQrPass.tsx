@@ -1,4 +1,4 @@
-import { encodeVisitQrPayload, formatVisitVehicle, visitTypeLabelEs } from '@veka/shared';
+import { encodeVisitQrPayload, formatDateKey, formatVisitDateRangeLabel, formatVisitVehicle, visitTypeLabelEs } from '@veka/shared';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -17,14 +17,10 @@ interface VisitQrPassProps {
   unitIdentifier: string;
 }
 
-function formatPassDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('es-MX', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
+function formatPassValidity(from: string, until: string): string {
+  const startKey = formatDateKey(new Date(from));
+  const endKey = formatDateKey(new Date(until));
+  return formatVisitDateRangeLabel(startKey, endKey);
 }
 
 export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrPassProps) {
@@ -76,7 +72,7 @@ export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrP
           {visit.notes ? <Text style={styles.exportMeta}>{visit.notes}</Text> : null}
 
           <Text style={styles.exportValidity}>
-            Válido: {formatPassDateTime(visit.valid_from)} – {formatPassDateTime(visit.valid_until)}
+            Válido: {formatPassValidity(visit.valid_from, visit.valid_until)}
           </Text>
 
           <View style={styles.qrFrame}>
@@ -96,7 +92,7 @@ export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrP
           <Tag label={visitTypeLabelEs(visit.visit_type)} tone="blue" />
         </View>
         <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center' }}>
-          Válido hasta {formatPassDateTime(visit.valid_until)}
+          Válido: {formatPassValidity(visit.valid_from, visit.valid_until)}
         </Text>
       </GlassCard>
 

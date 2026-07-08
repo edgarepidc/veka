@@ -12,7 +12,11 @@ import {
 import {
   DEFAULT_RENTAL_STAY_DAYS,
   RENTAL_OVERDUE_BLOCK_MESSAGE,
+  endDateKeyFromStartAndStayDays,
+  formatDateKey,
+  formatVisitDateRangeLabel,
   formatVisitVehicle,
+  todayDateKey,
 } from '@veka/shared';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,15 +30,15 @@ import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import { VisitQrPass } from '@/components/VisitQrPass';
+import { VisitSchedulePicker } from '@/components/VisitSchedulePicker';
 import { useMembership } from '@/hooks/useMembership';
 import { type VisitRow, useSecurity } from '@/hooks/useSecurity';
 import { useTheme } from '@/hooks/useTheme';
 
 function formatVisitRange(from: string, until: string): string {
-  const start = new Date(from);
-  const end = new Date(until);
-  const fmt = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  return `${fmt.format(start)} – ${fmt.format(end)}`;
+  const startKey = formatDateKey(new Date(from));
+  const endKey = formatDateKey(new Date(until));
+  return formatVisitDateRangeLabel(startKey, endKey);
 }
 
 function visitStatus(visit: VisitRow): { label: string; tone: 'green' | 'blue' | 'orange' | 'gray' } {
@@ -68,6 +72,8 @@ export default function SecurityScreen() {
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [rentalNotes, setRentalNotes] = useState('');
+  const [startDate, setStartDate] = useState(todayDateKey());
+  const [endDate, setEndDate] = useState(todayDateKey());
   const [submitting, setSubmitting] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
 
@@ -76,6 +82,12 @@ export default function SecurityScreen() {
       setTab(params.tab);
     }
   }, [params.tab]);
+
+  useEffect(() => {
+    if (visitType === 'rental') {
+      setEndDate(endDateKeyFromStartAndStayDays(startDate, Number(stayDays) || DEFAULT_RENTAL_STAY_DAYS));
+    }
+  }, [visitType, startDate, stayDays]);
 
   const activeVisit = useMemo(() => {
     const selected = visits.find((v) => v.id === selectedVisitId);
@@ -96,6 +108,9 @@ export default function SecurityScreen() {
     setVehiclePlate('');
     setVehicleModel('');
     setRentalNotes('');
+    const today = todayDateKey();
+    setStartDate(today);
+    setEndDate(today);
   }
 
   async function handleCreateVisit() {
@@ -107,7 +122,8 @@ export default function SecurityScreen() {
       visitorName,
       visitorPhone,
       visitType,
-      hoursValid: 24,
+      startDate,
+      endDate,
       stayDays: visitType === 'rental' ? Number(stayDays) : undefined,
       vehiclePlate: visitType === 'rental' ? vehiclePlate : undefined,
       vehicleModel: visitType === 'rental' ? vehicleModel : undefined,
@@ -315,6 +331,15 @@ export default function SecurityScreen() {
         {rentalBlocked ? (
           <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 8 }}>{RENTAL_OVERDUE_BLOCK_MESSAGE}</Text>
         ) : null}
+        <VisitSchedulePicker
+          startDate={startDate}
+          endDate={endDate}
+          onChange={(start, end) => {
+            setStartDate(start);
+            setEndDate(end);
+          }}
+          stayDays={visitType === 'rental' ? Number(stayDays) || DEFAULT_RENTAL_STAY_DAYS : undefined}
+        />
         {visitType === 'rental' ? (
           <>
             <GlassInput
