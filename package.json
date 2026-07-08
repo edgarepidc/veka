@@ -29,7 +29,9 @@
     "seed:amenity-images": "node scripts/seed-amenity-demo-images.mjs",
     "seed:amenity-rules": "node scripts/seed-amenity-rules.mjs",
     "seed:pilot-demo": "node scripts/seed-pilot-demo.mjs",
-    "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs"
+    "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs",
+    "apply:condo-transparency-income": "node scripts/apply-condo-transparency-income.mjs",
+    "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
   "devDependencies": {
     "postgres": "^3.4.7",
