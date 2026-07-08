@@ -622,3 +622,75 @@ export async function deliverAdminPendingReservation(
 
   return { pushSent, emailSent, skipped, failures };
 }
+
+export interface AdminNewMaintenanceTicketInput {
+  condominiumId: string;
+  unitId: string;
+  ticketId: string;
+  ticketTitle: string;
+  unitIdentifier: string;
+  categoryLabel: string;
+}
+
+export async function deliverAdminNewMaintenanceTicket(
+  input: AdminNewMaintenanceTicketInput,
+): Promise<ReminderDeliveryResult> {
+  const admin = createAdminClient();
+  const title = 'Nuevo reporte de mantenimiento — Veka';
+  const message = `Unidad ${input.unitIdentifier} reportó «${input.ticketTitle}» (${input.categoryLabel}). Revisa el ticket en el panel.`;
+  const panelUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://veka-admin.vercel.app'}/mantenimiento`;
+
+  const staffIds = await getCondoStaffUserIds(admin, input.condominiumId);
+  let pushSent = 0;
+  let emailSent = 0;
+  let skipped = 0;
+  let failures = 0;
+
+  for (const userId of staffIds) {
+    const tokens = await getUserPushTokens(admin, userId);
+    if (tokens.length === 0) {
+      skipped += 1;
+    } else {
+      const result = await sendExpoPush(tokens, title, message, {
+        screen: 'maintenance',
+        ticketId: input.ticketId,
+      });
+      pushSent += result.sent;
+      failures += result.failed;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId,
+        chargeId: null,
+        channel: 'push',
+        status: result.sent > 0 ? 'sent' : 'failed',
+        message,
+      });
+    }
+
+    const email = await getUserEmail(admin, userId);
+    if (!email || !process.env.RESEND_API_KEY) {
+      skipped += 1;
+      continue;
+    }
+
+    const ok = await sendReminderEmail(
+      email,
+      title,
+      `<p>Hola,</p><p>${message}</p><p><a href="${panelUrl}">Abrir panel de mantenimiento</a></p><p>— Veka</p>`,
+    );
+    if (ok) emailSent += 1;
+    else failures += 1;
+    await logDelivery(admin, {
+      condominiumId: input.condominiumId,
+      unitId: input.unitId,
+      userId,
+      chargeId: null,
+      channel: 'email',
+      status: ok ? 'sent' : 'failed',
+      message,
+    });
+  }
+
+  return { pushSent, emailSent, skipped, failures };
+}

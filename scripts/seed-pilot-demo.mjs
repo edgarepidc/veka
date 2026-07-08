@@ -19,6 +19,8 @@ const DEMO_EMAIL = 'diazcruzee@outlook.com';
 
 const IDS = {
   ticket: '66666666-6666-6666-6666-666666666601',
+  schedule: '66666666-6666-6666-6666-666666666602',
+  workLog: '66666666-6666-6666-6666-666666666603',
   postAnnouncement: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
   postPoll: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
   pollOptionYes: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb011',
@@ -134,6 +136,43 @@ try {
       'Gotea el lavabo desde ayer por la tarde.',
       'plumbing',
       'open'
+    )
+    on conflict (id) do nothing
+  `;
+
+  console.log('→ Insertando calendario y evidencia de mantenimiento…');
+  await db`
+    insert into public.maintenance_schedules (
+      id, condominium_id, amenity_id, title, description, period_start, period_end, file_url, file_name, created_by
+    ) values (
+      ${IDS.schedule},
+      ${CONDOMINIUM_ID},
+      ${poolId},
+      'Calendario de mantenimiento — Alberca',
+      'Limpieza profunda cada sábado de 8:00 a 11:00. Química y revisión de filtros los miércoles.',
+      date_trunc('month', current_date)::date,
+      (date_trunc('month', current_date) + interval '1 month' - interval '1 day')::date,
+      'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+      'calendario-alberca.pdf',
+      ${userId}
+    )
+    on conflict (id) do nothing
+  `;
+
+  await db`
+    insert into public.maintenance_work_logs (
+      id, condominium_id, amenity_id, ticket_id, title, description, work_date, file_url, file_name, created_by
+    ) values (
+      ${IDS.workLog},
+      ${CONDOMINIUM_ID},
+      null,
+      ${IDS.ticket},
+      'Inspección inicial — fuga lavabo A-102',
+      'Se identificó empaque dañado en mezcladora. Se programó cambio de refacción.',
+      current_date - 1,
+      'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+      'reporte-plomeria.pdf',
+      ${userId}
     )
     on conflict (id) do nothing
   `;

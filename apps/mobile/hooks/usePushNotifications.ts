@@ -61,6 +61,7 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
   const tab = typeof data?.tab === 'string' ? data.tab : undefined;
   const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
   const postId = typeof data?.postId === 'string' ? data.postId : undefined;
+  const ticketId = typeof data?.ticketId === 'string' ? data.ticketId : undefined;
 
   if (screen === 'finance') {
     if (tab) {
@@ -87,7 +88,11 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
     return;
   }
   if (screen === 'maintenance') {
-    router.push('/maintenance');
+    if (ticketId) {
+      router.push({ pathname: '/maintenance', params: { ticketId } });
+    } else {
+      router.push('/maintenance');
+    }
     return;
   }
   if (screen === 'community') {

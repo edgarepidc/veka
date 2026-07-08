@@ -278,6 +278,43 @@ from auth.users u
 where u.email = 'diazcruzee@outlook.com'
 on conflict (id) do nothing;
 
+-- Demo maintenance schedule (pool) and work evidence
+insert into public.maintenance_schedules (
+  id, condominium_id, amenity_id, title, description, period_start, period_end, file_url, file_name, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666602',
+  '22222222-2222-2222-2222-222222222222',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01',
+  'Calendario de mantenimiento — Alberca',
+  'Limpieza profunda cada sábado de 8:00 a 11:00. Química y revisión de filtros los miércoles.',
+  date_trunc('month', current_date)::date,
+  (date_trunc('month', current_date) + interval '1 month' - interval '1 day')::date,
+  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+  'calendario-alberca.pdf',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.maintenance_work_logs (
+  id, condominium_id, amenity_id, ticket_id, title, description, work_date, file_url, file_name, created_by
+)
+select
+  '66666666-6666-6666-6666-666666666603',
+  '22222222-2222-2222-2222-222222222222',
+  null,
+  '66666666-6666-6666-6666-666666666601',
+  'Inspección inicial — fuga lavabo A-102',
+  'Se identificó empaque dañado en mezcladora. Se programó cambio de refacción.',
+  current_date - 1,
+  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+  'reporte-plomeria.pdf',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
 -- Demo community, reservations, security, and documents (resident A-102)
 insert into public.posts (
   id, condominium_id, author_id, post_type, title, body, is_pinned, is_formal, is_admin_only

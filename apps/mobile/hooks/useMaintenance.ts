@@ -3,6 +3,7 @@ import type { MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/s
 import { STORAGE_BUCKETS, maintenanceFilePath } from '@veka/shared';
 
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
+import { notifyNewMaintenanceTicket } from '@/lib/notify-new-maintenance-ticket';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
@@ -128,28 +129,34 @@ export function useMaintenance(primary: ActiveMembership | null) {
         photoUrl = path;
       }
 
-      const { error } = await supabase.from('maintenance_tickets').insert({
-        condominium_id: primary.condominium_id,
-        unit_id: primary.unit_id,
-        created_by: user.id,
-        title: input.title.trim(),
-        description: input.description?.trim() || null,
-        category: input.category,
-        photo_url: photoUrl,
-      });
+      const { data, error } = await supabase
+        .from('maintenance_tickets')
+        .insert({
+          condominium_id: primary.condominium_id,
+          unit_id: primary.unit_id,
+          created_by: user.id,
+          title: input.title.trim(),
+          description: input.description?.trim() || null,
+          category: input.category,
+          photo_url: photoUrl,
+        })
+        .select('id')
+        .single();
 
-      if (error) {
-        setActionError(error.message);
-        return { error: error.message };
+      if (error || !data) {
+        setActionError(error?.message ?? 'No se pudo crear el ticket.');
+        return { error: error?.message ?? 'No se pudo crear el ticket.' };
       }
 
+      void notifyNewMaintenanceTicket(data.id);
       await refresh();
-      return { error: null };
+      return { error: null, ticketId: data.id };
     },
     [primary, refresh, user],
   );
 
   const getSignedUrl = useCallback(async (path: string) => {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
     const { data } = await supabase.storage.from(STORAGE_BUCKETS.MAINTENANCE_FILES).createSignedUrl(path, 3600);
     return data?.signedUrl ?? null;
   }, []);

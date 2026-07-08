@@ -30,3 +30,16 @@ export function ticketStatusLabel(status: MaintenanceTicketStatus): string {
 export function ticketCategoryLabel(category: MaintenanceTicketCategory): string {
   return TICKET_CATEGORY_LABELS[category];
 }
+
+export type MaintenanceTicketFilter = 'active' | 'open' | 'closed' | 'all';
+
+export function matchesMaintenanceTicketFilter(
+  status: MaintenanceTicketStatus,
+  filter: MaintenanceTicketFilter,
+): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'active') return status === 'open' || status === 'in_progress';
+  if (filter === 'open') return status === 'open';
+  if (filter === 'closed') return status === 'resolved' || status === 'closed';
+  return true;
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MAINTENANCE_TICKET_CATEGORIES,
@@ -44,14 +45,52 @@ export default function MaintenanceScreen() {
   const { primary, loading: membershipLoading } = useMembership();
   const { tickets, schedules, workLogs, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
     useMaintenance(primary);
+  const params = useLocalSearchParams<{ ticketId?: string | string[] }>();
+  const ticketIdParam = Array.isArray(params.ticketId) ? params.ticketId[0] : params.ticketId;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const ticketRefs = useRef<Record<string, View | null>>({});
 
   const [tab, setTab] = useState('tickets');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null);
+  const [scrollToTicketId, setScrollToTicketId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<MaintenanceTicketCategory>('unit');
   const [photo, setPhoto] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (ticketIdParam) setScrollToTicketId(ticketIdParam);
+  }, [ticketIdParam]);
+
+  useEffect(() => {
+    if (!scrollToTicketId || loading) return;
+    if (!tickets.some((item) => item.id === scrollToTicketId)) return;
+
+    setTab('tickets');
+
+    const timer = setTimeout(() => {
+      const ticketView = ticketRefs.current[scrollToTicketId];
+      const content = contentRef.current;
+      if (!ticketView || !content) return;
+
+      ticketView.measureLayout(
+        content,
+        (_x, y) => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+          setHighlightTicketId(scrollToTicketId);
+          setScrollToTicketId(null);
+          setTimeout(() => setHighlightTicketId(null), 2500);
+        },
+        () => undefined,
+      );
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [scrollToTicketId, loading, tickets]);
 
   async function pickPhoto() {
     const picked = await pickImageFromLibrary();
@@ -110,10 +149,12 @@ export default function MaintenanceScreen() {
   return (
     <ScreenBackground>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
         showsVerticalScrollIndicator={false}
       >
+        <View ref={contentRef} collapsable={false}>
         <ScreenHeader
           title="Mantenimiento"
           highlight="y reportes"
@@ -145,7 +186,21 @@ export default function MaintenanceScreen() {
               </GlassCard>
             ) : (
               tickets.map((ticket) => (
-                <GlassCard key={ticket.id} style={styles.mt}>
+                <View
+                  key={ticket.id}
+                  ref={(node) => {
+                    ticketRefs.current[ticket.id] = node;
+                  }}
+                  collapsable={false}
+                >
+                <GlassCard
+                  style={[
+                    styles.mt,
+                    highlightTicketId === ticket.id
+                      ? { borderColor: theme.accent, borderWidth: 2 }
+                      : undefined,
+                  ]}
+                >
                   <View style={styles.row}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{ticket.title}</Text>
                     <Tag label={ticketStatusLabel(ticket.status)} tone={statusTone(ticket.status)} />
@@ -167,6 +222,7 @@ export default function MaintenanceScreen() {
                     </Pressable>
                   ) : null}
                 </GlassCard>
+                </View>
               ))
             )}
           </View>
@@ -231,6 +287,7 @@ export default function MaintenanceScreen() {
             )}
           </View>
         ) : null}
+        </View>
       </ScrollView>
 
       <KeyboardFormSheet visible={sheetOpen} onClose={() => setSheetOpen(false)} title="Nuevo reporte">

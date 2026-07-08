@@ -1,12 +1,14 @@
 'use client';
 
-import { useId, useState, useTransition } from 'react';
+import { useId, useMemo, useState, useTransition } from 'react';
 import {
   MAINTENANCE_TICKET_STATUSES,
   STORAGE_BUCKETS,
   maintenanceFilePath,
+  matchesMaintenanceTicketFilter,
   ticketCategoryLabel,
   ticketStatusLabel,
+  type MaintenanceTicketFilter,
 } from '@veka/shared';
 
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -29,6 +31,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'tickets', label: 'Tickets' },
   { id: 'calendarios', label: 'Calendarios' },
   { id: 'evidencia', label: 'Evidencia' },
+];
+
+const TICKET_FILTERS: { id: MaintenanceTicketFilter; label: string }[] = [
+  { id: 'active', label: 'Activos' },
+  { id: 'open', label: 'Abiertos' },
+  { id: 'closed', label: 'Cerrados' },
+  { id: 'all', label: 'Todos' },
 ];
 
 function formatDate(iso: string): string {
@@ -54,8 +63,14 @@ export function MaintenanceManager({
   const evidenceDocId = useId().replace(/:/g, '');
 
   const [tab, setTab] = useState<Tab>('tickets');
+  const [ticketFilter, setTicketFilter] = useState<MaintenanceTicketFilter>('active');
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  const filteredTickets = useMemo(
+    () => tickets.filter((ticket) => matchesMaintenanceTicketFilter(ticket.status, ticketFilter)),
+    [ticketFilter, tickets],
+  );
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>,
@@ -70,6 +85,10 @@ export function MaintenanceManager({
   }
 
   async function openFile(path: string) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank');
+      return;
+    }
     const { data } = await supabase.storage.from(STORAGE_BUCKETS.MAINTENANCE_FILES).createSignedUrl(path, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
@@ -101,12 +120,24 @@ export function MaintenanceManager({
             Reportes de residentes sobre desperfectos en su unidad o áreas comunes. Actualiza el estado y deja
             notas internas.
           </p>
-          {tickets.length === 0 ? (
+          <div className="glass-tab-strip">
+            {TICKET_FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTicketFilter(item.id)}
+                className={`glass-tab ${ticketFilter === item.id ? 'glass-tab-active' : ''}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {filteredTickets.length === 0 ? (
             <GlassCard>
-              <p className="text-sm text-subtle">No hay tickets abiertos.</p>
+              <p className="text-sm text-subtle">No hay tickets en este filtro.</p>
             </GlassCard>
           ) : (
-            tickets.map((ticket) => (
+            filteredTickets.map((ticket) => (
               <GlassCard key={ticket.id} className="space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
