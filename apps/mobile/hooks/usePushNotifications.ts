@@ -62,7 +62,11 @@ function openNotificationTarget(data: Record<string, unknown> | undefined) {
   const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
 
   if (screen === 'finance') {
-    router.push('/finance');
+    if (tab) {
+      router.push({ pathname: '/finance', params: { tab } });
+    } else {
+      router.push({ pathname: '/finance', params: { tab: 'mi-cuenta' } });
+    }
     return;
   }
   if (screen === 'spaces') {

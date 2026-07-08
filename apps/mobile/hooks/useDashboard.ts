@@ -1,24 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import {
   chargeDisplaySubtitle,
   chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
+  resolveNextPaymentTarget,
+  type ActivePaymentPlan,
 } from '@veka/shared';
 import type { FeeSourceRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 
-export interface DashboardCharge {
-  id: string;
+export interface DashboardNextPayment {
+  label: string;
   concept: string;
   amount: number;
   due_date: string;
-  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  status: 'pending' | 'overdue';
   fee_campaign: FeeSourceRef | null;
   recurring_fee: FeeSourceRef | null;
+  isInstallment: boolean;
 }
 
 function normalizeFeeSource(raw: unknown): FeeSourceRef | null {
@@ -52,7 +56,7 @@ export interface DashboardPackage {
 }
 
 export interface DashboardData {
-  nextCharge: DashboardCharge | null;
+  nextPayment: DashboardNextPayment | null;
   latestPost: DashboardPost | null;
   upcomingReservation: DashboardReservation | null;
   pendingPackage: DashboardPackage | null;
@@ -77,7 +81,7 @@ function formatDateTime(iso: string): string {
 
 export function useDashboard(primary: ActiveMembership | null) {
   const [data, setData] = useState<DashboardData>({
-    nextCharge: null,
+    nextPayment: null,
     latestPost: null,
     upcomingReservation: null,
     pendingPackage: null,
@@ -88,7 +92,7 @@ export function useDashboard(primary: ActiveMembership | null) {
   const load = useCallback(async () => {
     if (!primary?.condominium_id || !primary.unit_id) {
       setData({
-        nextCharge: null,
+        nextPayment: null,
         latestPost: null,
         upcomingReservation: null,
         pendingPackage: null,
@@ -99,16 +103,22 @@ export function useDashboard(primary: ActiveMembership | null) {
 
     const now = new Date().toISOString();
 
-    const [chargesRes, postsRes, reservationsRes, packagesRes] = await Promise.all([
+    const [chargesRes, planRes, postsRes, reservationsRes, packagesRes] = await Promise.all([
       supabase
         .from('charges')
         .select(
-          'id, concept, amount, due_date, status, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
+          'id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
         )
         .eq('unit_id', primary.unit_id)
-        .in('status', ['pending', 'overdue'])
-        .order('due_date', { ascending: true })
-        .limit(1),
+        .order('due_date', { ascending: true }),
+      supabase
+        .from('payment_plans')
+        .select(
+          'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
+        )
+        .eq('unit_id', primary.unit_id)
+        .eq('status', 'active')
+        .maybeSingle(),
       supabase
         .from('posts')
         .select('id, title, body, is_pinned, created_at')
@@ -133,6 +143,60 @@ export function useDashboard(primary: ActiveMembership | null) {
         .limit(1),
     ]);
 
+    const rawCharges =
+      ((chargesRes.data as {
+        id: string;
+        concept: string;
+        amount: number;
+        amount_paid?: number;
+        due_date: string;
+        status: string;
+        charge_kind?: string;
+        parent_charge_id?: string | null;
+        fee_campaign?: unknown;
+        recurring_fee?: unknown;
+      }[]) ?? []).map((charge) => ({
+        id: charge.id,
+        concept: charge.concept,
+        amount: Number(charge.amount),
+        amount_paid: Number(charge.amount_paid ?? 0),
+        due_date: charge.due_date,
+        status: charge.status,
+        charge_kind: charge.charge_kind ?? 'principal',
+        parent_charge_id: charge.parent_charge_id ?? null,
+        fee_campaign: normalizeFeeSource(charge.fee_campaign),
+        recurring_fee: normalizeFeeSource(charge.recurring_fee),
+      }));
+
+    const planRow = planRes.data as {
+      id: string;
+      title: string;
+      status: string;
+      total_amount: number;
+      installments: ActivePaymentPlan['installments'];
+      charge_links: { charge_id: string }[];
+    } | null;
+
+    const activePlan: ActivePaymentPlan | null = planRow
+      ? {
+          id: planRow.id,
+          title: planRow.title,
+          status: planRow.status,
+          total_amount: Number(planRow.total_amount),
+          installments: (planRow.installments ?? []).map((row) => ({
+            ...row,
+            amount: Number(row.amount),
+            amount_paid: Number(row.amount_paid ?? 0),
+          })),
+          linked_charge_ids: (planRow.charge_links ?? []).map((link) => link.charge_id),
+        }
+      : null;
+
+    const paymentTarget = resolveNextPaymentTarget(rawCharges, activePlan);
+    const primaryCharge = paymentTarget
+      ? rawCharges.find((charge) => charge.id === paymentTarget.chargeId)
+      : null;
+
     const reservationRow = reservationsRes.data?.[0] as
       | {
           id: string;
@@ -145,19 +209,18 @@ export function useDashboard(primary: ActiveMembership | null) {
     const amenity = reservationRow?.amenity;
     const amenityName = Array.isArray(amenity) ? amenity[0]?.name : amenity?.name;
 
-    const chargeRow = chargesRes.data?.[0] as
-      | (Omit<DashboardCharge, 'fee_campaign' | 'recurring_fee'> & {
-          fee_campaign?: unknown;
-          recurring_fee?: unknown;
-        })
-      | undefined;
-
     setData({
-      nextCharge: chargeRow
+      nextPayment: paymentTarget
         ? {
-            ...chargeRow,
-            fee_campaign: normalizeFeeSource(chargeRow.fee_campaign),
-            recurring_fee: normalizeFeeSource(chargeRow.recurring_fee),
+            label: paymentTarget.label,
+            concept: primaryCharge?.concept ?? paymentTarget.label,
+            amount: paymentTarget.maxAmount,
+            due_date: paymentTarget.dueDate,
+            status:
+              primaryCharge?.status === 'overdue' ? 'overdue' : 'pending',
+            fee_campaign: primaryCharge?.fee_campaign ?? null,
+            recurring_fee: primaryCharge?.recurring_fee ?? null,
+            isInstallment: paymentTarget.kind === 'installment',
           }
         : null,
       latestPost: (postsRes.data?.[0] as DashboardPost | undefined) ?? null,

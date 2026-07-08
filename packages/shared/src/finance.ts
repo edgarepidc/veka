@@ -40,6 +40,31 @@ export function paymentStatusLabel(status: PaymentStatus): string {
   return labels[status];
 }
 
+export function paymentStatusTone(
+  status: PaymentStatus,
+): 'default' | 'success' | 'warning' | 'danger' {
+  const tones: Record<PaymentStatus, 'default' | 'success' | 'warning' | 'danger'> = {
+    pending_review: 'warning',
+    pending_second_review: 'warning',
+    awaiting_payment: 'default',
+    approved: 'success',
+    rejected: 'danger',
+  };
+  return tones[status];
+}
+
+export function paymentMethodLabel(method: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    transfer: 'Transferencia',
+    card: 'Tarjeta',
+    oxxo: 'Oxxo',
+    spei: 'SPEI',
+    stripe: 'En línea',
+  };
+  if (!method) return '—';
+  return labels[method] ?? method;
+}
+
 export function fundTypeLabel(fund: FundType): string {
   const labels: Record<FundType, string> = {
     operating: 'Fondo de operación',

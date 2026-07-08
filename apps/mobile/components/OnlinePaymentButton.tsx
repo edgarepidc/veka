@@ -63,9 +63,21 @@ export function OnlinePaymentButton({
           }),
         });
 
-        const payload = (await response.json()) as { url?: string; error?: string };
+        const payload = (await response.json()) as {
+          url?: string;
+          error?: string;
+          awaitingPayment?: boolean;
+          gatewayReference?: string | null;
+        };
         if (!response.ok || !payload.url) {
           throw new Error(payload.error ?? 'No se pudo iniciar el pago en línea');
+        }
+
+        if (payload.awaitingPayment && payload.gatewayReference) {
+          Alert.alert(
+            'Referencia de pago',
+            `Completa tu pago con esta referencia:\n\n${payload.gatewayReference}`,
+          );
         }
 
         onStarted?.();

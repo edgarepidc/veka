@@ -103,9 +103,9 @@ export default function DashboardScreen() {
               >
                 <StatPill
                   label="Próximo pago"
-                  value={data.nextCharge ? formatCurrency(data.nextCharge.amount) : '—'}
-                  sub={data.nextCharge ? formatShortDate(data.nextCharge.due_date) : 'Al día'}
-                  valueColor={data.nextCharge?.status === 'overdue' ? theme.danger : theme.accent}
+                  value={data.nextPayment ? formatCurrency(data.nextPayment.amount) : '—'}
+                  sub={data.nextPayment ? formatShortDate(data.nextPayment.due_date) : 'Al día'}
+                  valueColor={data.nextPayment?.status === 'overdue' ? theme.danger : theme.accent}
                 />
                 <StatPill
                   label="Reservas"
@@ -135,30 +135,52 @@ export default function DashboardScreen() {
                 </GlassCard>
               ) : (
                 <>
-                  {data.nextCharge ? (
+                  {data.nextPayment ? (
+                    <Pressable onPress={() => router.push({ pathname: '/finance', params: { tab: 'mi-cuenta' } })}>
                     <GlassCard
                       style={styles.cardGap}
                       variant="accent"
-                      accent={data.nextCharge.status === 'overdue' ? 'danger' : 'blue'}
+                      accent={data.nextPayment.status === 'overdue' ? 'danger' : 'blue'}
                     >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
-                          {chargeDisplayTitle(data.nextCharge)}
+                          {data.nextPayment.isInstallment
+                            ? data.nextPayment.label
+                            : chargeDisplayTitle({
+                                concept: data.nextPayment.concept,
+                                fee_campaign: data.nextPayment.fee_campaign,
+                                recurring_fee: data.nextPayment.recurring_fee,
+                              })}
                         </Text>
-                        <Tag label={chargeStatusLabel(data.nextCharge.status)} tone={mapChargeTone(chargeStatusTone(data.nextCharge.status))} />
+                        <Tag
+                          label={chargeStatusLabel(data.nextPayment.status)}
+                          tone={mapChargeTone(chargeStatusTone(data.nextPayment.status))}
+                        />
                       </View>
                       <Text style={[styles.amount, { color: theme.accent }]}>
-                        {formatCurrency(data.nextCharge.amount)}
+                        {formatCurrency(data.nextPayment.amount)}
                       </Text>
-                      {chargeDisplaySubtitle(data.nextCharge) ? (
+                      {!data.nextPayment.isInstallment && chargeDisplaySubtitle({
+                        concept: data.nextPayment.concept,
+                        fee_campaign: data.nextPayment.fee_campaign,
+                        recurring_fee: data.nextPayment.recurring_fee,
+                      }) ? (
                         <Text style={{ color: theme.accent2, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
-                          {chargeDisplaySubtitle(data.nextCharge)}
+                          {chargeDisplaySubtitle({
+                            concept: data.nextPayment.concept,
+                            fee_campaign: data.nextPayment.fee_campaign,
+                            recurring_fee: data.nextPayment.recurring_fee,
+                          })}
                         </Text>
                       ) : null}
                       <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                        Vence el {formatShortDate(data.nextCharge.due_date)}
+                        Vence el {formatShortDate(data.nextPayment.due_date)}
+                      </Text>
+                      <Text style={{ color: theme.accent2, fontSize: 12, fontWeight: '600', marginTop: 8 }}>
+                        Ir a pagar →
                       </Text>
                     </GlassCard>
+                    </Pressable>
                   ) : (
                     <GlassCard style={styles.cardGap} variant="accent" accent="green">
                       <Tag label="Al día" tone="green" />
