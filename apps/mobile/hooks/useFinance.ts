@@ -10,7 +10,7 @@ import {
 import type { FeeSourceRef } from '@veka/shared';
 
 import type { ActiveMembership } from '@/hooks/useMembership';
-import { filterVisibleCondoExpenses } from '@/lib/finance-stats';
+import { filterVisibleCondoExpenses, type CondoIncomeRow } from '@/lib/finance-stats';
 import { supabase } from '@/lib/supabase';
 
 export interface FinanceCharge {
@@ -57,6 +57,15 @@ export interface CondoExpense {
   status: string;
   cluster_id: string | null;
   cluster_name: string | null;
+}
+
+export interface CondoIncomeEntry {
+  id: string;
+  concept: string;
+  amount: number;
+  category: string;
+  income_date: string;
+  cluster_id: string | null;
 }
 
 export interface CondoBankAccount {
@@ -114,6 +123,8 @@ export function useFinance(primary: ActiveMembership | null) {
   const [payments, setPayments] = useState<FinancePayment[]>([]);
   const [funds, setFunds] = useState<CondoFund[]>([]);
   const [expenses, setExpenses] = useState<CondoExpense[]>([]);
+  const [incomeEntries, setIncomeEntries] = useState<CondoIncomeEntry[]>([]);
+  const [paymentIncomeRows, setPaymentIncomeRows] = useState<CondoIncomeRow[]>([]);
   const [bankAccounts, setBankAccounts] = useState<CondoBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,13 +137,15 @@ export function useFinance(primary: ActiveMembership | null) {
       setPayments([]);
       setFunds([]);
       setExpenses([]);
+      setIncomeEntries([]);
+      setPaymentIncomeRows([]);
       setBankAccounts([]);
       setLoading(false);
       setError(null);
       return;
     }
 
-    const [chargesRes, paymentsRes, fundsRes, expensesRes, planRes, banksRes] =
+    const [chargesRes, paymentsRes, fundsRes, expensesRes, incomeRes, paymentIncomeRes, planRes, banksRes] =
       await Promise.all([
         supabase
           .from('charges')
@@ -161,6 +174,16 @@ export function useFinance(primary: ActiveMembership | null) {
           .order('expense_date', { ascending: false })
           .limit(200),
         supabase
+          .from('income_entries')
+          .select('id, concept, amount, category, income_date, cluster_id')
+          .eq('condominium_id', primary.condominium_id)
+          .order('income_date', { ascending: false })
+          .limit(200),
+        supabase.rpc('condo_transparency_payment_income', {
+          p_condominium_id: primary.condominium_id,
+          p_since: null,
+        }),
+        supabase
           .from('payment_plans')
           .select(
             'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
@@ -181,6 +204,7 @@ export function useFinance(primary: ActiveMembership | null) {
       paymentsRes.error ??
       fundsRes.error ??
       expensesRes.error ??
+      incomeRes.error ??
       planRes.error ??
       banksRes.error;
 
@@ -263,6 +287,23 @@ export function useFinance(primary: ActiveMembership | null) {
         },
       ),
     );
+    setIncomeEntries(
+      ((incomeRes.data as CondoIncomeEntry[]) ?? []).map((row) => ({
+        ...row,
+        amount: Number(row.amount),
+      })),
+    );
+    setPaymentIncomeRows(
+      paymentIncomeRes.error
+        ? []
+        : ((paymentIncomeRes.data as Omit<CondoIncomeRow, 'source'>[]) ?? []).map((row) => ({
+            category: row.category,
+            cluster_id: row.cluster_id,
+            income_date: row.income_date,
+            amount: Number(row.amount),
+            source: 'payment' as const,
+          })),
+    );
     setBankAccounts((banksRes.data as CondoBankAccount[]) ?? []);
     setLoading(false);
   }, [primary?.condominium_id, primary?.unit_id]);
@@ -333,6 +374,23 @@ export function useFinance(primary: ActiveMembership | null) {
     return filterVisibleCondoExpenses(expenses, myClusterId);
   }, [expenses, primary?.unit?.cluster?.id]);
 
+  const condoIncomeRows = useMemo((): CondoIncomeRow[] => {
+    const myClusterId = primary?.unit?.cluster?.id ?? null;
+    const manualRows: CondoIncomeRow[] = incomeEntries
+      .filter(
+        (entry) =>
+          entry.cluster_id === null || (myClusterId !== null && entry.cluster_id === myClusterId),
+      )
+      .map((entry) => ({
+        category: entry.category,
+        cluster_id: entry.cluster_id,
+        income_date: entry.income_date,
+        amount: entry.amount,
+        source: 'manual' as const,
+      }));
+    return [...paymentIncomeRows, ...manualRows];
+  }, [incomeEntries, paymentIncomeRows, primary?.unit?.cluster?.id]);
+
   const pendingPaymentsCount = useMemo(
     () =>
       payments.filter((payment) =>
@@ -360,6 +418,7 @@ export function useFinance(primary: ActiveMembership | null) {
     funds,
     expenses,
     visibleExpenses,
+    condoIncomeRows,
     expenseGroups,
     bankAccounts,
     paymentTarget,

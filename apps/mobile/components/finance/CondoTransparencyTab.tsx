@@ -9,15 +9,21 @@ import {
 } from '@veka/shared';
 
 import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
-import { CondoStatsBar, CondoStatsChips } from '@/components/finance/CondoStatsViews';
+import { CondoTransparencySummary } from '@/components/finance/CondoStatsViews';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionLabel } from '@/components/ui/Avatar';
 import { FilterBar } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
-import { financePeriodLabel, inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
-import { condoPeriodStats } from '@/lib/finance-stats';
+import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
+import {
+  condoExpensePeriodStats,
+  condoIncomePeriodStats,
+  expenseCategoryBreakdown,
+  matchesCondoClusterFilter,
+  type CondoIncomeRow,
+} from '@/lib/finance-stats';
 
 interface CondoTransparencyTabProps {
   condominiumName: string;
@@ -26,6 +32,7 @@ interface CondoTransparencyTabProps {
   unitIdentifier: string;
   funds: CondoFund[];
   visibleExpenses: CondoExpense[];
+  condoIncomeRows: CondoIncomeRow[];
   expenseGroups: CondoExpenseGroup[];
 }
 
@@ -36,20 +43,12 @@ export function CondoTransparencyTab({
   unitIdentifier,
   funds,
   visibleExpenses,
+  condoIncomeRows,
   expenseGroups,
 }: CondoTransparencyTabProps) {
   const theme = useTheme();
   const [period, setPeriod] = useState<FinancePeriod>('1m');
   const [clusterFilter, setClusterFilter] = useState<string>('all');
-  const [statsView, setStatsView] = useState<'chips' | 'bar'>('chips');
-
-  const statsViewOptions = useMemo(
-    () => [
-      { key: 'chips', label: 'Chips' },
-      { key: 'bar', label: 'Barra' },
-    ],
-    [],
-  );
 
   const filterItems = useMemo(() => {
     const items = [{ key: 'all', label: 'Todo lo visible' }];
@@ -60,22 +59,46 @@ export function CondoTransparencyTab({
     return items;
   }, [clusterName, myClusterId]);
 
-  const periodStats = useMemo(
+  const scopedExpenses = useMemo(
     () =>
-      condoPeriodStats(visibleExpenses, period, myClusterId, {
-        paid: theme.accent,
-        pending: theme.accent3,
-        general: theme.accent2,
-        building: theme.accent,
-      }),
-    [visibleExpenses, period, myClusterId, theme.accent, theme.accent2, theme.accent3],
+      visibleExpenses.filter((expense) =>
+        matchesCondoClusterFilter(expense.cluster_id, clusterFilter, myClusterId),
+      ),
+    [clusterFilter, myClusterId, visibleExpenses],
+  );
+
+  const scopedIncomeRows = useMemo(
+    () =>
+      condoIncomeRows.filter((row) =>
+        matchesCondoClusterFilter(row.cluster_id, clusterFilter, myClusterId),
+      ),
+    [clusterFilter, condoIncomeRows, myClusterId],
+  );
+
+  const incomeStats = useMemo(
+    () => condoIncomePeriodStats(scopedIncomeRows, period),
+    [scopedIncomeRows, period],
+  );
+
+  const expenseStats = useMemo(
+    () => condoExpensePeriodStats(scopedExpenses, period),
+    [scopedExpenses, period],
+  );
+
+  const categorySlices = useMemo(
+    () => expenseCategoryBreakdown(scopedExpenses, period),
+    [scopedExpenses, period],
   );
 
   const filteredGroups = useMemo(() => {
     const groups = expenseGroups
       .map((group) => ({
         ...group,
-        expenses: group.expenses.filter((expense) => inFinancePeriod(expense.expense_date, period)),
+        expenses: group.expenses.filter(
+          (expense) =>
+            inFinancePeriod(expense.expense_date, period) &&
+            matchesCondoClusterFilter(expense.cluster_id, clusterFilter, myClusterId),
+        ),
       }))
       .filter((group) => group.expenses.length > 0)
       .map((group) => ({
@@ -83,12 +106,8 @@ export function CondoTransparencyTab({
         totalAmount: group.expenses.reduce((sum, expense) => sum + expense.amount, 0),
       }));
 
-    if (clusterFilter === 'all') return groups;
-    if (clusterFilter === 'general') {
-      return groups.filter((group) => group.clusterId === null);
-    }
-    return groups.filter((group) => group.clusterId === clusterFilter);
-  }, [clusterFilter, expenseGroups, period]);
+    return groups;
+  }, [clusterFilter, expenseGroups, myClusterId, period]);
 
   const totalFunds = funds.reduce((sum, fund) => sum + fund.balance, 0);
 
@@ -102,35 +121,24 @@ export function CondoTransparencyTab({
             {clusterName ? `Tu edificio: ${clusterName} · Unidad ${unitIdentifier}` : `Unidad ${unitIdentifier}`}
           </Text>
           <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 8, lineHeight: 18 }}>
-            Solo ves egresos del condominio general y de tu edificio. No incluye adeudos de otras unidades ni
+            Ves ingresos y egresos del condominio general y de tu edificio. No incluye adeudos de otras unidades ni
             nómina detallada.
           </Text>
         </GlassCard>
       </View>
 
       <View style={styles.section}>
-        <FinancePeriodFilter period={period} onChange={setPeriod} />
-        <Text style={[styles.statsHint, { color: theme.textSubtle }]}>
-          Elige la vista del resumen · {financePeriodLabel(period).toLowerCase()}
-        </Text>
-        <FilterBar items={statsViewOptions} active={statsView} onChange={(key) => setStatsView(key as 'chips' | 'bar')} />
-        {statsView === 'chips' ? (
-          <CondoStatsChips
-            compare={periodStats.compare}
-            scopeCompare={periodStats.scopeCompare}
-            totalFunds={totalFunds}
-            period={period}
-          />
-        ) : (
-          <View style={{ paddingTop: 12 }}>
-            <CondoStatsBar
-              compare={periodStats.compare}
-              scopeCompare={periodStats.scopeCompare}
-              totalFunds={totalFunds}
-              period={period}
-            />
-          </View>
-        )}
+        <FilterBar items={filterItems} active={clusterFilter} onChange={setClusterFilter} />
+        <View style={{ marginTop: 10 }}>
+          <FinancePeriodFilter period={period} onChange={setPeriod} />
+        </View>
+        <CondoTransparencySummary
+          income={incomeStats}
+          expenses={expenseStats}
+          categorySlices={categorySlices}
+          totalFunds={totalFunds}
+          period={period}
+        />
       </View>
 
       <SectionLabel title="Fondos del condominio" />
@@ -160,9 +168,8 @@ export function CondoTransparencyTab({
         </GlassCard>
       </View>
 
-      <SectionLabel title="Detalle por edificio" />
+      <SectionLabel title="Detalle de egresos" />
       <View style={styles.section}>
-        <FilterBar items={filterItems} active={clusterFilter} onChange={setClusterFilter} />
         {filteredGroups.length === 0 ? (
           <GlassCard>
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay egresos en este filtro.</Text>
@@ -210,7 +217,6 @@ export function CondoTransparencyTab({
 
 const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, marginBottom: 8 },
-  statsHint: { fontSize: 11, marginTop: 10, marginBottom: 8 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
   cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },

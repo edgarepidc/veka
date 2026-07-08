@@ -1,4 +1,4 @@
-import { chargeBalanceDue } from '@veka/shared';
+import { chargeBalanceDue, expenseCategoryLabel } from '@veka/shared';
 
 import type { FinanceCharge, FinancePayment, CondoExpense } from '@/hooks/useFinance';
 import type { FinancePeriod } from '@/lib/finance-period';
@@ -142,3 +142,102 @@ export function filterVisibleCondoExpenses(
     (expense) => expense.cluster_id === null || (myClusterId !== null && expense.cluster_id === myClusterId),
   );
 }
+
+export type CondoClusterFilter = 'all' | 'general' | string;
+
+export function matchesCondoClusterFilter(
+  clusterId: string | null,
+  filter: CondoClusterFilter,
+  myClusterId: string | null,
+): boolean {
+  if (filter === 'all') {
+    return clusterId === null || (myClusterId !== null && clusterId === myClusterId);
+  }
+  if (filter === 'general') return clusterId === null;
+  return clusterId === filter;
+}
+
+export interface CondoIncomeRow {
+  category: string;
+  cluster_id: string | null;
+  income_date: string;
+  amount: number;
+  source: 'payment' | 'manual';
+}
+
+export function condoExpensePeriodStats(
+  expenses: CondoExpense[],
+  period: FinancePeriod,
+): { paid: number; pending: number; total: number } {
+  const periodExpenses = expenses.filter((expense) => inFinancePeriod(expense.expense_date, period));
+  const paid = periodExpenses
+    .filter((expense) => expense.status === 'paid')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const pending = periodExpenses
+    .filter((expense) => expense.status === 'pending')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  return { paid, pending, total: paid + pending };
+}
+
+export function condoIncomePeriodStats(
+  incomeRows: CondoIncomeRow[],
+  period: FinancePeriod,
+): { cuotas: number; otros: number; total: number } {
+  const periodRows = incomeRows.filter((row) => inFinancePeriod(row.income_date, period));
+  const cuotas = periodRows
+    .filter((row) => row.source === 'payment' || row.category === 'cuotas')
+    .reduce((sum, row) => sum + row.amount, 0);
+  const otros = periodRows
+    .filter((row) => row.source === 'manual' && row.category !== 'cuotas')
+    .reduce((sum, row) => sum + row.amount, 0);
+  return { cuotas, otros, total: cuotas + otros };
+}
+
+export interface CategorySlice {
+  label: string;
+  value: number;
+  color: string;
+  percent: number;
+}
+
+const PIE_COLORS = [
+  '#2563EB',
+  '#0EA5E9',
+  '#059669',
+  '#7C3AED',
+  '#F59E0B',
+  '#DC2626',
+  '#64748B',
+];
+
+export function expenseCategoryBreakdown(
+  expenses: CondoExpense[],
+  period: FinancePeriod,
+  maxSlices = 5,
+): CategorySlice[] {
+  const totals = new Map<string, number>();
+  for (const expense of expenses) {
+    if (!inFinancePeriod(expense.expense_date, period)) continue;
+    if (expense.status !== 'paid') continue;
+    const key = expense.category || 'otros';
+    totals.set(key, (totals.get(key) ?? 0) + expense.amount);
+  }
+
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const grandTotal = sorted.reduce((sum, [, value]) => sum + value, 0);
+  if (grandTotal <= 0) return [];
+
+  const top = sorted.slice(0, maxSlices);
+  const rest = sorted.slice(maxSlices).reduce((sum, [, value]) => sum + value, 0);
+  const rows = rest > 0 ? [...top, ['otros', rest] as const] : top;
+
+  return rows.map(([category, value], index) => ({
+    label: category === 'otros' && index === rows.length - 1 && sorted.length > maxSlices
+      ? 'Otros'
+      : expenseCategoryLabel(category),
+    value,
+    color: PIE_COLORS[index % PIE_COLORS.length],
+    percent: (value / grandTotal) * 100,
+  }));
+}
+

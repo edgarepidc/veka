@@ -121,6 +121,7 @@ export default function FinanceScreen() {
             unitIdentifier={primary.unit?.identifier ?? '—'}
             funds={finance.funds}
             visibleExpenses={finance.visibleExpenses}
+            condoIncomeRows={finance.condoIncomeRows}
             expenseGroups={finance.expenseGroups}
           />
         )}

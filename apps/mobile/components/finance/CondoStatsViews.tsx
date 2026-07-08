@@ -1,118 +1,33 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Svg, { G, Path } from 'react-native-svg';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SURFACE_RADIUS } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 import { formatCurrency } from '@veka/shared';
-import type { CompareSlice } from '@/lib/finance-stats';
+import type { CategorySlice } from '@/lib/finance-stats';
 import { financePeriodLabel, type FinancePeriod } from '@/lib/finance-period';
 
-interface CondoGradientStatProps {
-  label: string;
-  value: string;
-  sub?: string;
-  colors: readonly [string, string];
-  style?: StyleProp<ViewStyle>;
-}
-
-function CondoGradientStat({ label, value, sub, colors, style }: CondoGradientStatProps) {
-  const theme = useTheme();
-
-  return (
-    <LinearGradient
-      colors={[...colors]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.gradientTile, style]}
-    >
-      <Text style={[styles.tileLabel, { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text
-        style={[styles.tileValue, { color: theme.onAccent, fontFamily: theme.sansFamily }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-      >
-        {value}
-      </Text>
-      {sub ? (
-        <Text style={[styles.tileSub, { color: 'rgba(255,255,255,0.75)' }]} numberOfLines={1}>
-          {sub}
-        </Text>
-      ) : null}
-    </LinearGradient>
-  );
-}
-
-interface CondoStatsChipsProps {
-  compare: CompareSlice[];
-  scopeCompare: CompareSlice[];
-  totalFunds: number;
+interface FlowBarProps {
+  eyebrow: string;
+  total: number;
+  segments: { label: string; amount: number; color: string }[];
   period: FinancePeriod;
 }
 
-export function CondoStatsChips({ compare, scopeCompare, totalFunds, period }: CondoStatsChipsProps) {
-  const theme = useTheme();
-  const periodSub = financePeriodLabel(period).toLowerCase();
-  const paid = compare.find((s) => s.label === 'Pagado');
-  const pending = compare.find((s) => s.label === 'Pendiente');
-
-  return (
-    <View style={styles.chipsGrid}>
-      <View style={styles.chipsRow}>
-        {paid ? (
-          <CondoGradientStat
-            label="Pagado"
-            value={formatCurrency(paid.value)}
-            sub={periodSub}
-            colors={[theme.success, theme.accent2]}
-            style={styles.chipHalf}
-          />
-        ) : null}
-        {pending ? (
-          <CondoGradientStat
-            label="Pendiente"
-            value={formatCurrency(pending.value)}
-            sub={periodSub}
-            colors={[theme.danger, theme.accent3]}
-            style={styles.chipHalf}
-          />
-        ) : null}
-      </View>
-      <View style={styles.chipsRow}>
-        {scopeCompare.map((slice) => (
-          <CondoGradientStat
-            key={slice.label}
-            label={slice.label}
-            value={formatCurrency(slice.value)}
-            sub="egresos"
-            colors={
-              slice.label === 'General'
-                ? ([theme.purple, theme.accent] as const)
-                : ([theme.accent2, theme.accent] as const)
-            }
-            style={scopeCompare.length > 1 ? styles.chipThird : styles.chipHalf}
-          />
-        ))}
-        <CondoGradientStat
-          label="Fondos"
-          value={formatCurrency(totalFunds)}
-          sub="saldo actual"
-          colors={[theme.accent, theme.accent2]}
-          style={scopeCompare.length > 1 ? styles.chipThird : styles.chipHalf}
-        />
-      </View>
-    </View>
-  );
+function polarToCartesian(cx: number, cy: number, radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
 }
 
-interface CondoStatsBarProps {
-  compare: CompareSlice[];
-  scopeCompare: CompareSlice[];
-  totalFunds: number;
-  period: FinancePeriod;
+function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(cx, cy, radius, endAngle);
+  const end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
 }
 
 function BarLegend({
@@ -141,19 +56,15 @@ function BarLegend({
   );
 }
 
-export function CondoStatsBar({ compare, scopeCompare, totalFunds, period }: CondoStatsBarProps) {
+function FlowBar({ eyebrow, total, segments, period }: FlowBarProps) {
   const theme = useTheme();
-  const paid = compare.find((s) => s.label === 'Pagado')?.value ?? 0;
-  const pending = compare.find((s) => s.label === 'Pendiente')?.value ?? 0;
-  const total = paid + pending;
-  const paidPct = total > 0 ? (paid / total) * 100 : 0;
-  const pendingPct = total > 0 ? (pending / total) * 100 : 0;
-  const scopeTotal = scopeCompare.reduce((sum, slice) => sum + slice.value, 0);
+  const positiveSegments = segments.filter((segment) => segment.amount > 0);
+  const segmentTotal = positiveSegments.reduce((sum, segment) => sum + segment.amount, 0);
 
   return (
-    <GlassCard>
+    <View style={styles.flowBlock}>
       <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>
-        EGRESOS · {financePeriodLabel(period).toUpperCase()}
+        {eyebrow} · {financePeriodLabel(period).toUpperCase()}
       </Text>
       <Text style={[styles.barTotal, { color: theme.text, fontFamily: theme.serifFamily }]}>
         {formatCurrency(total)}
@@ -161,87 +72,149 @@ export function CondoStatsBar({ compare, scopeCompare, totalFunds, period }: Con
       <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 14 }}>Total del período</Text>
 
       <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted }]}>
-        {paidPct > 0 ? (
-          <View
-            style={[
-              styles.barSegment,
-              {
-                width: `${paidPct}%`,
-                backgroundColor: theme.success,
-                borderTopLeftRadius: SURFACE_RADIUS.button,
-                borderBottomLeftRadius: SURFACE_RADIUS.button,
-                borderTopRightRadius: pendingPct > 0 ? 0 : SURFACE_RADIUS.button,
-                borderBottomRightRadius: pendingPct > 0 ? 0 : SURFACE_RADIUS.button,
-              },
-            ]}
-          />
-        ) : null}
-        {pendingPct > 0 ? (
-          <View
-            style={[
-              styles.barSegment,
-              {
-                width: `${pendingPct}%`,
-                backgroundColor: theme.accent3,
-                borderTopRightRadius: SURFACE_RADIUS.button,
-                borderBottomRightRadius: SURFACE_RADIUS.button,
-                borderTopLeftRadius: paidPct > 0 ? 0 : SURFACE_RADIUS.button,
-                borderBottomLeftRadius: paidPct > 0 ? 0 : SURFACE_RADIUS.button,
-              },
-            ]}
-          />
-        ) : null}
-        {total === 0 ? (
+        {segmentTotal > 0 ? (
+          positiveSegments.map((segment, index) => {
+            const width = (segment.amount / segmentTotal) * 100;
+            const isFirst = index === 0;
+            const isLast = index === positiveSegments.length - 1;
+            return (
+              <View
+                key={segment.label}
+                style={[
+                  styles.barSegment,
+                  {
+                    width: `${width}%`,
+                    backgroundColor: segment.color,
+                    borderTopLeftRadius: isFirst ? SURFACE_RADIUS.button : 0,
+                    borderBottomLeftRadius: isFirst ? SURFACE_RADIUS.button : 0,
+                    borderTopRightRadius: isLast ? SURFACE_RADIUS.button : 0,
+                    borderBottomRightRadius: isLast ? SURFACE_RADIUS.button : 0,
+                  },
+                ]}
+              />
+            );
+          })
+        ) : (
           <View style={[styles.barSegment, { width: '100%', backgroundColor: theme.border }]} />
-        ) : null}
+        )}
       </View>
 
       <View style={styles.legendRow}>
-        <BarLegend color={theme.success} label="Pagado" amount={paid} percent={paidPct} />
-        <BarLegend color={theme.accent3} label="Pendiente" amount={pending} percent={pendingPct} />
+        {segments.map((segment) => (
+          <BarLegend
+            key={segment.label}
+            color={segment.color}
+            label={segment.label}
+            amount={segment.amount}
+            percent={segmentTotal > 0 ? (segment.amount / segmentTotal) * 100 : 0}
+          />
+        ))}
       </View>
+    </View>
+  );
+}
 
-      {scopeCompare.length > 0 && scopeTotal > 0 ? (
-        <>
-          <Text style={[styles.barEyebrow, { color: theme.textSubtle, marginTop: 16, marginBottom: 8 }]}>
-            POR ALCANCE
-          </Text>
-          <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted, height: 10 }]}>
-            {scopeCompare.map((slice, index) => {
-              const width = (slice.value / scopeTotal) * 100;
-              const isFirst = index === 0;
-              const isLast = index === scopeCompare.length - 1;
-              return (
-                <View
-                  key={slice.label}
-                  style={[
-                    styles.barSegment,
-                    {
-                      width: `${width}%`,
-                      backgroundColor: slice.color,
-                      borderTopLeftRadius: isFirst ? 6 : 0,
-                      borderBottomLeftRadius: isFirst ? 6 : 0,
-                      borderTopRightRadius: isLast ? 6 : 0,
-                      borderBottomRightRadius: isLast ? 6 : 0,
-                    },
-                  ]}
-                />
-              );
-            })}
-          </View>
-          <View style={[styles.legendRow, { marginTop: 10 }]}>
-            {scopeCompare.map((slice) => (
-              <BarLegend
+function ExpensePieChart({ slices }: { slices: CategorySlice[] }) {
+  const theme = useTheme();
+  const size = 148;
+  const radius = size / 2;
+  const cx = radius;
+  const cy = radius;
+  let cursor = 0;
+
+  if (slices.length === 0) {
+    return (
+      <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+        Sin egresos pagados en este período.
+      </Text>
+    );
+  }
+
+  return (
+    <View style={styles.pieLayout}>
+      <Svg width={size} height={size}>
+        <G>
+          {slices.map((slice) => {
+            const startAngle = cursor;
+            const sweep = (slice.percent / 100) * 360;
+            const endAngle = startAngle + sweep;
+            cursor = endAngle;
+            if (slice.value <= 0) return null;
+            const arcEnd = sweep >= 359.9 ? startAngle + 359.99 : endAngle;
+            return (
+              <Path
                 key={slice.label}
-                color={slice.color}
-                label={slice.label}
-                amount={slice.value}
-                percent={scopeTotal > 0 ? (slice.value / scopeTotal) * 100 : 0}
+                d={describeArc(cx, cy, radius - 4, startAngle, arcEnd)}
+                fill={slice.color}
               />
-            ))}
+            );
+          })}
+        </G>
+      </Svg>
+      <View style={styles.pieLegend}>
+        {slices.map((slice) => (
+          <View key={slice.label} style={styles.pieLegendRow}>
+            <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>{slice.label}</Text>
+              <Text style={{ color: theme.textMuted, fontSize: 11 }}>
+                {formatCurrency(slice.value)} · {slice.percent.toFixed(0)}%
+              </Text>
+            </View>
           </View>
-        </>
-      ) : null}
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export interface CondoTransparencySummaryProps {
+  income: { cuotas: number; otros: number; total: number };
+  expenses: { paid: number; pending: number; total: number };
+  categorySlices: CategorySlice[];
+  totalFunds: number;
+  period: FinancePeriod;
+}
+
+export function CondoTransparencySummary({
+  income,
+  expenses,
+  categorySlices,
+  totalFunds,
+  period,
+}: CondoTransparencySummaryProps) {
+  const theme = useTheme();
+
+  return (
+    <GlassCard style={{ marginTop: 12 }}>
+      <FlowBar
+        eyebrow="INGRESOS"
+        total={income.total}
+        period={period}
+        segments={[
+          { label: 'Cuotas cobradas', amount: income.cuotas, color: theme.accent },
+          { label: 'Otros ingresos', amount: income.otros, color: theme.success },
+        ]}
+      />
+
+      <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
+      <FlowBar
+        eyebrow="EGRESOS"
+        total={expenses.total}
+        period={period}
+        segments={[
+          { label: 'Pagado', amount: expenses.paid, color: theme.success },
+          { label: 'Pendiente', amount: expenses.pending, color: theme.accent3 },
+        ]}
+      />
+
+      <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle, marginBottom: 12 }]}>
+        EGRESOS POR CATEGORÍA
+      </Text>
+      <ExpensePieChart slices={categorySlices} />
 
       <View style={[styles.fundsRow, { borderTopColor: theme.border }]}>
         <Text style={{ color: theme.textMuted, fontSize: 13 }}>Fondos del condominio</Text>
@@ -252,25 +225,7 @@ export function CondoStatsBar({ compare, scopeCompare, totalFunds, period }: Con
 }
 
 const styles = StyleSheet.create({
-  chipsGrid: { gap: 8, paddingTop: 12 },
-  chipsRow: { flexDirection: 'row', gap: 8 },
-  chipHalf: { flex: 1 },
-  chipThird: { flex: 1 },
-  gradientTile: {
-    borderRadius: SURFACE_RADIUS.card,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    minHeight: 76,
-    justifyContent: 'center',
-  },
-  tileLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tileValue: { fontSize: 16, fontWeight: '700', marginTop: 4 },
-  tileSub: { fontSize: 9, marginTop: 2 },
+  flowBlock: {},
   barEyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
   barTotal: { fontSize: 28, fontWeight: '700', marginTop: 4 },
   barTrack: {
@@ -283,11 +238,18 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
   legendItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
+  divider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginVertical: 18,
+  },
+  pieLayout: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  pieLegend: { flex: 1, gap: 8 },
+  pieLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   fundsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 18,
     paddingTop: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
