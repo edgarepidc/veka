@@ -8,8 +8,9 @@
   ],
   "scripts": {
     "dev": "turbo dev",
-    "dev:mobile": "node scripts/sync-mobile-env.mjs && npm run dev --workspace=@veka/mobile",
-    "dev:mobile:tunnel": "node scripts/sync-mobile-env.mjs && npm run dev:tunnel --workspace=@veka/mobile",
+    "dev:mobile": "node scripts/start-expo-go.mjs",
+    "dev:mobile:tunnel": "node scripts/start-expo-go.mjs --tunnel",
+    "dev:mobile:warm": "node scripts/warm-expo-bundle.mjs",
     "dev:mobile:url": "npm run dev:url --workspace=@veka/mobile",
     "build:mobile:dev:ios": "npm run eas:build:dev:ios --workspace=@veka/mobile",
     "build:mobile:dev:android": "npm run eas:build:dev:android --workspace=@veka/mobile",
