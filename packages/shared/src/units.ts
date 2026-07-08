@@ -43,12 +43,17 @@ export function canVoteInFormalPoll(unitRelationship: UnitRelationship | null | 
   return unitRelationship !== 'tenant';
 }
 
+export const POLL_DEBT_MESSAGE =
+  'Tu unidad tiene adeudos pendientes. Regulariza tu cuenta en Finanzas para votar en esta encuesta.';
+
 export function canVoteInPoll(
   unitRelationship: UnitRelationship | null | undefined,
   isFormal: boolean,
+  options?: { requirePaymentCurrent?: boolean; hasOutstandingDebt?: boolean },
 ): boolean {
-  if (!isFormal) return true;
-  return canVoteInFormalPoll(unitRelationship);
+  if (isFormal && !canVoteInFormalPoll(unitRelationship)) return false;
+  if (options?.requirePaymentCurrent && options?.hasOutstandingDebt) return false;
+  return true;
 }
 
 export function formatResidentProfileLabel(

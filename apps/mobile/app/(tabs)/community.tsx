@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -9,7 +10,9 @@ import {
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { POLL_DEBT_MESSAGE } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -60,11 +63,25 @@ export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, canVoteFormalPolls } =
+  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
+
+  function confirmVote(postId: string, optionId: string, label: string) {
+    Alert.alert('Confirmar voto', `¿Registrar tu voto por "${label}"? No podrás cambiarlo después.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Votar',
+        onPress: () => {
+          void votePoll(postId, optionId).then((result) => {
+            if (result.error) Alert.alert('No se pudo votar', result.error);
+          });
+        },
+      },
+    ]);
+  }
 
   const filteredPosts = useMemo(() => {
     if (filter === 'all') return posts;
@@ -153,15 +170,35 @@ export default function CommunityScreen() {
                               Votación formal · solo residente propietario
                             </Text>
                           ) : null}
+                          {post.require_payment_current ? (
+                            <Text style={{ color: theme.textSubtle, fontSize: 10, marginBottom: 6 }}>
+                              Solo unidades al corriente de pagos
+                            </Text>
+                          ) : null}
+                          {post.require_payment_current && hasOutstandingDebt && !post.myVote ? (
+                            <View
+                              style={[
+                                styles.debtBanner,
+                                { backgroundColor: `${theme.danger}12`, borderColor: `${theme.danger}33` },
+                              ]}
+                            >
+                              <Text style={{ color: theme.danger, fontSize: 12, lineHeight: 18, flex: 1 }}>
+                                {POLL_DEBT_MESSAGE}
+                              </Text>
+                              <Pressable onPress={() => router.push('/finance')} style={styles.debtLink}>
+                                <Text style={{ color: theme.accent, fontSize: 12, fontWeight: '700' }}>Ir a Finanzas</Text>
+                              </Pressable>
+                            </View>
+                          ) : null}
                           {post.pollOptions.map((opt) => {
                             const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
                             const voted = post.myVote === opt.id;
-                            const pollLocked = post.is_formal && !canVoteFormalPolls;
+                            const pollLocked = !canVoteInPost(post) || !!post.myVote;
                             return (
                               <Pressable
                                 key={opt.id}
-                                disabled={!!post.myVote || pollLocked}
-                                onPress={() => void votePoll(post.id, opt.id)}
+                                disabled={pollLocked}
+                                onPress={() => confirmVote(post.id, opt.id, opt.label)}
                                 style={[
                                   styles.pollOption,
                                   {
@@ -180,7 +217,7 @@ export default function CommunityScreen() {
                               </Pressable>
                             );
                           })}
-                          {post.is_formal && !canVoteFormalPolls && !post.myVote ? (
+                          {post.is_formal && primary?.unit_relationship === 'tenant' && !post.myVote ? (
                             <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
                               Como residente inquilino puedes ver resultados, pero no votar en encuestas formales.
                             </Text>
@@ -275,6 +312,14 @@ const styles = StyleSheet.create({
   pollOption: { borderRadius: 12, borderWidth: 1, overflow: 'hidden', padding: 10 },
   pollBar: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   pollRow: { flexDirection: 'row', alignItems: 'center' },
+  debtBanner: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 4,
+    gap: 8,
+  },
+  debtLink: { alignSelf: 'flex-start' },
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rxnBtn: {
     flexDirection: 'row',

@@ -73,7 +73,7 @@ async function logDelivery(
   admin: SupabaseClient,
   row: {
     condominiumId: string;
-    unitId: string;
+    unitId: string | null;
     userId: string | null;
     chargeId?: string | null;
     channel: 'push' | 'email';
@@ -406,6 +406,73 @@ async function getCondoStaffUserIds(admin: SupabaseClient, condominiumId: string
     .in('role', ['super_admin', 'admin', 'board_member', 'staff']);
 
   return [...new Set((data ?? []).map((row) => row.user_id as string))];
+}
+
+async function getCondoMemberUserIds(admin: SupabaseClient, condominiumId: string): Promise<string[]> {
+  const { data } = await admin
+    .from('memberships')
+    .select('user_id')
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'active');
+
+  return [...new Set((data ?? []).map((row) => row.user_id as string))];
+}
+
+export interface CommunityPostNotificationInput {
+  condominiumId: string;
+  postId: string;
+  title: string;
+  body?: string | null;
+  postType: 'announcement' | 'poll';
+  isPinned: boolean;
+}
+
+export async function deliverCommunityPost(
+  input: CommunityPostNotificationInput,
+): Promise<ReminderDeliveryResult> {
+  if (!input.isPinned) {
+    return { pushSent: 0, emailSent: 0, skipped: 0, failures: 0 };
+  }
+
+  const admin = createAdminClient();
+  const isPoll = input.postType === 'poll';
+  const title = isPoll ? 'Nueva encuesta — Veka' : 'Aviso importante — Veka';
+  const preview = input.body?.trim() || input.title;
+  const message = isPoll
+    ? `Encuesta fijada: ${input.title}`
+    : `Aviso fijado: ${preview.length > 120 ? `${preview.slice(0, 117)}…` : preview}`;
+
+  const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+  let pushSent = 0;
+  let emailSent = 0;
+  let skipped = 0;
+  let failures = 0;
+
+  for (const userId of memberIds) {
+    const tokens = await getUserPushTokens(admin, userId);
+    if (tokens.length === 0) {
+      skipped += 1;
+    } else {
+      const result = await sendExpoPush(tokens, title, message, {
+        screen: 'community',
+        postId: input.postId,
+      });
+      pushSent += result.sent;
+      failures += result.failed;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: null,
+        userId,
+        chargeId: null,
+        channel: 'push',
+        status: result.sent > 0 ? 'sent' : 'failed',
+        message,
+        error: result.sent > 0 ? undefined : 'No se pudo entregar push',
+      });
+    }
+  }
+
+  return { pushSent, emailSent, skipped, failures };
 }
 
 export interface AdminPendingReservationInput {

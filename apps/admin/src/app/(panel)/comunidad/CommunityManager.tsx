@@ -36,11 +36,11 @@ export function CommunityManager({
   const [pending, start] = useTransition();
   const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
 
-  function run(action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>, formData: FormData, ok: string) {
+  function run(action: (formData: FormData) => Promise<{ error?: string; success?: boolean; message?: string }>, formData: FormData, ok: string) {
     setMessage(null);
     start(async () => {
       const result = await action(formData);
-      setMessage(result.error ?? ok);
+      setMessage(result.error ?? result.message ?? ok);
     });
   }
 
@@ -106,6 +106,24 @@ export function CommunityManager({
                 className="glass-input mt-1 min-h-[100px] font-mono text-sm"
               />
             </label>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+              <p className="text-sm font-medium text-[var(--text)]">Quién puede votar</p>
+              <label className="flex items-start gap-3 text-sm text-muted">
+                <input type="radio" name="require_payment_current" value="off" defaultChecked className="mt-1" />
+                <span>
+                  <strong className="text-[var(--text)]">Todos los residentes elegibles</strong> — sin
+                  restricción por pagos (sujeto al tipo formal/informal).
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-muted">
+                <input type="radio" name="require_payment_current" value="on" className="mt-1" />
+                <span>
+                  <strong className="text-[var(--text)]">Solo al corriente</strong> — unidades con adeudos
+                  pendientes no podrán votar y verán una alerta en la app.
+                </span>
+              </label>
+            </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
               <p className="text-sm font-medium text-[var(--text)]">Tipo de votación</p>
@@ -175,6 +193,11 @@ export function CommunityManager({
                       className={`text-[10px] font-semibold uppercase tracking-wide ${post.is_formal ? 'text-amber-200' : 'text-sky-200'}`}
                     >
                       {post.is_formal ? 'Formal' : 'Informal'}
+                    </span>
+                  ) : null}
+                  {post.post_type === 'poll' && post.require_payment_current ? (
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                      Al corriente
                     </span>
                   ) : null}
                   {post.is_pinned ? <span className="text-[10px] text-accent">Fijado</span> : null}

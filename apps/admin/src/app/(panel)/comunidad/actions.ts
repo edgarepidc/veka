@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
+import { deliverCommunityPost } from '@/lib/notifications';
 import { createClient } from '@/lib/supabase/server';
+
+function formatPublishMessage(base: string, pushSent: number): string {
+  if (pushSent <= 0) return base;
+  return `${base} Notificación enviada a ${pushSent} dispositivo${pushSent === 1 ? '' : 's'}.`;
+}
 
 export async function createAnnouncement(formData: FormData) {
   const condoResult = await requireActiveCondominiumId();
@@ -24,21 +30,35 @@ export async function createAnnouncement(formData: FormData) {
 
   if (!title) return { error: 'Título obligatorio.' };
 
-  const { error } = await supabase.from('posts').insert({
-    condominium_id: condominiumId,
-    author_id: user.id,
-    post_type: 'announcement',
+  const { data: post, error } = await supabase
+    .from('posts')
+    .insert({
+      condominium_id: condominiumId,
+      author_id: user.id,
+      post_type: 'announcement',
+      title,
+      body: body || null,
+      is_pinned: isPinned,
+      is_formal: false,
+      is_admin_only: false,
+      require_payment_current: false,
+    })
+    .select('id')
+    .single();
+
+  if (error || !post) return { error: error?.message ?? 'No se pudo publicar el aviso.' };
+
+  const delivery = await deliverCommunityPost({
+    condominiumId,
+    postId: post.id,
     title,
     body: body || null,
-    is_pinned: isPinned,
-    is_formal: false,
-    is_admin_only: false,
+    postType: 'announcement',
+    isPinned,
   });
 
-  if (error) return { error: error.message };
-
   revalidatePath('/comunidad');
-  return { success: true };
+  return { success: true, message: formatPublishMessage('Aviso publicado.', delivery.pushSent) };
 }
 
 export async function uploadDocument(formData: FormData) {
@@ -73,7 +93,7 @@ export async function uploadDocument(formData: FormData) {
   if (error) return { error: error.message };
 
   revalidatePath('/comunidad');
-  return { success: true };
+  return { success: true, message: 'Documento publicado.' };
 }
 
 export async function createPoll(formData: FormData) {
@@ -93,6 +113,7 @@ export async function createPoll(formData: FormData) {
   const optionsRaw = String(formData.get('options') ?? '');
   const isFormal = formData.get('is_formal') !== 'off';
   const isPinned = formData.get('is_pinned') === 'on';
+  const requirePaymentCurrent = formData.get('require_payment_current') === 'on';
 
   const options = optionsRaw
     .split('\n')
@@ -113,6 +134,7 @@ export async function createPoll(formData: FormData) {
       is_pinned: isPinned,
       is_formal: isFormal,
       is_admin_only: false,
+      require_payment_current: requirePaymentCurrent,
     })
     .select('id')
     .single();
@@ -128,6 +150,15 @@ export async function createPoll(formData: FormData) {
 
   if (optionsError) return { error: optionsError.message };
 
+  const delivery = await deliverCommunityPost({
+    condominiumId,
+    postId: post.id,
+    title,
+    body: body || null,
+    postType: 'poll',
+    isPinned,
+  });
+
   revalidatePath('/comunidad');
-  return { success: true };
+  return { success: true, message: formatPublishMessage('Encuesta publicada.', delivery.pushSent) };
 }

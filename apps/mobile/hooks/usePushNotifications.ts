@@ -87,6 +87,10 @@ function openNotificationTarget(data: Record<string, unknown> | undefined) {
   }
   if (screen === 'maintenance') {
     router.push('/maintenance');
+    return;
+  }
+  if (screen === 'community') {
+    router.push('/community');
   }
 }
 
