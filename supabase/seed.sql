@@ -378,7 +378,7 @@ on conflict (id) do nothing;
 
 insert into public.documents (id, condominium_id, title, category, file_url, uploaded_by)
 select
-  'ffffffff-ffff-ffff-ffff-fffffffffff01',
+  '11111111-1111-4111-8111-111111111101',
   '22222222-2222-2222-2222-222222222222',
   'Reglamento interno',
   'Reglamento',
@@ -390,7 +390,7 @@ on conflict (id) do nothing;
 
 insert into public.documents (id, condominium_id, title, category, file_url, uploaded_by)
 select
-  'ffffffff-ffff-ffff-ffff-fffffffffff02',
+  '11111111-1111-4111-8111-111111111102',
   '22222222-2222-2222-2222-222222222222',
   'Minuta asamblea marzo 2025',
   'Minutas',
