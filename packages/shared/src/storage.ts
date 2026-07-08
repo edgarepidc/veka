@@ -5,6 +5,7 @@ export const STORAGE_BUCKETS = {
   DOCUMENTS: 'documents',
   EXPENSE_EVIDENCE: 'expense-evidence',
   MAINTENANCE_FILES: 'maintenance-files',
+  POSTS: 'posts',
 } as const;
 
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -37,6 +38,10 @@ export function maintenanceFilePath(
 
 export function documentStoragePath(condominiumId: string, fileId: string, ext: string): string {
   return `${condominiumId}/documents/${fileId}.${ext}`;
+}
+
+export function postImagePath(condominiumId: string, postId: string, ext: string): string {
+  return `${condominiumId}/posts/${postId}.${ext}`;
 }
 
 export function publicStorageUrl(supabaseUrl: string, bucket: string, path: string): string {

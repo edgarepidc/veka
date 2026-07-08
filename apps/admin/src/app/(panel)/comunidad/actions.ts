@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { notifyCondoMembersInApp } from '@/lib/community-notifications';
-import { deliverCommunityPost } from '@/lib/notifications';
+import { deliverCommunityPollClosed, deliverCommunityPost } from '@/lib/notifications';
 import { createClient } from '@/lib/supabase/server';
 import { formatPollMinutesExport, isPollClosed } from '@veka/shared';
 
@@ -57,21 +57,82 @@ export async function createAnnouncement(formData: FormData) {
     body: body || null,
     postType: 'announcement',
     isPinned,
+    excludeUserId: user.id,
   });
 
-  if (isPinned) {
-    await notifyCondoMembersInApp({
-      condominiumId,
-      notificationType: 'community_announcement',
-      title: 'Nuevo aviso importante',
-      body: title,
-      entityId: post.id,
-      excludeUserId: user.id,
-    });
-  }
+  await notifyCondoMembersInApp({
+    condominiumId,
+    notificationType: 'community_announcement',
+    title: isPinned ? 'Nuevo aviso importante' : 'Nuevo aviso',
+    body: title,
+    entityId: post.id,
+    excludeUserId: user.id,
+  });
 
   revalidatePath('/comunidad');
   return { success: true, message: formatPublishMessage('Aviso publicado.', delivery.pushSent) };
+}
+
+export async function createPhotoPost(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const title = String(formData.get('title') ?? '').trim();
+  const body = String(formData.get('body') ?? '').trim();
+  const imageUrl = String(formData.get('image_url') ?? '').trim();
+  const isPinned = formData.get('is_pinned') === 'on';
+
+  if (!title) return { error: 'Título obligatorio.' };
+  if (!imageUrl) return { error: 'Sube una imagen.' };
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .insert({
+      condominium_id: condominiumId,
+      author_id: user.id,
+      post_type: 'photo',
+      title,
+      body: body || null,
+      image_url: imageUrl,
+      is_pinned: isPinned,
+      is_formal: false,
+      is_admin_only: false,
+      require_payment_current: false,
+    })
+    .select('id')
+    .single();
+
+  if (error || !post) return { error: error?.message ?? 'No se pudo publicar la foto.' };
+
+  const delivery = await deliverCommunityPost({
+    condominiumId,
+    postId: post.id,
+    title,
+    body: body || null,
+    postType: 'photo',
+    isPinned,
+    excludeUserId: user.id,
+  });
+
+  await notifyCondoMembersInApp({
+    condominiumId,
+    notificationType: 'community_announcement',
+    title: 'Nueva publicación con foto',
+    body: title,
+    entityId: post.id,
+    excludeUserId: user.id,
+  });
+
+  revalidatePath('/comunidad');
+  return { success: true, message: formatPublishMessage('Foto publicada.', delivery.pushSent) };
 }
 
 export async function uploadDocument(formData: FormData) {
@@ -192,6 +253,7 @@ export async function createPoll(formData: FormData) {
     body: body || null,
     postType: 'poll',
     isPinned,
+    excludeUserId: user.id,
   });
 
   await notifyCondoMembersInApp({
@@ -242,6 +304,12 @@ export async function closePoll(postId: string) {
     title: 'Encuesta cerrada',
     body: post.title,
     entityId: postId,
+  });
+
+  await deliverCommunityPollClosed({
+    condominiumId,
+    postId,
+    title: post.title,
   });
 
   revalidatePath('/comunidad');

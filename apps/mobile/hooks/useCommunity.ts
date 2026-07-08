@@ -12,6 +12,7 @@ export interface CommunityPost {
   body: string | null;
   post_type: 'announcement' | 'poll' | 'photo';
   is_pinned: boolean;
+  image_url: string | null;
   is_formal: boolean;
   require_payment_current: boolean;
   quorum_percent: number | null;
@@ -72,6 +73,12 @@ async function resolveDocumentUrl(fileUrl: string): Promise<string> {
   return data?.signedUrl ?? fileUrl;
 }
 
+async function resolvePostImageUrl(imageUrl: string): Promise<string> {
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+  const { data } = await supabase.storage.from(STORAGE_BUCKETS.POSTS).createSignedUrl(imageUrl, 3600);
+  return data?.signedUrl ?? imageUrl;
+}
+
 async function fetchOutstandingDebt(unitId: string | null | undefined): Promise<boolean> {
   if (!unitId) return false;
 
@@ -106,7 +113,7 @@ export function useCommunity(primary: ActiveMembership | null) {
       supabase
         .from('posts')
         .select(
-          'id, title, body, post_type, is_pinned, is_formal, require_payment_current, quorum_percent, poll_closes_at, poll_closed_at, created_at, author_id',
+          'id, title, body, post_type, image_url, is_pinned, is_formal, require_payment_current, quorum_percent, poll_closes_at, poll_closed_at, created_at, author_id',
         )
         .eq('condominium_id', primary.condominium_id)
         .eq('is_archived', false)
@@ -254,7 +261,8 @@ export function useCommunity(primary: ActiveMembership | null) {
       commentsByPost.set(comment.post_id, list);
     }
 
-    const mappedPosts: CommunityPost[] = rawPosts.map((post) => {
+    const mappedPosts: CommunityPost[] = await Promise.all(
+      rawPosts.map(async (post) => {
       const name = profileMap.get(post.author_id) ?? 'Residente';
       const reactions: Record<string, number> = {};
       const myReactions: string[] = [];
@@ -276,6 +284,7 @@ export function useCommunity(primary: ActiveMembership | null) {
           : undefined;
 
       const voted = pollOptions?.find((opt) => myVotes.has(opt.id));
+      const imageUrl = post.image_url ? await resolvePostImageUrl(post.image_url) : null;
 
       return {
         id: post.id,
@@ -283,6 +292,7 @@ export function useCommunity(primary: ActiveMembership | null) {
         body: post.body,
         post_type: post.post_type,
         is_pinned: post.is_pinned,
+        image_url: imageUrl,
         is_formal: post.is_formal ?? true,
         require_payment_current: post.require_payment_current ?? false,
         quorum_percent: post.quorum_percent != null ? Number(post.quorum_percent) : null,
@@ -300,7 +310,8 @@ export function useCommunity(primary: ActiveMembership | null) {
         eligibleVoters: (post.is_formal ?? true) ? eligibleFormal : eligibleInformal,
         comments: commentsByPost.get(post.id) ?? [],
       };
-    });
+    }),
+    );
 
     setPosts(mappedPosts);
 

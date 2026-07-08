@@ -56,10 +56,11 @@ async function savePushToken(userId: string, token: string): Promise<void> {
   );
 }
 
-function openNotificationTarget(data: Record<string, unknown> | undefined) {
+export function openNotificationTarget(data: Record<string, unknown> | undefined) {
   const screen = typeof data?.screen === 'string' ? data.screen : null;
   const tab = typeof data?.tab === 'string' ? data.tab : undefined;
   const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
+  const postId = typeof data?.postId === 'string' ? data.postId : undefined;
 
   if (screen === 'finance') {
     if (tab) {
@@ -90,7 +91,11 @@ function openNotificationTarget(data: Record<string, unknown> | undefined) {
     return;
   }
   if (screen === 'community') {
-    router.push('/community');
+    if (postId) {
+      router.push({ pathname: '/community', params: { postId } });
+    } else {
+      router.push('/community');
+    }
   }
 }
 
@@ -120,6 +125,12 @@ export function usePushNotifications(userId: string | null | undefined) {
   }, [userId]);
 
   useEffect(() => {
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (!response) return;
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      openNotificationTarget(data);
+    });
+
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       openNotificationTarget(data);

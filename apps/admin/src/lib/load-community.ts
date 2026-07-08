@@ -20,6 +20,7 @@ export interface CommunityPostRow {
   title: string;
   body: string | null;
   post_type: 'announcement' | 'poll' | 'photo';
+  image_url: string | null;
   is_pinned: boolean;
   is_archived: boolean;
   archived_at: string | null;
@@ -70,7 +71,7 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
   const { data } = await supabase
     .from('posts')
     .select(
-      'id, title, body, post_type, is_pinned, is_archived, archived_at, is_formal, require_payment_current, quorum_percent, poll_closes_at, poll_closed_at, created_at, poll_options(id, label)',
+      'id, title, body, post_type, image_url, is_pinned, is_archived, archived_at, is_formal, require_payment_current, quorum_percent, poll_closes_at, poll_closed_at, created_at, poll_options(id, label)',
     )
     .eq('condominium_id', condoId)
     .order('is_archived', { ascending: true })
@@ -131,6 +132,7 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
       title: row.title,
       body: row.body,
       post_type: row.post_type as CommunityPostRow['post_type'],
+      image_url: row.image_url ?? null,
       is_pinned: row.is_pinned,
       is_archived: row.is_archived ?? false,
       archived_at: row.archived_at ?? null,

@@ -423,26 +423,92 @@ export interface CommunityPostNotificationInput {
   postId: string;
   title: string;
   body?: string | null;
-  postType: 'announcement' | 'poll';
+  postType: 'announcement' | 'poll' | 'photo';
   isPinned: boolean;
+  excludeUserId?: string | null;
+}
+
+function communityPushCopy(input: CommunityPostNotificationInput): { title: string; message: string } {
+  const preview = input.body?.trim() || input.title;
+  const clipped = preview.length > 120 ? `${preview.slice(0, 117)}…` : preview;
+
+  if (input.postType === 'poll') {
+    return {
+      title: 'Nueva encuesta — Veka',
+      message: input.isPinned ? `Encuesta fijada: ${input.title}` : `Nueva encuesta: ${input.title}`,
+    };
+  }
+
+  if (input.postType === 'photo') {
+    return {
+      title: 'Nueva publicación — Veka',
+      message: input.isPinned ? `Foto fijada: ${input.title}` : `Nueva foto: ${input.title}`,
+    };
+  }
+
+  return {
+    title: input.isPinned ? 'Aviso importante — Veka' : 'Nuevo aviso — Veka',
+    message: input.isPinned ? `Aviso fijado: ${clipped}` : `Nuevo aviso: ${clipped}`,
+  };
 }
 
 export async function deliverCommunityPost(
   input: CommunityPostNotificationInput,
 ): Promise<ReminderDeliveryResult> {
-  if (!input.isPinned) {
-    return { pushSent: 0, emailSent: 0, skipped: 0, failures: 0 };
-  }
-
   const admin = createAdminClient();
-  const isPoll = input.postType === 'poll';
-  const title = isPoll ? 'Nueva encuesta — Veka' : 'Aviso importante — Veka';
-  const preview = input.body?.trim() || input.title;
-  const message = isPoll
-    ? `Encuesta fijada: ${input.title}`
-    : `Aviso fijado: ${preview.length > 120 ? `${preview.slice(0, 117)}…` : preview}`;
+  const { title, message } = communityPushCopy(input);
 
   const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+  const targets = input.excludeUserId
+    ? memberIds.filter((userId) => userId !== input.excludeUserId)
+    : memberIds;
+
+  let pushSent = 0;
+  let emailSent = 0;
+  let skipped = 0;
+  let failures = 0;
+
+  for (const userId of targets) {
+    const tokens = await getUserPushTokens(admin, userId);
+    if (tokens.length === 0) {
+      skipped += 1;
+    } else {
+      const result = await sendExpoPush(tokens, title, message, {
+        screen: 'community',
+        postId: input.postId,
+      });
+      pushSent += result.sent;
+      failures += result.failed;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: null,
+        userId,
+        chargeId: null,
+        channel: 'push',
+        status: result.sent > 0 ? 'sent' : 'failed',
+        message,
+        error: result.sent > 0 ? undefined : 'No se pudo entregar push',
+      });
+    }
+  }
+
+  return { pushSent, emailSent, skipped, failures };
+}
+
+export interface CommunityPollClosedNotificationInput {
+  condominiumId: string;
+  postId: string;
+  title: string;
+}
+
+export async function deliverCommunityPollClosed(
+  input: CommunityPollClosedNotificationInput,
+): Promise<ReminderDeliveryResult> {
+  const admin = createAdminClient();
+  const title = 'Encuesta cerrada — Veka';
+  const message = `Resultados disponibles: ${input.title}`;
+  const memberIds = await getCondoMemberUserIds(admin, input.condominiumId);
+
   let pushSent = 0;
   let emailSent = 0;
   let skipped = 0;

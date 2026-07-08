@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Pressable,
   RefreshControl,
@@ -11,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isPollClosed, computePollQuorumResult, POLL_DEBT_MESSAGE, pollCloseLabel } from '@veka/shared';
 
@@ -68,12 +69,59 @@ export default function CommunityScreen() {
   const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
   const { notifications, unreadCount, markRead, markAllRead } = useCommunityNotifications();
+  const params = useLocalSearchParams<{ postId?: string | string[] }>();
+  const postIdParam = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const postRefs = useRef<Record<string, View | null>>({});
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
   const [showInbox, setShowInbox] = useState(false);
+  const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
+  const [scrollToPostId, setScrollToPostId] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [sendingComment, setSendingComment] = useState<Record<string, boolean>>({});
+
+  function openPost(postId: string) {
+    const post = posts.find((item) => item.id === postId);
+    setTab('feed');
+    if (post?.post_type === 'poll') setFilter('poll');
+    else if (post?.post_type === 'photo') setFilter('photo');
+    else if (post?.post_type === 'announcement') setFilter('announcement');
+    else setFilter('all');
+    setShowInbox(false);
+    setScrollToPostId(postId);
+  }
+
+  useEffect(() => {
+    if (postIdParam) setScrollToPostId(postIdParam);
+  }, [postIdParam]);
+
+  useEffect(() => {
+    if (!scrollToPostId || loading) return;
+    if (!posts.some((item) => item.id === scrollToPostId)) return;
+
+    const timer = setTimeout(() => {
+      const postView = postRefs.current[scrollToPostId];
+      const content = contentRef.current;
+      if (!postView || !content) return;
+
+      postView.measureLayout(
+        content,
+        (_x, y) => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+          setHighlightPostId(scrollToPostId);
+          setScrollToPostId(null);
+          setTimeout(() => setHighlightPostId(null), 2500);
+        },
+        () => undefined,
+      );
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [scrollToPostId, loading, posts]);
 
   function confirmVote(postId: string, optionId: string, label: string) {
     Alert.alert('Confirmar voto', `¿Registrar tu voto por "${label}"? No podrás cambiarlo después.`, [
@@ -122,10 +170,12 @@ export default function CommunityScreen() {
   return (
     <ScreenBackground>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
         showsVerticalScrollIndicator={false}
       >
+        <View ref={contentRef} collapsable={false}>
         <ScreenHeader title="Comunidad" highlight="vecinal" subtitle={primary?.condominium?.name} />
 
         {unreadCount > 0 ? (
@@ -152,7 +202,10 @@ export default function CommunityScreen() {
                 {notifications.slice(0, 8).map((item) => (
                   <Pressable
                     key={item.id}
-                    onPress={() => void markRead(item.id)}
+                    onPress={() => {
+                      void markRead(item.id);
+                      if (item.entity_id) openPost(item.entity_id);
+                    }}
                     style={[
                       styles.inboxItem,
                       {
@@ -227,7 +280,23 @@ export default function CommunityScreen() {
                       : null;
 
                   return (
-                    <GlassCard key={post.id} variant="accent" accent={accent} style={styles.postCard}>
+                    <View
+                      key={post.id}
+                      ref={(node) => {
+                        postRefs.current[post.id] = node;
+                      }}
+                      collapsable={false}
+                    >
+                    <GlassCard
+                      variant="accent"
+                      accent={accent}
+                      style={[
+                        styles.postCard,
+                        highlightPostId === post.id
+                          ? { borderColor: theme.accent, borderWidth: 2 }
+                          : undefined,
+                      ]}
+                    >
                       <View style={styles.postHeader}>
                         <Avatar initials={post.author_initials} color={post.author_color} />
                         <View style={styles.postMeta}>
@@ -246,6 +315,12 @@ export default function CommunityScreen() {
                       <Text style={[styles.postTitle, { color: theme.text }]}>{post.title}</Text>
                       {post.body ? (
                         <Text style={[styles.postBody, { color: theme.textMuted }]}>{post.body}</Text>
+                      ) : null}
+
+                      {post.image_url ? (
+                        <Pressable onPress={() => void Linking.openURL(post.image_url!)}>
+                          <Image source={{ uri: post.image_url }} style={styles.postImage} resizeMode="cover" />
+                        </Pressable>
                       ) : null}
 
                       {post.post_type === 'poll' && closeLabel ? (
@@ -433,6 +508,7 @@ export default function CommunityScreen() {
                         })}
                       </View>
                     </GlassCard>
+                    </View>
                   );
                 })
               )}
@@ -470,6 +546,7 @@ export default function CommunityScreen() {
             </GlassCard>
           )}
         </View>
+        </View>
       </ScrollView>
     </ScreenBackground>
   );
@@ -504,6 +581,13 @@ const styles = StyleSheet.create({
   pinned: { alignSelf: 'flex-start', borderRadius: 8, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 },
   postTitle: { fontSize: 15, fontWeight: '700', marginBottom: 4 },
   postBody: { fontSize: 13, lineHeight: 20, marginBottom: 10 },
+  postImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
   poll: { gap: 8, marginBottom: 12 },
   pollOption: { borderRadius: 12, borderWidth: 1, overflow: 'hidden', padding: 10 },
   pollBar: { position: 'absolute', left: 0, top: 0, bottom: 0 },
