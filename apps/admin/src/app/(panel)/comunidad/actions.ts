@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { randomUUID } from 'node:crypto';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
@@ -32,6 +33,41 @@ export async function createAnnouncement(formData: FormData) {
     is_pinned: isPinned,
     is_formal: false,
     is_admin_only: false,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/comunidad');
+  return { success: true };
+}
+
+export async function uploadDocument(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const title = String(formData.get('title') ?? '').trim();
+  const category = String(formData.get('category') ?? '').trim();
+  const fileUrl = String(formData.get('file_url') ?? '').trim();
+
+  if (!title) return { error: 'Título obligatorio.' };
+  if (!category) return { error: 'Categoría obligatoria.' };
+  if (!fileUrl) return { error: 'Sube el documento (PDF o imagen).' };
+
+  const { error } = await supabase.from('documents').insert({
+    id: randomUUID(),
+    condominium_id: condominiumId,
+    title,
+    category,
+    file_url: fileUrl,
+    uploaded_by: user.id,
   });
 
   if (error) return { error: error.message };

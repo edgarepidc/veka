@@ -267,3 +267,135 @@ select
 from auth.users u
 where u.email = 'diazcruzee@outlook.com'
 on conflict (id) do nothing;
+
+-- Demo community, reservations, security, and documents (resident A-102)
+insert into public.posts (
+  id, condominium_id, author_id, post_type, title, body, is_pinned, is_formal, is_admin_only
+)
+select
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb001',
+  '22222222-2222-2222-2222-222222222222',
+  u.id,
+  'announcement',
+  'Mantenimiento de alberca — sábado 8:00',
+  'La alberca cerrará el sábado de 8:00 a 11:00 para limpieza profunda. Gracias por su comprensión.',
+  true,
+  false,
+  false
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.posts (
+  id, condominium_id, author_id, post_type, title, body, is_pinned, is_formal, is_admin_only
+)
+select
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002',
+  '22222222-2222-2222-2222-222222222222',
+  u.id,
+  'poll',
+  '¿Apruebas el presupuesto de jardinería Q3?',
+  'Votación formal del consejo para el trimestre julio–septiembre.',
+  false,
+  true,
+  false
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.poll_options (id, post_id, label)
+values
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb011', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', 'Sí, aprobar'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb012', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb002', 'No, requiere ajustes')
+on conflict (id) do nothing;
+
+insert into public.reservations (
+  id, amenity_id, condominium_id, unit_id, user_id, starts_at, ends_at, status
+)
+select
+  'cccccccc-cccc-cccc-cccc-cccccccccc01',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  u.id,
+  (date_trunc('day', now()) + interval '1 day' + interval '18 hours'),
+  (date_trunc('day', now()) + interval '1 day' + interval '19 hours'),
+  'confirmed'
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.reservations (
+  id, amenity_id, condominium_id, unit_id, user_id, starts_at, ends_at, status
+)
+select
+  'cccccccc-cccc-cccc-cccc-cccccccccc02',
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  u.id,
+  (date_trunc('day', now()) + interval '10 days' + interval '14 hours'),
+  (date_trunc('day', now()) + interval '10 days' + interval '16 hours'),
+  'pending'
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.visits (
+  id, condominium_id, unit_id, created_by, visitor_name, visitor_phone, visit_type,
+  qr_token, valid_from, valid_until
+)
+select
+  'dddddddd-dddd-dddd-dddd-dddddddddd01',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  u.id,
+  'Carlos Méndez',
+  '5512345678',
+  'visit',
+  'a1b2c3d4e5f6789012345678abcdef01',
+  now() - interval '1 hour',
+  now() + interval '23 hours'
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.packages (
+  id, condominium_id, unit_id, carrier, tracking_number, notes, status, received_by
+)
+select
+  'eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  'Amazon',
+  'AMZ-482910',
+  'Caja mediana — recepción principal',
+  'received',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.documents (id, condominium_id, title, category, file_url, uploaded_by)
+select
+  'ffffffff-ffff-ffff-ffff-fffffffffff01',
+  '22222222-2222-2222-2222-222222222222',
+  'Reglamento interno',
+  'Reglamento',
+  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;
+
+insert into public.documents (id, condominium_id, title, category, file_url, uploaded_by)
+select
+  'ffffffff-ffff-ffff-ffff-fffffffffff02',
+  '22222222-2222-2222-2222-222222222222',
+  'Minuta asamblea marzo 2025',
+  'Minutas',
+  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+  u.id
+from auth.users u
+where u.email = 'diazcruzee@outlook.com'
+on conflict (id) do nothing;

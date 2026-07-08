@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/ui/Avatar';
@@ -48,6 +49,7 @@ function visitTypeLabel(type: VisitRow['visit_type']): string {
 export default function SecurityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { primary, loading: membershipLoading } = useMembership();
   const { visits, packages, loading, refreshing, actionError, refresh, createVisit } = useSecurity(primary);
 
@@ -58,6 +60,12 @@ export default function SecurityScreen() {
   const [visitType, setVisitType] = useState<VisitRow['visit_type']>('visit');
   const [submitting, setSubmitting] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (params.tab === 'paquetes' || params.tab === 'visitas' || params.tab === 'qr') {
+      setTab(params.tab);
+    }
+  }, [params.tab]);
 
   const activeVisit = useMemo(() => {
     const selected = visits.find((v) => v.id === selectedVisitId);

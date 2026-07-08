@@ -12,6 +12,14 @@ export interface CommunityPostRow {
   poll_options: { id: string; label: string }[];
 }
 
+export interface CommunityDocumentRow {
+  id: string;
+  title: string;
+  category: string;
+  file_url: string;
+  created_at: string;
+}
+
 export async function loadCommunityPosts(condominiumId?: string): Promise<CommunityPostRow[]> {
   const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
@@ -35,4 +43,18 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
     created_at: row.created_at,
     poll_options: (Array.isArray(row.poll_options) ? row.poll_options : []) as { id: string; label: string }[],
   }));
+}
+
+export async function loadCommunityDocuments(condominiumId?: string): Promise<CommunityDocumentRow[]> {
+  const condoId = condominiumId ?? (await getLoaderCondominiumId());
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from('documents')
+    .select('id, title, category, file_url, created_at')
+    .eq('condominium_id', condoId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  return (data ?? []) as CommunityDocumentRow[];
 }

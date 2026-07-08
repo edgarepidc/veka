@@ -62,11 +62,18 @@ npm run dev:admin
 
 | Módulo | Mobile | Admin | Estado |
 |--------|--------|-------|--------|
-| Dashboard | ✅ shell | ✅ shell | Setup |
-| Finanzas | ✅ shell | ✅ shell | Próximo |
-| Comunidad | ✅ shell | ✅ shell | Próximo |
-| Espacios | ✅ shell | ✅ shell | Próximo |
-| Seguridad | ✅ shell | ✅ shell | Próximo |
+| Dashboard | ✅ | ✅ KPIs y accesos | Piloto |
+| Finanzas | ✅ cargos y pagos | ✅ cargos, egresos, importación | Piloto |
+| Comunidad | ✅ avisos, encuestas, docs | ✅ avisos, encuestas, upload docs | Piloto |
+| Espacios | ✅ reservas y calendario | ✅ aprobación y reglas | Piloto |
+| Seguridad | ✅ visitas QR y paquetes | ✅ caseta y notificaciones | Piloto |
+| Mantenimiento | ✅ tickets | ✅ estados y evidencia | Piloto |
+
+Guía del piloto demo: [docs/PILOTO_LAS_PALMAS.md](docs/PILOTO_LAS_PALMAS.md)
+
+## CI
+
+GitHub Actions ejecuta `typecheck` y `test:shared` en cada push/PR a `main` (ver `.github/workflows/ci.yml`).
 
 ## Base de datos
 
@@ -91,7 +98,7 @@ Guía paso a paso: [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md)
 ## Próximos pasos
 
 1. Conectar Supabase Cloud — ver [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
-2. Crear admin en SQL Editor y enviar invitaciones desde `/configuracion`
-3. Residentes se registran en la app móvil y ven finanzas en `/finance`
-4. Push notifications (Expo + cron)
+2. Ejecutar piloto Las Palmas — ver [docs/PILOTO_LAS_PALMAS.md](docs/PILOTO_LAS_PALMAS.md)
+3. Crear admin en SQL Editor y enviar invitaciones desde `/configuracion`
+4. Residentes se registran en la app móvil y ven finanzas en `/finance`
 5. Pagos Stripe en línea

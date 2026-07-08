@@ -58,7 +58,9 @@ async function savePushToken(userId: string, token: string): Promise<void> {
 
 function openNotificationTarget(data: Record<string, unknown> | undefined) {
   const screen = typeof data?.screen === 'string' ? data.screen : null;
+  const tab = typeof data?.tab === 'string' ? data.tab : undefined;
   const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
+
   if (screen === 'finance') {
     router.push('/finance');
     return;
@@ -72,7 +74,15 @@ function openNotificationTarget(data: Record<string, unknown> | undefined) {
     return;
   }
   if (screen === 'security') {
-    router.push('/security');
+    if (tab) {
+      router.push({ pathname: '/security', params: { tab } });
+    } else {
+      router.push('/security');
+    }
+    return;
+  }
+  if (screen === 'maintenance') {
+    router.push('/maintenance');
   }
 }
 

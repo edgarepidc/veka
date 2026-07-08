@@ -28,6 +28,7 @@
     "setup:image-storage": "node scripts/setup-image-storage.mjs",
     "seed:amenity-images": "node scripts/seed-amenity-demo-images.mjs",
     "seed:amenity-rules": "node scripts/seed-amenity-rules.mjs",
+    "seed:pilot-demo": "node scripts/seed-pilot-demo.mjs",
     "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs"
   },
   "devDependencies": {

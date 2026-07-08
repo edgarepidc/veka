@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { canVoteInPoll } from '@veka/shared';
+import { canVoteInPoll, STORAGE_BUCKETS } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -47,6 +47,12 @@ function authorColor(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash + id.charCodeAt(i)) % AUTHOR_COLORS.length;
   return AUTHOR_COLORS[hash] ?? AUTHOR_COLORS[0];
+}
+
+async function resolveDocumentUrl(fileUrl: string): Promise<string> {
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) return fileUrl;
+  const { data } = await supabase.storage.from(STORAGE_BUCKETS.DOCUMENTS).createSignedUrl(fileUrl, 3600);
+  return data?.signedUrl ?? fileUrl;
 }
 
 export function useCommunity(primary: ActiveMembership | null) {
@@ -153,7 +159,15 @@ export function useCommunity(primary: ActiveMembership | null) {
     });
 
     setPosts(mappedPosts);
-    setDocuments((docsRes.data as CommunityDocument[]) ?? []);
+
+    const rawDocs = (docsRes.data as CommunityDocument[]) ?? [];
+    const resolvedDocs = await Promise.all(
+      rawDocs.map(async (doc) => ({
+        ...doc,
+        file_url: await resolveDocumentUrl(doc.file_url),
+      })),
+    );
+    setDocuments(resolvedDocs);
     setLoading(false);
   }, [primary?.condominium_id, user?.id]);
 

@@ -396,3 +396,93 @@ export async function deliverReservationUpdate(
 
   return { pushSent, emailSent, skipped, failures };
 }
+
+async function getCondoStaffUserIds(admin: SupabaseClient, condominiumId: string): Promise<string[]> {
+  const { data } = await admin
+    .from('memberships')
+    .select('user_id')
+    .eq('condominium_id', condominiumId)
+    .eq('status', 'active')
+    .in('role', ['super_admin', 'admin', 'board_member', 'staff']);
+
+  return [...new Set((data ?? []).map((row) => row.user_id as string))];
+}
+
+export interface AdminPendingReservationInput {
+  condominiumId: string;
+  unitId: string;
+  reservationId: string;
+  amenityName: string;
+  unitIdentifier: string;
+  startsAt: string;
+}
+
+export async function deliverAdminPendingReservation(
+  input: AdminPendingReservationInput,
+): Promise<ReminderDeliveryResult> {
+  const admin = createAdminClient();
+  const when = new Date(input.startsAt).toLocaleString('es-MX', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const title = 'Nueva solicitud de reserva — Veka';
+  const message = `Unidad ${input.unitIdentifier} solicitó ${input.amenityName} (${when}). Requiere aprobación en el panel.`;
+
+  const staffIds = await getCondoStaffUserIds(admin, input.condominiumId);
+  let pushSent = 0;
+  let emailSent = 0;
+  let skipped = 0;
+  let failures = 0;
+
+  for (const userId of staffIds) {
+    const tokens = await getUserPushTokens(admin, userId);
+    if (tokens.length === 0) {
+      skipped += 1;
+    } else {
+      const result = await sendExpoPush(tokens, title, message, {
+        screen: 'spaces',
+        reservationId: input.reservationId,
+      });
+      pushSent += result.sent;
+      failures += result.failed;
+      await logDelivery(admin, {
+        condominiumId: input.condominiumId,
+        unitId: input.unitId,
+        userId,
+        chargeId: null,
+        channel: 'push',
+        status: result.sent > 0 ? 'sent' : 'failed',
+        message,
+      });
+    }
+
+    const email = await getUserEmail(admin, userId);
+    if (!email || !process.env.RESEND_API_KEY) {
+      skipped += 1;
+      continue;
+    }
+
+    const ok = await sendReminderEmail(
+      email,
+      title,
+      `<p>Hola,</p><p>${message}</p><p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? 'https://veka-admin.vercel.app'}/espacios">Abrir panel de espacios</a></p><p>— Veka</p>`,
+    );
+    if (ok) emailSent += 1;
+    else failures += 1;
+    await logDelivery(admin, {
+      condominiumId: input.condominiumId,
+      unitId: input.unitId,
+      userId,
+      chargeId: null,
+      channel: 'email',
+      status: ok ? 'sent' : 'failed',
+      message,
+    });
+  }
+
+  return { pushSent, emailSent, skipped, failures };
+}

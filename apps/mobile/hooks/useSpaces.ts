@@ -14,6 +14,7 @@ import {
 } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
+import { notifyPendingReservation } from '@/lib/notify-pending-reservation';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -398,7 +399,7 @@ export function useSpaces(primary: ActiveMembership | null) {
         return { error: message, pending: false };
       }
 
-      const { error } = await supabase.rpc('create_reservation_rpc', {
+      const { data: reservationId, error } = await supabase.rpc('create_reservation_rpc', {
         p_amenity_id: amenity.id,
         p_unit_id: primary.unit_id,
         p_starts_at: startsAt.toISOString(),
@@ -411,6 +412,9 @@ export function useSpaces(primary: ActiveMembership | null) {
       }
 
       const pending = amenity.requires_approval;
+      if (pending && typeof reservationId === 'string') {
+        void notifyPendingReservation(reservationId);
+      }
       await refresh();
       return { error: null, pending };
     },

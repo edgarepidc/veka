@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { documentStoragePath, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { FileUpload } from '@/components/ui/FileUpload';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
-import type { CommunityPostRow } from '@/lib/load-community';
+import { createClient } from '@/lib/supabase/client';
+import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
 
-import { createAnnouncement, createPoll } from './actions';
+import { createAnnouncement, createPoll, uploadDocument } from './actions';
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -19,10 +22,19 @@ function timeAgo(iso: string): string {
   return `hace ${days}d`;
 }
 
-export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
+export function CommunityManager({
+  posts,
+  documents,
+  condominiumId,
+}: {
+  posts: CommunityPostRow[];
+  documents: CommunityDocumentRow[];
+  condominiumId: string;
+}) {
+  const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [tab, setTab] = useState<'announcement' | 'poll'>('announcement');
+  const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
 
   function run(action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>, formData: FormData, ok: string) {
     setMessage(null);
@@ -32,10 +44,19 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
     });
   }
 
+  async function openDocument(pathOrUrl: string) {
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      window.open(pathOrUrl, '_blank');
+      return;
+    }
+    const { data } = await supabase.storage.from(STORAGE_BUCKETS.DOCUMENTS).createSignedUrl(pathOrUrl, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
   return (
     <div className="space-y-6">
       <GlassCard>
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setTab('announcement')}
@@ -49,6 +70,13 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
             className={`glass-tab ${tab === 'poll' ? 'glass-tab-active' : ''}`}
           >
             Encuesta
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('document')}
+            className={`glass-tab ${tab === 'document' ? 'glass-tab-active' : ''}`}
+          >
+            Documento
           </button>
         </div>
 
@@ -64,7 +92,7 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
               {pending ? 'Publicando…' : 'Publicar aviso'}
             </button>
           </form>
-        ) : (
+        ) : tab === 'poll' ? (
           <form action={(fd) => run(createPoll, fd, 'Encuesta publicada.')} className="space-y-3">
             <input name="title" required placeholder="Pregunta de la encuesta" className="glass-input" />
             <textarea name="body" rows={2} placeholder="Contexto adicional (opcional)" className="glass-input" />
@@ -104,6 +132,21 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
 
             <button type="submit" disabled={pending} className="glass-btn-primary">
               {pending ? 'Publicando…' : 'Publicar encuesta'}
+            </button>
+          </form>
+        ) : (
+          <form action={(fd) => run(uploadDocument, fd, 'Documento publicado.')} className="space-y-3">
+            <input name="title" required placeholder="Título del documento" className="glass-input" />
+            <input name="category" required placeholder="Categoría (ej. Reglamento, Minutas)" className="glass-input" />
+            <FileUpload
+              bucket={STORAGE_BUCKETS.DOCUMENTS}
+              buildPath={(ext) => documentStoragePath(condominiumId, crypto.randomUUID(), ext)}
+              inputName="file_url"
+              label="Archivo"
+              hint="PDF o imagen. Los residentes lo verán en la pestaña Documentos de la app."
+            />
+            <button type="submit" disabled={pending} className="glass-btn-primary">
+              {pending ? 'Publicando…' : 'Publicar documento'}
             </button>
           </form>
         )}
@@ -146,6 +189,33 @@ export function CommunityManager({ posts }: { posts: CommunityPostRow[] }) {
                     ))}
                   </ul>
                 ) : null}
+              </li>
+            ))
+          )}
+        </ul>
+      </GlassCard>
+
+      <GlassCard>
+        <SectionHeading>Documentos del condominio</SectionHeading>
+        <ul className="mt-4 space-y-3">
+          {documents.length === 0 ? (
+            <li className="text-sm text-subtle">No hay documentos todavía.</li>
+          ) : (
+            documents.map((doc) => (
+              <li key={doc.id} className="glass-card-deep flex items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="font-medium text-[var(--text)]">{doc.title}</p>
+                  <p className="text-xs text-subtle">
+                    {doc.category} · {timeAgo(doc.created_at)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void openDocument(doc.file_url)}
+                  className="glass-btn-secondary shrink-0 text-xs"
+                >
+                  Abrir
+                </button>
               </li>
             ))
           )}

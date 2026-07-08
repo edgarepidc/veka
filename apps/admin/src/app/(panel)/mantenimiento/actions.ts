@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import type { MaintenanceTicketStatus } from '@veka/shared';
-import { MAINTENANCE_TICKET_STATUSES } from '@veka/shared';
+import { MAINTENANCE_TICKET_STATUSES, ticketStatusLabel } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
+import { deliverUnitPushNotification } from '@/lib/unit-push';
 
 export async function updateTicketStatus(formData: FormData) {
   const condoResult = await requireActiveCondominiumId();
@@ -25,6 +26,15 @@ export async function updateTicketStatus(formData: FormData) {
   if (!ticketId) return { error: 'Ticket inválido.' };
   if (!MAINTENANCE_TICKET_STATUSES.includes(status)) return { error: 'Estado inválido.' };
 
+  const { data: ticket } = await supabase
+    .from('maintenance_tickets')
+    .select('id, status, title, unit_id')
+    .eq('id', ticketId)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!ticket) return { error: 'Ticket no encontrado.' };
+
   const { error } = await supabase
     .from('maintenance_tickets')
     .update({
@@ -36,6 +46,15 @@ export async function updateTicketStatus(formData: FormData) {
     .eq('condominium_id', condominiumId);
 
   if (error) return { error: error.message };
+
+  if (ticket.status !== status && ticket.unit_id) {
+    await deliverUnitPushNotification({
+      unitId: ticket.unit_id,
+      title: 'Actualización de mantenimiento — Veka',
+      body: `Tu reporte «${ticket.title}» ahora está: ${ticketStatusLabel(status)}.`,
+      data: { screen: 'maintenance', ticketId },
+    });
+  }
 
   revalidatePath('/mantenimiento');
   return { success: true };

@@ -1,10 +1,15 @@
 import { CommunityManager } from '@/app/(panel)/comunidad/CommunityManager';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { HELP } from '@/lib/help-content';
-import { loadCommunityPosts } from '@/lib/load-community';
+import { getLoaderCondominiumId } from '@/lib/condominium-context';
+import { loadCommunityDocuments, loadCommunityPosts } from '@/lib/load-community';
 
 export default async function ComunidadPage() {
-  const posts = await loadCommunityPosts();
+  const [posts, documents, condominiumId] = await Promise.all([
+    loadCommunityPosts(),
+    loadCommunityDocuments(),
+    getLoaderCondominiumId(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -19,7 +24,7 @@ export default async function ComunidadPage() {
           </>
         }
       />
-      <CommunityManager posts={posts} />
+      <CommunityManager posts={posts} documents={documents} condominiumId={condominiumId} />
     </div>
   );
 }

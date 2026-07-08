@@ -2,6 +2,7 @@ export const STORAGE_BUCKETS = {
   AVATARS: 'avatars',
   BRANDING: 'branding',
   AMENITY_IMAGES: 'amenity-images',
+  DOCUMENTS: 'documents',
   EXPENSE_EVIDENCE: 'expense-evidence',
   MAINTENANCE_FILES: 'maintenance-files',
 } as const;
@@ -32,6 +33,10 @@ export function maintenanceFilePath(
   ext: string,
 ): string {
   return `${condominiumId}/${folder}/${fileId}.${ext}`;
+}
+
+export function documentStoragePath(condominiumId: string, fileId: string, ext: string): string {
+  return `${condominiumId}/documents/${fileId}.${ext}`;
 }
 
 export function publicStorageUrl(supabaseUrl: string, bucket: string, path: string): string {
