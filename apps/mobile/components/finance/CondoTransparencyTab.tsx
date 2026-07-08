@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   expenseCategoryLabel,
@@ -8,12 +8,10 @@ import {
   fundTypeLabel,
 } from '@veka/shared';
 
-import {
-  FinanceCompareChart,
-  FinancePeriodFilter,
-} from '@/components/finance/FinanceCharts';
+import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionLabel } from '@/components/ui/Avatar';
+import { StatPill } from '@/components/ui/StatPill';
 import { FilterBar } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
@@ -103,11 +101,32 @@ export function CondoTransparencyTab({
 
       <View style={styles.section}>
         <FinancePeriodFilter period={period} onChange={setPeriod} />
-        <GlassCard>
-          <FinanceCompareChart title={`Egresos · ${financePeriodLabel(period)}`} items={periodStats.compare} />
-          <View style={{ height: 18 }} />
-          <FinanceCompareChart title="Por alcance" items={periodStats.scopeCompare} />
-        </GlassCard>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+          {periodStats.compare.map((slice) => (
+            <StatPill
+              key={slice.label}
+              label={slice.label}
+              value={formatCurrency(slice.value)}
+              sub={financePeriodLabel(period).toLowerCase()}
+              valueColor={slice.color}
+            />
+          ))}
+          {periodStats.scopeCompare.map((slice) => (
+            <StatPill
+              key={slice.label}
+              label={slice.label}
+              value={formatCurrency(slice.value)}
+              sub="egresos"
+              valueColor={slice.color}
+            />
+          ))}
+          <StatPill
+            label="Fondos"
+            value={formatCurrency(totalFunds)}
+            sub="saldo actual"
+            valueColor={theme.accent2}
+          />
+        </ScrollView>
       </View>
 
       <SectionLabel title="Fondos del condominio" />
@@ -134,18 +153,6 @@ export function CondoTransparencyTab({
               </View>
             ))
           )}
-        </GlassCard>
-      </View>
-
-      <SectionLabel title="Egresos del período" />
-      <View style={styles.section}>
-        <GlassCard>
-          <Text style={{ color: theme.text, fontWeight: '700', fontSize: 22 }}>
-            {formatCurrency(periodStats.periodPaidTotal)}
-          </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-            Comprobados / pagados · {financePeriodLabel(period).toLowerCase()}
-          </Text>
         </GlassCard>
       </View>
 
@@ -199,6 +206,7 @@ export function CondoTransparencyTab({
 
 const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, marginBottom: 8 },
+  statsRow: { gap: 10, paddingTop: 12 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
   cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },

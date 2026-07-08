@@ -21,12 +21,9 @@ import type { ActivePaymentPlan } from '@veka/shared';
 
 import { OnlinePaymentButton } from '@/components/OnlinePaymentButton';
 import { PaymentProofUploader } from '@/components/PaymentProofUploader';
-import {
-  FinanceCompareChart,
-  FinanceMonthlyChart,
-  FinancePeriodFilter,
-} from '@/components/finance/FinanceCharts';
+import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatPill } from '@/components/ui/StatPill';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { SectionLabel } from '@/components/ui/Avatar';
 import { Tag } from '@/components/ui/Tag';
@@ -34,7 +31,6 @@ import type { ActiveMembership } from '@/hooks/useMembership';
 import type { FinanceCharge, FinancePayment } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
-import { personalPeriodStats } from '@/lib/finance-stats';
 import { mapChargeTone, mapPaymentTone } from '@/lib/tagTone';
 import { supabase } from '@/lib/supabase';
 
@@ -84,15 +80,6 @@ export function PersonalAccountTab({
   const payAmount = Number(payAmountInput.replace(/,/g, ''));
   const planProgress = activePlan ? planInstallmentsProgress(activePlan.installments) : null;
 
-  const periodStats = useMemo(
-    () =>
-      personalPeriodStats(charges, payments, period, {
-        paid: theme.accent,
-        owed: theme.danger,
-      }),
-    [charges, payments, period, theme.accent, theme.danger],
-  );
-
   const filteredCharges = useMemo(
     () => charges.filter((charge) => inFinancePeriod(charge.due_date, period)),
     [charges, period],
@@ -117,19 +104,19 @@ export function PersonalAccountTab({
   return (
     <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
-        <StatMini
+        <StatPill
           label="Próximo pago"
           value={paymentTarget ? formatCurrency(paymentTotal) : '—'}
           sub={paymentTarget ? `Vence ${paymentTarget.dueDate}` : 'Al día'}
-          color={paymentTarget?.kind === 'installment' ? theme.accent2 : theme.accent}
+          valueColor={paymentTarget?.kind === 'installment' ? theme.accent2 : theme.accent}
         />
-        <StatMini
+        <StatPill
           label="Saldo total"
           value={formatCurrency(balanceDue)}
           sub={balanceDue > 0 ? 'pendiente' : 'al corriente'}
-          color={balanceDue > 0 ? theme.danger : theme.accent}
+          valueColor={balanceDue > 0 ? theme.danger : theme.accent}
         />
-        <StatMini
+        <StatPill
           label="En revisión"
           value={String(
             payments.filter((p) =>
@@ -137,22 +124,9 @@ export function PersonalAccountTab({
             ).length,
           )}
           sub="pagos"
-          color={theme.accent3}
+          valueColor={theme.accent3}
         />
       </ScrollView>
-
-      <View style={styles.section}>
-        <FinancePeriodFilter period={period} onChange={setPeriod} />
-        <GlassCard>
-          <FinanceCompareChart title="Resumen del período" items={periodStats.compare} />
-          <View style={{ height: 18 }} />
-          <FinanceMonthlyChart
-            title="Tendencia mensual"
-            paidBuckets={periodStats.paidMonthly}
-            owedBuckets={periodStats.owedMonthly}
-          />
-        </GlassCard>
-      </View>
 
       {activePlan ? (
         <View style={styles.section}>
@@ -287,6 +261,10 @@ export function PersonalAccountTab({
         </View>
       )}
 
+      <View style={styles.section}>
+        <FinancePeriodFilter period={period} onChange={setPeriod} />
+      </View>
+
       <SectionLabel title="Mi estado de cuenta" />
       <View style={styles.section}>
         <GlassCard>
@@ -411,30 +389,8 @@ export function PersonalAccountTab({
   );
 }
 
-function StatMini({
-  label,
-  value,
-  sub,
-  color,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  color: string;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.statMini, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={{ color: theme.textSubtle, fontSize: 10, fontWeight: '600' }}>{label}</Text>
-      <Text style={{ color, fontSize: 16, fontWeight: '700', marginTop: 2 }}>{value}</Text>
-      <Text style={{ color: theme.textMuted, fontSize: 10 }}>{sub}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   statsRow: { gap: 10, paddingHorizontal: 20, paddingBottom: 16 },
-  section: { paddingHorizontal: 20, marginBottom: 8 },
   cardGap: { marginBottom: 12 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 },
   cardLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
@@ -448,11 +404,5 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   bankBox: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 4 },
-  statMini: {
-    minWidth: 108,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
+  section: { paddingHorizontal: 20, marginBottom: 8 },
 });
