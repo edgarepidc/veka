@@ -16,6 +16,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
+import type { SurfaceAccentTone } from '@/constants/surface';
 import { useCommunity } from '@/hooks/useCommunity';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
@@ -37,6 +38,22 @@ function postTypeTag(type: string): { label: string; tone: 'green' | 'blue' | 'p
   if (type === 'photo') return { label: 'Foto', tone: 'blue' };
   if (type === 'announcement') return { label: 'Aviso', tone: 'green' };
   return { label: 'Post', tone: 'gray' };
+}
+
+function postAccent(type: string, pinned: boolean): SurfaceAccentTone {
+  if (pinned) return 'green';
+  if (type === 'poll') return 'purple';
+  if (type === 'announcement') return 'green';
+  if (type === 'photo') return 'blue';
+  return 'orange';
+}
+
+function docAccent(category: string): SurfaceAccentTone {
+  const value = category.toLowerCase();
+  if (value.includes('reglamento')) return 'blue';
+  if (value.includes('minuta')) return 'purple';
+  if (value.includes('estado')) return 'green';
+  return 'orange';
 }
 
 export default function CommunityScreen() {
@@ -104,10 +121,11 @@ export default function CommunityScreen() {
               ) : (
                 filteredPosts.map((post) => {
                   const typeTag = postTypeTag(post.post_type);
+                  const accent = postAccent(post.post_type, post.is_pinned);
                   const totalVotes = post.pollOptions?.reduce((sum, o) => sum + o.votes, 0) ?? 0;
 
                   return (
-                    <GlassCard key={post.id} style={styles.postCard}>
+                    <GlassCard key={post.id} variant="accent" accent={accent} style={styles.postCard}>
                       <View style={styles.postHeader}>
                         <Avatar initials={post.author_initials} color={post.author_color} />
                         <View style={styles.postMeta}>
@@ -214,24 +232,24 @@ export default function CommunityScreen() {
                   </Text>
                 </View>
               ) : (
-                documents.map((doc, index) => (
-                  <Pressable
+                documents.map((doc) => (
+                  <GlassCard
                     key={doc.id}
-                    onPress={() => void Linking.openURL(doc.file_url)}
-                    style={[
-                      styles.docRow,
-                      index < documents.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.glassBorder },
-                    ]}
+                    variant="accent"
+                    accent={docAccent(doc.category)}
+                    style={styles.docCard}
                   >
-                    <View style={[styles.docIcon, { backgroundColor: `${theme.accent3}22` }]}>
-                      <Text style={{ fontSize: 20 }}>📄</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.docTitle, { color: theme.text }]}>{doc.title}</Text>
-                      <Text style={{ color: theme.textSubtle, fontSize: 10 }}>{doc.category}</Text>
-                    </View>
-                    <Text style={{ color: theme.accent2, fontSize: 16 }}>›</Text>
-                  </Pressable>
+                    <Pressable onPress={() => void Linking.openURL(doc.file_url)} style={styles.docRowInner}>
+                      <View style={[styles.docIcon, { backgroundColor: `${theme.accent3}22` }]}>
+                        <Text style={{ fontSize: 20 }}>📄</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.docTitle, { color: theme.text }]}>{doc.title}</Text>
+                        <Text style={{ color: theme.textSubtle, fontSize: 10 }}>{doc.category}</Text>
+                      </View>
+                      <Text style={{ color: theme.accent2, fontSize: 16 }}>›</Text>
+                    </Pressable>
+                  </GlassCard>
                 ))
               )}
             </GlassCard>
@@ -269,7 +287,8 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 15, fontWeight: '700' },
   emptyText: { fontSize: 13, marginTop: 6, lineHeight: 20 },
-  docRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  docCard: { marginBottom: 10 },
+  docRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   docIcon: { width: 42, height: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   docTitle: { fontSize: 13, fontWeight: '600' },
 });

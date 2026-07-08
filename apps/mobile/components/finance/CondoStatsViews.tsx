@@ -6,7 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { SURFACE_RADIUS } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
 import { formatCurrency } from '@veka/shared';
-import type { CategorySlice } from '@/lib/finance-stats';
+import type { CategorySlice, MonthlyTrendBucket } from '@/lib/finance-stats';
 import { financePeriodLabel, type FinancePeriod } from '@/lib/finance-period';
 
 interface FlowBarProps {
@@ -177,6 +177,87 @@ function ExpensePieChart({ slices }: { slices: CategorySlice[] }) {
             </View>
           </View>
         ))}
+      </View>
+    </View>
+  );
+}
+
+function MonthlyTrendChart({ buckets }: { buckets: MonthlyTrendBucket[] }) {
+  const theme = useTheme();
+  const maxValue = Math.max(...buckets.flatMap((bucket) => [bucket.income, bucket.expense]), 1);
+
+  return (
+    <View style={styles.flowBlock}>
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>TENDENCIA MENSUAL</Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>
+        Ingresos vs egresos pagados (últimos {buckets.length} meses)
+      </Text>
+      <View style={styles.trendGrid}>
+        {buckets.map((bucket) => (
+          <View key={bucket.key} style={styles.trendColumn}>
+            <View style={styles.trendBars}>
+              <View
+                style={[
+                  styles.trendBar,
+                  {
+                    height: Math.max(6, (bucket.income / maxValue) * 56),
+                    backgroundColor: theme.accent,
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.trendBar,
+                  {
+                    height: Math.max(6, (bucket.expense / maxValue) * 56),
+                    backgroundColor: theme.success,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 6, textAlign: 'center' }}>
+              {bucket.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+      <View style={[styles.legendRow, { marginTop: 10 }]}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.accent }]} />
+          <Text style={{ color: theme.textMuted, fontSize: 11 }}>Ingresos</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.success }]} />
+          <Text style={{ color: theme.textMuted, fontSize: 11 }}>Egresos pagados</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PeriodComparisonRow({
+  incomeLabel,
+  expenseLabel,
+  balanceLabel,
+  period,
+}: {
+  incomeLabel: string;
+  expenseLabel: string;
+  balanceLabel: string;
+  period: FinancePeriod;
+}) {
+  const theme = useTheme();
+  if (period === 'all') return null;
+
+  return (
+    <View style={styles.flowBlock}>
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>
+        VS PERÍODO ANTERIOR · {financePeriodLabel(period).toUpperCase()}
+      </Text>
+      <View style={{ gap: 6, marginTop: 8 }}>
+        <Text style={{ color: theme.textMuted, fontSize: 12 }}>Ingresos: {incomeLabel}</Text>
+        <Text style={{ color: theme.textMuted, fontSize: 12 }}>Egresos: {expenseLabel}</Text>
+        <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>Balance: {balanceLabel}</Text>
       </View>
     </View>
   );
@@ -356,6 +437,12 @@ export interface CondoTransparencySummaryProps {
     percentUsed: number | null;
     highlights: { label: string; percentUsed: number; actual: number; budget: number }[];
   };
+  monthlyTrend: MonthlyTrendBucket[];
+  comparisons: {
+    income: { label: string };
+    expenses: { label: string };
+    balance: { label: string };
+  };
 }
 
 export function CondoTransparencySummary({
@@ -369,6 +456,8 @@ export function CondoTransparencySummary({
   showCollection,
   collectionLabel,
   budget,
+  monthlyTrend,
+  comparisons,
 }: CondoTransparencySummaryProps) {
   const theme = useTheme();
   const fundsNegative = totalFunds < 0;
@@ -409,6 +498,22 @@ export function CondoTransparencySummary({
           { label: 'Pendiente', amount: expenses.pending, color: theme.accent3 },
         ]}
       />
+
+      <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
+      <MonthlyTrendChart buckets={monthlyTrend} />
+
+      {period !== 'all' ? (
+        <>
+          <View style={[styles.divider, { borderTopColor: theme.border }]} />
+          <PeriodComparisonRow
+            incomeLabel={comparisons.income.label}
+            expenseLabel={comparisons.expenses.label}
+            balanceLabel={comparisons.balance.label}
+            period={period}
+          />
+        </>
+      ) : null}
 
       <View style={[styles.divider, { borderTopColor: theme.border }]} />
 
@@ -496,4 +601,8 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   balanceValue: { fontSize: 26, fontWeight: '700', marginTop: 4, marginBottom: 4 },
+  trendGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  trendColumn: { flex: 1, alignItems: 'center' },
+  trendBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 60 },
+  trendBar: { width: 10, borderRadius: 4 },
 });

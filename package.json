@@ -29,6 +29,7 @@
     "seed:amenity-images": "node scripts/seed-amenity-demo-images.mjs",
     "seed:amenity-rules": "node scripts/seed-amenity-rules.mjs",
     "seed:pilot-demo": "node scripts/seed-pilot-demo.mjs",
+    "seed:pilot-finance": "node scripts/seed-pilot-finance.mjs",
     "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs",
     "apply:condo-transparency-income": "node scripts/apply-condo-transparency-income.mjs",
     "apply:condo-transparency-collection": "node scripts/apply-condo-transparency-collection.mjs",

@@ -222,22 +222,11 @@ values
   )
 on conflict do nothing;
 
--- Overdue charges for morosity demo
+-- Overdue charges for morosity demo (B-201 only; A-102 stays clean for mobile demo)
 insert into public.charges (
   id, condominium_id, unit_id, concept, amount, fund_type, due_date, status, period_month
 )
 values
-  (
-    '55555555-5555-5555-5555-555555555503',
-    '22222222-2222-2222-2222-222222222222',
-    '44444444-4444-4444-4444-444444444402',
-    'Cuota de mantenimiento — Mayo 2025',
-    3500.00,
-    'operating',
-    (current_date - interval '25 days')::date,
-    'overdue',
-    (date_trunc('month', current_date) - interval '1 month')::date
-  ),
   (
     '55555555-5555-5555-5555-555555555504',
     '22222222-2222-2222-2222-222222222222',
@@ -250,6 +239,27 @@ values
     (date_trunc('month', current_date) - interval '1 month')::date
   )
 on conflict (id) do nothing;
+
+-- Demo CLABE for SPEI / admin reconciliation
+insert into public.bank_accounts (
+  id, condominium_id, name, bank_name, account_last4, clabe, currency, is_active
+)
+values (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb201',
+  '22222222-2222-2222-2222-222222222222',
+  'Cuenta operativa Las Palmas',
+  'BBVA México',
+  '4821',
+  '012180001234567890',
+  'MXN',
+  true
+)
+on conflict (id) do update set
+  name = excluded.name,
+  bank_name = excluded.bank_name,
+  account_last4 = excluded.account_last4,
+  clabe = excluded.clabe,
+  is_active = excluded.is_active;
 
 -- Demo maintenance ticket (resident A-102)
 insert into public.maintenance_tickets (

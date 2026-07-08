@@ -1,8 +1,8 @@
-import { chargeBalanceDue, expenseCategoryLabel, incomeCategoryLabel } from '@veka/shared';
+import { chargeBalanceDue, expenseCategoryLabel, formatCurrency, incomeCategoryLabel } from '@veka/shared';
 
 import type { FinanceCharge, FinancePayment, CondoExpense } from '@/hooks/useFinance';
 import type { FinancePeriod } from '@/lib/finance-period';
-import { inFinancePeriod } from '@/lib/finance-period';
+import { inFinancePeriod, inPreviousFinancePeriod } from '@/lib/finance-period';
 
 export interface CompareSlice {
   label: string;
@@ -369,5 +369,137 @@ export function condoIncomeDetailRows(
 export function incomeRowCategoryLabel(row: CondoIncomeRow): string {
   if (row.source === 'payment') return 'Cuota cobrada';
   return incomeCategoryLabel(row.category);
+}
+
+export interface MonthlyTrendBucket {
+  key: string;
+  label: string;
+  income: number;
+  expense: number;
+}
+
+function trendMonthKey(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function trendMonthLabel(key: string): string {
+  const [year, month] = key.split('-').map(Number);
+  if (!year || !month) return key;
+  return new Intl.DateTimeFormat('es-MX', { month: 'short' }).format(new Date(year, month - 1, 1));
+}
+
+export function condoMonthlyTrend(
+  incomeRows: CondoIncomeRow[],
+  expenses: CondoExpense[],
+  clusterFilter: CondoClusterFilter,
+  myClusterId: string | null,
+  maxMonths = 4,
+): MonthlyTrendBucket[] {
+  const scopedIncome = incomeRows.filter((row) =>
+    matchesCondoClusterFilter(row.cluster_id, clusterFilter, myClusterId),
+  );
+  const scopedExpenses = expenses.filter((expense) =>
+    matchesCondoClusterFilter(expense.cluster_id, clusterFilter, myClusterId),
+  );
+
+  const keys = new Set<string>();
+  const now = new Date();
+  for (let i = maxMonths - 1; i >= 0; i -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+  }
+
+  const incomeMap = new Map<string, number>();
+  const expenseMap = new Map<string, number>();
+
+  for (const row of scopedIncome) {
+    const key = trendMonthKey(row.income_date);
+    if (!keys.has(key)) continue;
+    incomeMap.set(key, (incomeMap.get(key) ?? 0) + row.amount);
+  }
+
+  for (const expense of scopedExpenses) {
+    if (expense.status !== 'paid') continue;
+    const key = trendMonthKey(expense.expense_date);
+    if (!keys.has(key)) continue;
+    expenseMap.set(key, (expenseMap.get(key) ?? 0) + expense.amount);
+  }
+
+  return [...keys].map((key) => ({
+    key,
+    label: trendMonthLabel(key),
+    income: incomeMap.get(key) ?? 0,
+    expense: expenseMap.get(key) ?? 0,
+  }));
+}
+
+export function formatPeriodDelta(current: number, previous: number): {
+  delta: number;
+  percent: number | null;
+  label: string;
+} {
+  const delta = current - previous;
+  const percent = previous > 0 ? (delta / previous) * 100 : null;
+  const sign = delta > 0 ? '+' : delta < 0 ? '−' : '';
+  const pctLabel = percent !== null ? ` (${sign}${Math.abs(percent).toFixed(0)}%)` : '';
+  return {
+    delta,
+    percent,
+    label: `${sign}${formatCurrency(Math.abs(delta))}${pctLabel} vs período anterior`,
+  };
+}
+
+export function condoPeriodComparisons(
+  incomeRows: CondoIncomeRow[],
+  expenses: CondoExpense[],
+  period: FinancePeriod,
+  clusterFilter: CondoClusterFilter,
+  myClusterId: string | null,
+): {
+  income: ReturnType<typeof formatPeriodDelta>;
+  expenses: ReturnType<typeof formatPeriodDelta>;
+  balance: ReturnType<typeof formatPeriodDelta>;
+} {
+  const scopedIncome = incomeRows.filter((row) =>
+    matchesCondoClusterFilter(row.cluster_id, clusterFilter, myClusterId),
+  );
+  const scopedExpenses = expenses.filter((expense) =>
+    matchesCondoClusterFilter(expense.cluster_id, clusterFilter, myClusterId),
+  );
+
+  const sumIncome = (usePrevious: boolean) =>
+    scopedIncome
+      .filter((row) =>
+        usePrevious
+          ? inPreviousFinancePeriod(row.income_date, period)
+          : inFinancePeriod(row.income_date, period),
+      )
+      .reduce((sum, row) => sum + row.amount, 0);
+
+  const sumExpensesPaid = (usePrevious: boolean) =>
+    scopedExpenses
+      .filter(
+        (expense) =>
+          expense.status === 'paid' &&
+          (usePrevious
+            ? inPreviousFinancePeriod(expense.expense_date, period)
+            : inFinancePeriod(expense.expense_date, period)),
+      )
+      .reduce((sum, expense) => sum + expense.amount, 0);
+
+  const incomeCurrent = sumIncome(false);
+  const incomePrevious = sumIncome(true);
+  const expenseCurrent = sumExpensesPaid(false);
+  const expensePrevious = sumExpensesPaid(true);
+  const balanceCurrent = incomeCurrent - expenseCurrent;
+  const balancePrevious = incomePrevious - expensePrevious;
+
+  return {
+    income: formatPeriodDelta(incomeCurrent, incomePrevious),
+    expenses: formatPeriodDelta(expenseCurrent, expensePrevious),
+    balance: formatPeriodDelta(balanceCurrent, balancePrevious),
+  };
 }
 

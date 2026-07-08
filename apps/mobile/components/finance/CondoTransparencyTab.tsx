@@ -16,6 +16,7 @@ import { FilterBar } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
+import { expenseAccentTone } from '@/lib/finance-accent';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
 import {
   condoBudgetExecution,
@@ -23,7 +24,9 @@ import {
   condoExpensePeriodStats,
   condoIncomeDetailRows,
   condoIncomePeriodStats,
+  condoMonthlyTrend,
   condoPeriodBalance,
+  condoPeriodComparisons,
   expenseCategoryBreakdown,
   incomeRowCategoryLabel,
   matchesCondoClusterFilter,
@@ -121,6 +124,16 @@ export function CondoTransparencyTab({
     [clusterFilter, condoIncomeRows, myClusterId, period],
   );
 
+  const monthlyTrend = useMemo(
+    () => condoMonthlyTrend(condoIncomeRows, visibleExpenses, clusterFilter, myClusterId),
+    [clusterFilter, condoIncomeRows, myClusterId, visibleExpenses],
+  );
+
+  const comparisons = useMemo(
+    () => condoPeriodComparisons(condoIncomeRows, visibleExpenses, period, clusterFilter, myClusterId),
+    [clusterFilter, condoIncomeRows, myClusterId, period, visibleExpenses],
+  );
+
   const showCollection = Boolean(myClusterId) && clusterFilter !== 'general';
   const collectionLabel = clusterName ?? 'Mi edificio';
 
@@ -178,6 +191,8 @@ export function CondoTransparencyTab({
           showCollection={showCollection}
           collectionLabel={collectionLabel}
           budget={budget}
+          monthlyTrend={monthlyTrend}
+          comparisons={comparisons}
         />
       </View>
 
@@ -258,16 +273,21 @@ export function CondoTransparencyTab({
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay egresos en este filtro.</Text>
           </GlassCard>
         ) : (
-          filteredGroups.map((group) => (
-            <GlassCard key={group.clusterId ?? 'general'} style={styles.cardGap}>
-              <View style={styles.cardTop}>
-                <Text style={[styles.cardTitle, { color: theme.text }]}>{group.clusterName}</Text>
-                <Text style={{ color: theme.accent2, fontWeight: '700', fontSize: 14 }}>
-                  {formatCurrency(group.totalAmount)}
-                </Text>
-              </View>
-              {group.expenses.slice(0, 8).map((expense) => (
-                <View key={expense.id} style={styles.expenseRow}>
+          filteredGroups.flatMap((group) => [
+            <View key={`${group.clusterId ?? 'general'}-header`} style={styles.groupHeader}>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>{group.clusterName}</Text>
+              <Text style={{ color: theme.accent2, fontWeight: '700', fontSize: 14 }}>
+                {formatCurrency(group.totalAmount)}
+              </Text>
+            </View>,
+            ...group.expenses.slice(0, 8).map((expense) => (
+              <GlassCard
+                key={expense.id}
+                variant="accent"
+                accent={expenseAccentTone(expense.status)}
+                style={styles.cardGap}
+              >
+                <View style={styles.expenseRowInner}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>{expense.concept}</Text>
                     <Text style={{ color: theme.textMuted, fontSize: 11 }}>
@@ -284,14 +304,17 @@ export function CondoTransparencyTab({
                     />
                   </View>
                 </View>
-              ))}
-              {group.expenses.length > 8 ? (
-                <Text style={{ color: theme.textSubtle, fontSize: 11, marginTop: 6 }}>
-                  +{group.expenses.length - 8} egresos más en este grupo
-                </Text>
-              ) : null}
-            </GlassCard>
-          ))
+              </GlassCard>
+            )),
+            group.expenses.length > 8 ? (
+              <Text
+                key={`${group.clusterId ?? 'general'}-more`}
+                style={{ color: theme.textSubtle, fontSize: 11, marginBottom: 12, paddingHorizontal: 4 }}
+              >
+                +{group.expenses.length - 8} egresos más en {group.clusterName}
+              </Text>
+            ) : null,
+          ])
         )}
       </View>
     </>
@@ -312,11 +335,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  expenseRow: {
+  groupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  expenseRowInner: {
     flexDirection: 'row',
     gap: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
 });

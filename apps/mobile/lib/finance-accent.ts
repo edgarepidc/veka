@@ -15,3 +15,9 @@ export function paymentAccentTone(status: PaymentStatus): SurfaceAccentTone {
   if (status === 'pending_review' || status === 'pending_second_review') return 'orange';
   return 'blue';
 }
+
+export function expenseAccentTone(status: string): SurfaceAccentTone {
+  if (status === 'paid') return 'green';
+  if (status === 'pending') return 'orange';
+  return 'purple';
+}

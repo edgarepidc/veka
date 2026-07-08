@@ -29,3 +29,26 @@ export function inFinancePeriod(dateIso: string, period: FinancePeriod): boolean
 export function financePeriodLabel(period: FinancePeriod): string {
   return FINANCE_PERIOD_OPTIONS.find((option) => option.key === period)?.label ?? 'Período';
 }
+
+export function previousFinancePeriodStart(period: FinancePeriod): Date | null {
+  if (period === 'all') return null;
+  const currentStart = financePeriodStart(period);
+  if (!currentStart) return null;
+  const prev = new Date(currentStart);
+  if (period === '1m') {
+    prev.setMonth(prev.getMonth() - 1);
+  } else {
+    prev.setMonth(prev.getMonth() - 3);
+  }
+  return prev;
+}
+
+export function inPreviousFinancePeriod(dateIso: string, period: FinancePeriod): boolean {
+  if (period === 'all') return false;
+  const prevStart = previousFinancePeriodStart(period);
+  const currentStart = financePeriodStart(period);
+  if (!prevStart || !currentStart) return false;
+  const value = new Date(dateIso);
+  if (Number.isNaN(value.getTime())) return false;
+  return value >= prevStart && value < currentStart;
+}

@@ -100,6 +100,40 @@ values (
 )
 on conflict (id) do nothing;
 
+-- Previous month paid (A-102 demo unit) with approved payment
+insert into public.charges (
+  id, condominium_id, unit_id, recurring_fee_id, concept, amount, fund_type, due_date, status, period_month
+)
+values (
+  '55555555-5555-5555-5555-555555555522',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  '77777777-7777-7777-7777-777777777701',
+  'Cuota de mantenimiento — ' || to_char(current_date - interval '1 month', 'TMMonth YYYY'),
+  3500.00,
+  'operating',
+  (date_trunc('month', current_date) - interval '1 month' + interval '4 days')::date,
+  'paid',
+  (date_trunc('month', current_date) - interval '1 month')::date
+)
+on conflict (id) do update set status = excluded.status;
+
+insert into public.payments (
+  id, charge_id, condominium_id, unit_id, amount, status, payment_method, paid_at, created_at
+)
+values (
+  '88888888-8888-8888-8888-888888888803',
+  '55555555-5555-5555-5555-555555555522',
+  '22222222-2222-2222-2222-222222222222',
+  '44444444-4444-4444-4444-444444444402',
+  3500.00,
+  'approved',
+  'transfer',
+  (date_trunc('month', current_date) - interval '1 month' + interval '2 days'),
+  (date_trunc('month', current_date) - interval '1 month' + interval '2 days')
+)
+on conflict (id) do nothing;
+
 -- Pending review payment (A-101 current month)
 insert into public.payments (
   id, charge_id, condominium_id, unit_id, amount, status, payment_method, proof_url, paid_at, created_at
@@ -118,22 +152,11 @@ values (
 )
 on conflict (id) do nothing;
 
--- Aging morosity: various overdue buckets
+-- Aging morosity: B-201 overdue buckets (A-102 excluded for clean mobile demo)
 insert into public.charges (
   id, condominium_id, unit_id, concept, amount, fund_type, due_date, status, period_month
 )
 values
-  (
-    '55555555-5555-5555-5555-555555555531',
-    '22222222-2222-2222-2222-222222222222',
-    '44444444-4444-4444-4444-444444444402',
-    'Cuota de mantenimiento — mora 20 días',
-    3500.00,
-    'operating',
-    (current_date - interval '20 days')::date,
-    'overdue',
-    (date_trunc('month', current_date) - interval '1 month')::date
-  ),
   (
     '55555555-5555-5555-5555-555555555532',
     '22222222-2222-2222-2222-222222222222',
@@ -296,3 +319,24 @@ values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb12', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'servicios', 24000.00),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb13', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'extraordinario', 60000.00)
 on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;
+
+-- Demo CLABE for SPEI / admin reconciliation
+insert into public.bank_accounts (
+  id, condominium_id, name, bank_name, account_last4, clabe, currency, is_active
+)
+values (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbb201',
+  '22222222-2222-2222-2222-222222222222',
+  'Cuenta operativa Las Palmas',
+  'BBVA México',
+  '4821',
+  '012180001234567890',
+  'MXN',
+  true
+)
+on conflict (id) do update set
+  name = excluded.name,
+  bank_name = excluded.bank_name,
+  account_last4 = excluded.account_last4,
+  clabe = excluded.clabe,
+  is_active = excluded.is_active;
