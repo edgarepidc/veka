@@ -21,6 +21,7 @@ export function FileUpload({
   inputName,
   label,
   hint,
+  uploadButtonLabel = 'Subir archivo',
 }: {
   bucket: string;
   buildPath: (ext: string) => string;
@@ -28,6 +29,7 @@ export function FileUpload({
   inputName: string;
   label: string;
   hint?: string;
+  uploadButtonLabel?: string;
 }) {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +117,7 @@ export function FileUpload({
             onClick={() => fileInputRef.current?.click()}
             className="glass-btn-secondary w-fit"
           >
-            {uploading ? 'Subiendo…' : storedPath ? 'Cambiar archivo' : 'Subir comprobante'}
+            {uploading ? 'Subiendo…' : storedPath ? 'Cambiar archivo' : uploadButtonLabel}
           </button>
           {storedPath ? (
             <button

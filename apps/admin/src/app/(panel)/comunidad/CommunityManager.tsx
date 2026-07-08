@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useMemo, useState, useTransition, useEffect } from 'react';
 import { documentStoragePath, computePollQuorumResult, isImageStoragePath, isPollClosed, pollCloseLabel, postImagePath, STORAGE_BUCKETS } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -61,6 +61,38 @@ function PostAttachmentPreview({ path }: { path: string }) {
   );
 }
 
+type CreateTab = 'announcement' | 'poll' | 'document';
+type ListFilter = CreateTab;
+type PeriodFilter = 'month' | 'quarter' | 'all';
+
+const LIST_FILTER_LABELS: Record<ListFilter, string> = {
+  announcement: 'Avisos',
+  poll: 'Encuestas',
+  document: 'Documentos',
+};
+
+const PERIOD_FILTER_LABELS: Record<PeriodFilter, string> = {
+  month: 'Mes actual',
+  quarter: 'Últimos 3 meses',
+  all: 'Histórico',
+};
+
+function isInPeriod(iso: string, period: PeriodFilter): boolean {
+  const date = new Date(iso);
+  const now = new Date();
+  if (period === 'all') return true;
+  if (period === 'month') {
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  }
+  const threeMonthsAgo = new Date(now);
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  return date >= threeMonthsAgo;
+}
+
+function isAnnouncementPost(post: CommunityPostRow): boolean {
+  return post.post_type === 'announcement' || post.post_type === 'photo';
+}
+
 export function CommunityManager({
   posts,
   documents,
@@ -73,7 +105,30 @@ export function CommunityManager({
   const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [tab, setTab] = useState<'announcement' | 'poll' | 'document'>('announcement');
+  const [tab, setTab] = useState<CreateTab>('announcement');
+  const [listFilter, setListFilter] = useState<ListFilter>('announcement');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('month');
+
+  const filteredPosts = useMemo(() => {
+    const byType =
+      listFilter === 'announcement'
+        ? posts.filter(isAnnouncementPost)
+        : listFilter === 'poll'
+          ? posts.filter((post) => post.post_type === 'poll')
+          : [];
+
+    return byType.filter((post) => isInPeriod(post.created_at, periodFilter));
+  }, [listFilter, periodFilter, posts]);
+
+  const filteredDocuments = useMemo(
+    () => documents.filter((doc) => isInPeriod(doc.created_at, periodFilter)),
+    [documents, periodFilter],
+  );
+
+  function selectCreateTab(next: CreateTab) {
+    setTab(next);
+    setListFilter(next);
+  }
 
   function runAction(action: () => Promise<{ error?: string; success?: boolean; message?: string; text?: string }>, ok: string) {
     setMessage(null);
@@ -119,21 +174,21 @@ export function CommunityManager({
         <div className="mb-4 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setTab('announcement')}
+            onClick={() => selectCreateTab('announcement')}
             className={`glass-tab ${tab === 'announcement' ? 'glass-tab-active' : ''}`}
           >
             Aviso
           </button>
           <button
             type="button"
-            onClick={() => setTab('poll')}
+            onClick={() => selectCreateTab('poll')}
             className={`glass-tab ${tab === 'poll' ? 'glass-tab-active' : ''}`}
           >
             Encuesta
           </button>
           <button
             type="button"
-            onClick={() => setTab('document')}
+            onClick={() => selectCreateTab('document')}
             className={`glass-tab ${tab === 'document' ? 'glass-tab-active' : ''}`}
           >
             Documento
@@ -150,6 +205,7 @@ export function CommunityManager({
               inputName="attachment_url"
               label="Adjunto (opcional)"
               hint="Imagen o PDF. Máximo 2 MB (imagen) o 5 MB (PDF)."
+              uploadButtonLabel="Subir adjunto"
             />
             <label className="flex items-center gap-2 text-sm text-muted">
               <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
@@ -265,12 +321,70 @@ export function CommunityManager({
       </GlassCard>
 
       <GlassCard>
-        <SectionHeading help={HELP.comunidad.avisos}>Publicaciones recientes</SectionHeading>
-        <ul className="mt-4 space-y-3">
-          {posts.length === 0 ? (
-            <li className="text-sm text-subtle">No hay publicaciones todavía.</li>
-          ) : (
-            posts.map((post) => {
+        <SectionHeading help={HELP.comunidad.avisos}>Publicaciones del condominio</SectionHeading>
+
+        <div className="glass-tab-strip mb-3">
+          {(Object.keys(LIST_FILTER_LABELS) as ListFilter[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setListFilter(key)}
+              className={`glass-tab ${listFilter === key ? 'glass-tab-active' : ''}`}
+            >
+              {LIST_FILTER_LABELS[key]}
+            </button>
+          ))}
+        </div>
+
+        <div className="glass-tab-strip mb-4">
+          {(Object.keys(PERIOD_FILTER_LABELS) as PeriodFilter[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPeriodFilter(key)}
+              className={`glass-tab !min-w-0 !flex-none px-4 text-xs ${periodFilter === key ? 'glass-tab-active' : ''}`}
+            >
+              {PERIOD_FILTER_LABELS[key]}
+            </button>
+          ))}
+        </div>
+
+        <p className="mb-4 text-xs text-subtle">
+          {listFilter === 'document'
+            ? `${filteredDocuments.length} documento${filteredDocuments.length === 1 ? '' : 's'} · ${PERIOD_FILTER_LABELS[periodFilter].toLowerCase()}`
+            : `${filteredPosts.length} ${LIST_FILTER_LABELS[listFilter].toLowerCase()} · ${PERIOD_FILTER_LABELS[periodFilter].toLowerCase()}`}
+        </p>
+
+        {listFilter === 'document' ? (
+          <ul className="space-y-3">
+            {filteredDocuments.length === 0 ? (
+              <li className="text-sm text-subtle">No hay documentos en este período.</li>
+            ) : (
+              filteredDocuments.map((doc) => (
+                <li key={doc.id} className="glass-card-deep flex items-center justify-between gap-3 px-4 py-3">
+                  <div>
+                    <p className="font-medium text-[var(--text)]">{doc.title}</p>
+                    <p className="text-xs text-subtle">
+                      {doc.category} · {timeAgo(doc.created_at)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openDocument(doc.file_url)}
+                    className="glass-btn-secondary shrink-0 text-xs"
+                  >
+                    Abrir
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : (
+          <ul className="space-y-3">
+            {filteredPosts.length === 0 ? (
+              <li className="text-sm text-subtle">No hay publicaciones en este período.</li>
+            ) : (
+              filteredPosts.map((post) => {
               const pollClosed = post.post_type === 'poll' && isPollClosed(post);
               const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
               const quorumResult =
@@ -431,35 +545,9 @@ export function CommunityManager({
               </li>
               );
             })
-          )}
-        </ul>
-      </GlassCard>
-
-      <GlassCard>
-        <SectionHeading>Documentos del condominio</SectionHeading>
-        <ul className="mt-4 space-y-3">
-          {documents.length === 0 ? (
-            <li className="text-sm text-subtle">No hay documentos todavía.</li>
-          ) : (
-            documents.map((doc) => (
-              <li key={doc.id} className="glass-card-deep flex items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="font-medium text-[var(--text)]">{doc.title}</p>
-                  <p className="text-xs text-subtle">
-                    {doc.category} · {timeAgo(doc.created_at)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void openDocument(doc.file_url)}
-                  className="glass-btn-secondary shrink-0 text-xs"
-                >
-                  Abrir
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
+            )}
+          </ul>
+        )}
       </GlassCard>
     </div>
   );
