@@ -31,6 +31,7 @@
     "seed:pilot-demo": "node scripts/seed-pilot-demo.mjs",
     "apply:reservation-rpc": "node scripts/apply-reservation-rpc.mjs",
     "apply:condo-transparency-income": "node scripts/apply-condo-transparency-income.mjs",
+    "apply:condo-transparency-collection": "node scripts/apply-condo-transparency-collection.mjs",
     "verify:condo-transparency": "node scripts/verify-condo-transparency.mjs"
   },
   "devDependencies": {

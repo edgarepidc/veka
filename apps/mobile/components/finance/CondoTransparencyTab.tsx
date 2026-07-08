@@ -18,10 +18,17 @@ import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFina
 import { useTheme } from '@/hooks/useTheme';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
 import {
+  condoBudgetExecution,
+  condoCollectionStats,
   condoExpensePeriodStats,
+  condoIncomeDetailRows,
   condoIncomePeriodStats,
+  condoPeriodBalance,
   expenseCategoryBreakdown,
+  incomeRowCategoryLabel,
   matchesCondoClusterFilter,
+  type CondoBudgetLine,
+  type CondoCollectionFlowRow,
   type CondoIncomeRow,
 } from '@/lib/finance-stats';
 
@@ -33,6 +40,8 @@ interface CondoTransparencyTabProps {
   funds: CondoFund[];
   visibleExpenses: CondoExpense[];
   condoIncomeRows: CondoIncomeRow[];
+  collectionFlowRows: CondoCollectionFlowRow[];
+  budgetLines: CondoBudgetLine[];
   expenseGroups: CondoExpenseGroup[];
 }
 
@@ -44,6 +53,8 @@ export function CondoTransparencyTab({
   funds,
   visibleExpenses,
   condoIncomeRows,
+  collectionFlowRows,
+  budgetLines,
   expenseGroups,
 }: CondoTransparencyTabProps) {
   const theme = useTheme();
@@ -90,6 +101,29 @@ export function CondoTransparencyTab({
     [scopedExpenses, period],
   );
 
+  const periodBalance = useMemo(
+    () => condoPeriodBalance(incomeStats.total, expenseStats.paid, expenseStats.pending),
+    [expenseStats.paid, expenseStats.pending, incomeStats.total],
+  );
+
+  const collection = useMemo(
+    () => condoCollectionStats(collectionFlowRows, period, clusterFilter, myClusterId),
+    [clusterFilter, collectionFlowRows, myClusterId, period],
+  );
+
+  const budget = useMemo(
+    () => condoBudgetExecution(budgetLines, scopedExpenses, period),
+    [budgetLines, period, scopedExpenses],
+  );
+
+  const incomeDetails = useMemo(
+    () => condoIncomeDetailRows(condoIncomeRows, period, clusterFilter, myClusterId),
+    [clusterFilter, condoIncomeRows, myClusterId, period],
+  );
+
+  const showCollection = Boolean(myClusterId) && clusterFilter !== 'general';
+  const collectionLabel = clusterName ?? 'Mi edificio';
+
   const filteredGroups = useMemo(() => {
     const groups = expenseGroups
       .map((group) => ({
@@ -110,6 +144,7 @@ export function CondoTransparencyTab({
   }, [clusterFilter, expenseGroups, myClusterId, period]);
 
   const totalFunds = funds.reduce((sum, fund) => sum + fund.balance, 0);
+  const fundsNegative = totalFunds < 0;
 
   return (
     <>
@@ -138,16 +173,58 @@ export function CondoTransparencyTab({
           categorySlices={categorySlices}
           totalFunds={totalFunds}
           period={period}
+          periodBalance={periodBalance}
+          collection={collection}
+          showCollection={showCollection}
+          collectionLabel={collectionLabel}
+          budget={budget}
         />
+      </View>
+
+      <SectionLabel title="Detalle de ingresos" />
+      <View style={styles.section}>
+        {incomeDetails.length === 0 ? (
+          <GlassCard>
+            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin ingresos en este filtro.</Text>
+          </GlassCard>
+        ) : (
+          incomeDetails.map((row) => (
+            <GlassCard
+              key={`${row.source}-${row.id ?? row.income_date}-${row.amount}-${row.concept}`}
+              variant="accent"
+              accent="green"
+              style={styles.cardGap}
+            >
+              <View style={styles.cardTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>{row.concept}</Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>
+                    {incomeRowCategoryLabel(row)} · {row.income_date}
+                  </Text>
+                </View>
+                <Text style={{ color: theme.success, fontWeight: '700', fontSize: 15 }}>
+                  {formatCurrency(row.amount)}
+                </Text>
+              </View>
+            </GlassCard>
+          ))
+        )}
       </View>
 
       <SectionLabel title="Fondos del condominio" />
       <View style={styles.section}>
-        <GlassCard>
+        <GlassCard variant={fundsNegative ? 'accent' : 'default'} accent={fundsNegative ? 'danger' : undefined}>
           <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 10 }}>
             Saldo consolidado:{' '}
-            <Text style={{ color: theme.accent, fontWeight: '700' }}>{formatCurrency(totalFunds)}</Text>
+            <Text style={{ color: fundsNegative ? theme.danger : theme.accent, fontWeight: '700' }}>
+              {formatCurrency(totalFunds)}
+            </Text>
           </Text>
+          {fundsNegative ? (
+            <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 10, lineHeight: 18 }}>
+              Saldo negativo: requiere atención de la administración.
+            </Text>
+          ) : null}
           {funds.length === 0 ? (
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin saldos registrados.</Text>
           ) : (
@@ -159,7 +236,13 @@ export function CondoTransparencyTab({
                   </Text>
                   <Text style={{ color: theme.textSubtle, fontSize: 11 }}>Al {fund.as_of_date}</Text>
                 </View>
-                <Text style={{ color: theme.accent2, fontWeight: '700', fontSize: 16 }}>
+                <Text
+                  style={{
+                    color: fund.balance < 0 ? theme.danger : theme.accent2,
+                    fontWeight: '700',
+                    fontSize: 16,
+                  }}
+                >
                   {formatCurrency(fund.balance)}
                 </Text>
               </View>

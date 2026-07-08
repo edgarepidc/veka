@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { G, Path } from 'react-native-svg';
 
+import { accentColor, surfaceAccentBanner } from '@/constants/surface';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SURFACE_RADIUS } from '@/constants/surface';
 import { useTheme } from '@/hooks/useTheme';
@@ -56,7 +57,13 @@ function BarLegend({
   );
 }
 
-function FlowBar({ eyebrow, total, segments, period }: FlowBarProps) {
+function FlowBar({
+  eyebrow,
+  total,
+  segments,
+  period,
+  footnote,
+}: FlowBarProps & { footnote?: string }) {
   const theme = useTheme();
   const positiveSegments = segments.filter((segment) => segment.amount > 0);
   const segmentTotal = positiveSegments.reduce((sum, segment) => sum + segment.amount, 0);
@@ -69,7 +76,14 @@ function FlowBar({ eyebrow, total, segments, period }: FlowBarProps) {
       <Text style={[styles.barTotal, { color: theme.text, fontFamily: theme.serifFamily }]}>
         {formatCurrency(total)}
       </Text>
-      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 14 }}>Total del período</Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: footnote ? 8 : 14 }}>
+        Total del período
+      </Text>
+      {footnote ? (
+        <Text style={{ color: theme.textSubtle, fontSize: 11, lineHeight: 16, marginBottom: 14 }}>
+          {footnote}
+        </Text>
+      ) : null}
 
       <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted }]}>
         {segmentTotal > 0 ? (
@@ -168,12 +182,180 @@ function ExpensePieChart({ slices }: { slices: CategorySlice[] }) {
   );
 }
 
+function PeriodBalanceCard({
+  net,
+  withCommitments,
+  pendingExpenses,
+  label,
+}: {
+  net: number;
+  withCommitments: number;
+  pendingExpenses: number;
+  label: string;
+}) {
+  const theme = useTheme();
+  const positive = net >= 0;
+
+  return (
+    <View
+      style={[
+        styles.balanceCard,
+        {
+          backgroundColor: positive ? `${theme.success}12` : `${theme.danger}12`,
+          borderColor: positive ? `${theme.success}33` : `${theme.danger}33`,
+        },
+      ]}
+    >
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>BALANCE DEL PERÍODO</Text>
+      <Text
+        style={[
+          styles.balanceValue,
+          { color: positive ? theme.success : theme.danger, fontFamily: theme.serifFamily },
+        ]}
+      >
+        {positive ? '+' : '−'}
+        {formatCurrency(Math.abs(net))}
+      </Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13 }}>{label}</Text>
+      {pendingExpenses > 0 ? (
+        <Text style={{ color: theme.textSubtle, fontSize: 11, marginTop: 6 }}>
+          Con egresos pendientes: {formatCurrency(withCommitments)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function CollectionTargetBar({
+  label,
+  expected,
+  collected,
+  percent,
+}: {
+  label: string;
+  expected: number;
+  collected: number;
+  percent: number | null;
+}) {
+  const theme = useTheme();
+  if (expected <= 0 && collected <= 0) return null;
+
+  const width = percent !== null ? Math.min(percent, 100) : collected > 0 ? 100 : 0;
+
+  return (
+    <View style={styles.flowBlock}>
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>META DE RECAUDACIÓN · {label.toUpperCase()}</Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 10 }}>
+        Cuotas con vencimiento en el período vs pagos aprobados del edificio
+      </Text>
+      <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted }]}>
+        <View
+          style={[
+            styles.barSegment,
+            {
+              width: `${width}%`,
+              backgroundColor: theme.accent,
+              borderRadius: SURFACE_RADIUS.button,
+            },
+          ]}
+        />
+      </View>
+      <View style={styles.legendRow}>
+        <BarLegend
+          color={theme.accent}
+          label="Cobrado"
+          amount={collected}
+          percent={percent ?? (expected > 0 ? 0 : 100)}
+        />
+        <BarLegend
+          color={theme.border}
+          label="Meta"
+          amount={expected}
+          percent={expected > 0 ? 100 - (percent ?? 0) : 0}
+        />
+      </View>
+    </View>
+  );
+}
+
+function BudgetExecutionBlock({
+  percentUsed,
+  totalBudget,
+  totalActual,
+  highlights,
+  period,
+}: {
+  percentUsed: number | null;
+  totalBudget: number;
+  totalActual: number;
+  highlights: { label: string; percentUsed: number; actual: number; budget: number }[];
+  period: FinancePeriod;
+}) {
+  const theme = useTheme();
+  if (totalBudget <= 0 && totalActual <= 0) {
+    return (
+      <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+        Sin presupuesto anual registrado para comparar.
+      </Text>
+    );
+  }
+
+  const pct = percentUsed ?? 0;
+  const barColor = pct > 100 ? theme.danger : pct > 85 ? theme.accent3 : theme.success;
+
+  return (
+    <View style={styles.flowBlock}>
+      <Text style={[styles.barEyebrow, { color: theme.textSubtle }]}>
+        EJECUCIÓN PRESUPUESTAL · {financePeriodLabel(period).toUpperCase()}
+      </Text>
+      <Text style={[styles.barTotal, { color: theme.text, fontFamily: theme.serifFamily, fontSize: 22 }]}>
+        {percentUsed !== null ? `${percentUsed.toFixed(0)}%` : '—'}
+      </Text>
+      <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 10 }}>
+        {formatCurrency(totalActual)} de {formatCurrency(totalBudget)} presupuestados en egresos
+      </Text>
+      <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted }]}>
+        <View
+          style={[
+            styles.barSegment,
+            {
+              width: `${Math.min(pct, 100)}%`,
+              backgroundColor: barColor,
+              borderRadius: SURFACE_RADIUS.button,
+            },
+          ]}
+        />
+      </View>
+      {highlights.length > 0 ? (
+        <View style={{ marginTop: 12, gap: 6 }}>
+          {highlights.map((row) => (
+            <Text key={row.label} style={{ color: theme.textMuted, fontSize: 12 }}>
+              {row.label}: {formatCurrency(row.actual)} / {formatCurrency(row.budget)} (
+              {row.percentUsed.toFixed(0)}%)
+            </Text>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export interface CondoTransparencySummaryProps {
   income: { cuotas: number; otros: number; total: number };
   expenses: { paid: number; pending: number; total: number };
   categorySlices: CategorySlice[];
   totalFunds: number;
   period: FinancePeriod;
+  periodBalance: { net: number; withCommitments: number; label: string };
+  collection: { expected: number; collected: number; percent: number | null };
+  showCollection: boolean;
+  collectionLabel: string;
+  budget: {
+    totalBudget: number;
+    totalActual: number;
+    percentUsed: number | null;
+    highlights: { label: string; percentUsed: number; actual: number; budget: number }[];
+  };
 }
 
 export function CondoTransparencySummary({
@@ -182,8 +364,14 @@ export function CondoTransparencySummary({
   categorySlices,
   totalFunds,
   period,
+  periodBalance,
+  collection,
+  showCollection,
+  collectionLabel,
+  budget,
 }: CondoTransparencySummaryProps) {
   const theme = useTheme();
+  const fundsNegative = totalFunds < 0;
 
   return (
     <GlassCard style={{ marginTop: 12 }}>
@@ -191,11 +379,24 @@ export function CondoTransparencySummary({
         eyebrow="INGRESOS"
         total={income.total}
         period={period}
+        footnote="Las cuotas cobradas suman pagos aprobados de tu edificio. Los demás ingresos los registra administración."
         segments={[
           { label: 'Cuotas cobradas', amount: income.cuotas, color: theme.accent },
           { label: 'Otros ingresos', amount: income.otros, color: theme.success },
         ]}
       />
+
+      {showCollection ? (
+        <>
+          <View style={[styles.divider, { borderTopColor: theme.border }]} />
+          <CollectionTargetBar
+            label={collectionLabel}
+            expected={collection.expected}
+            collected={collection.collected}
+            percent={collection.percent}
+          />
+        </>
+      ) : null}
 
       <View style={[styles.divider, { borderTopColor: theme.border }]} />
 
@@ -211,6 +412,25 @@ export function CondoTransparencySummary({
 
       <View style={[styles.divider, { borderTopColor: theme.border }]} />
 
+      <PeriodBalanceCard
+        net={periodBalance.net}
+        withCommitments={periodBalance.withCommitments}
+        pendingExpenses={expenses.pending}
+        label={periodBalance.label}
+      />
+
+      <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
+      <BudgetExecutionBlock
+        percentUsed={budget.percentUsed}
+        totalBudget={budget.totalBudget}
+        totalActual={budget.totalActual}
+        highlights={budget.highlights}
+        period={period}
+      />
+
+      <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
       <Text style={[styles.barEyebrow, { color: theme.textSubtle, marginBottom: 12 }]}>
         EGRESOS POR CATEGORÍA
       </Text>
@@ -218,8 +438,24 @@ export function CondoTransparencySummary({
 
       <View style={[styles.fundsRow, { borderTopColor: theme.border }]}>
         <Text style={{ color: theme.textMuted, fontSize: 13 }}>Fondos del condominio</Text>
-        <Text style={{ color: theme.accent2, fontSize: 16, fontWeight: '700' }}>{formatCurrency(totalFunds)}</Text>
+        <Text
+          style={{
+            color: fundsNegative ? theme.danger : theme.accent2,
+            fontSize: 16,
+            fontWeight: '700',
+          }}
+        >
+          {formatCurrency(totalFunds)}
+        </Text>
       </View>
+      {fundsNegative ? (
+        <View style={[styles.fundsWarning, surfaceAccentBanner(theme, 'danger')]}>
+          <Text style={{ color: accentColor(theme, 'danger'), fontSize: 12, lineHeight: 18 }}>
+            El saldo consolidado es negativo. La administración debe revisar ingresos, egresos y conciliación de
+            fondos.
+          </Text>
+        </View>
+      ) : null}
     </GlassCard>
   );
 }
@@ -253,4 +489,11 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  fundsWarning: { marginTop: 12 },
+  balanceCard: {
+    borderWidth: 1,
+    borderRadius: SURFACE_RADIUS.card,
+    padding: 14,
+  },
+  balanceValue: { fontSize: 26, fontWeight: '700', marginTop: 4, marginBottom: 4 },
 });

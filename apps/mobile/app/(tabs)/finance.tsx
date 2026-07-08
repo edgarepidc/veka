@@ -122,6 +122,8 @@ export default function FinanceScreen() {
             funds={finance.funds}
             visibleExpenses={finance.visibleExpenses}
             condoIncomeRows={finance.condoIncomeRows}
+            collectionFlowRows={finance.collectionFlowRows}
+            budgetLines={finance.budgetLines}
             expenseGroups={finance.expenseGroups}
           />
         )}

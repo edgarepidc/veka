@@ -10,7 +10,7 @@ import {
 import type { FeeSourceRef } from '@veka/shared';
 
 import type { ActiveMembership } from '@/hooks/useMembership';
-import { filterVisibleCondoExpenses, type CondoIncomeRow } from '@/lib/finance-stats';
+import { filterVisibleCondoExpenses, type CondoBudgetLine, type CondoCollectionFlowRow, type CondoIncomeRow } from '@/lib/finance-stats';
 import { supabase } from '@/lib/supabase';
 
 export interface FinanceCharge {
@@ -125,6 +125,8 @@ export function useFinance(primary: ActiveMembership | null) {
   const [expenses, setExpenses] = useState<CondoExpense[]>([]);
   const [incomeEntries, setIncomeEntries] = useState<CondoIncomeEntry[]>([]);
   const [paymentIncomeRows, setPaymentIncomeRows] = useState<CondoIncomeRow[]>([]);
+  const [collectionFlowRows, setCollectionFlowRows] = useState<CondoCollectionFlowRow[]>([]);
+  const [budgetLines, setBudgetLines] = useState<CondoBudgetLine[]>([]);
   const [bankAccounts, setBankAccounts] = useState<CondoBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -139,13 +141,15 @@ export function useFinance(primary: ActiveMembership | null) {
       setExpenses([]);
       setIncomeEntries([]);
       setPaymentIncomeRows([]);
+      setCollectionFlowRows([]);
+      setBudgetLines([]);
       setBankAccounts([]);
       setLoading(false);
       setError(null);
       return;
     }
 
-    const [chargesRes, paymentsRes, fundsRes, expensesRes, incomeRes, paymentIncomeRes, planRes, banksRes] =
+    const [chargesRes, paymentsRes, fundsRes, expensesRes, incomeRes, paymentIncomeRes, collectionRes, budgetRes, planRes, banksRes] =
       await Promise.all([
         supabase
           .from('charges')
@@ -183,6 +187,18 @@ export function useFinance(primary: ActiveMembership | null) {
           p_condominium_id: primary.condominium_id,
           p_since: null,
         }),
+        supabase.rpc('condo_transparency_collection_flow', {
+          p_condominium_id: primary.condominium_id,
+          p_since: null,
+        }),
+        supabase
+          .from('annual_budgets')
+          .select('fiscal_year, budget_lines(line_kind, category, annual_amount)')
+          .eq('condominium_id', primary.condominium_id)
+          .eq('fund_type', 'operating')
+          .order('fiscal_year', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
         supabase
           .from('payment_plans')
           .select(
@@ -296,13 +312,35 @@ export function useFinance(primary: ActiveMembership | null) {
     setPaymentIncomeRows(
       paymentIncomeRes.error
         ? []
-        : ((paymentIncomeRes.data as Omit<CondoIncomeRow, 'source'>[]) ?? []).map((row) => ({
+        : ((paymentIncomeRes.data as Omit<CondoIncomeRow, 'source' | 'concept'>[]) ?? []).map((row) => ({
+            concept: 'Pago de cuota',
             category: row.category,
             cluster_id: row.cluster_id,
             income_date: row.income_date,
             amount: Number(row.amount),
             source: 'payment' as const,
           })),
+    );
+    setCollectionFlowRows(
+      collectionRes.error
+        ? []
+        : ((collectionRes.data as CondoCollectionFlowRow[]) ?? []).map((row) => ({
+            cluster_id: row.cluster_id,
+            item_date: row.item_date,
+            amount: Number(row.amount),
+            item_kind: row.item_kind,
+          })),
+    );
+    const budgetRow = budgetRes.data as {
+      fiscal_year: number;
+      budget_lines: CondoBudgetLine[];
+    } | null;
+    setBudgetLines(
+      (budgetRow?.budget_lines ?? []).map((line) => ({
+        line_kind: line.line_kind,
+        category: line.category,
+        annual_amount: Number(line.annual_amount),
+      })),
     );
     setBankAccounts((banksRes.data as CondoBankAccount[]) ?? []);
     setLoading(false);
@@ -382,6 +420,8 @@ export function useFinance(primary: ActiveMembership | null) {
           entry.cluster_id === null || (myClusterId !== null && entry.cluster_id === myClusterId),
       )
       .map((entry) => ({
+        id: entry.id,
+        concept: entry.concept,
         category: entry.category,
         cluster_id: entry.cluster_id,
         income_date: entry.income_date,
@@ -419,6 +459,8 @@ export function useFinance(primary: ActiveMembership | null) {
     expenses,
     visibleExpenses,
     condoIncomeRows,
+    collectionFlowRows,
+    budgetLines,
     expenseGroups,
     bankAccounts,
     paymentTarget,

@@ -1,4 +1,4 @@
-import { chargeBalanceDue, expenseCategoryLabel } from '@veka/shared';
+import { chargeBalanceDue, expenseCategoryLabel, incomeCategoryLabel } from '@veka/shared';
 
 import type { FinanceCharge, FinancePayment, CondoExpense } from '@/hooks/useFinance';
 import type { FinancePeriod } from '@/lib/finance-period';
@@ -158,6 +158,8 @@ export function matchesCondoClusterFilter(
 }
 
 export interface CondoIncomeRow {
+  id?: string;
+  concept: string;
   category: string;
   cluster_id: string | null;
   income_date: string;
@@ -232,12 +234,140 @@ export function expenseCategoryBreakdown(
   const rows = rest > 0 ? [...top, ['otros', rest] as const] : top;
 
   return rows.map(([category, value], index) => ({
-    label: category === 'otros' && index === rows.length - 1 && sorted.length > maxSlices
-      ? 'Otros'
-      : expenseCategoryLabel(category),
+    label:
+      category === 'otros' && index === rows.length - 1 && sorted.length > maxSlices
+        ? 'Otros'
+        : expenseCategoryLabel(category),
     value,
     color: PIE_COLORS[index % PIE_COLORS.length],
     percent: (value / grandTotal) * 100,
   }));
+}
+
+export interface CondoCollectionFlowRow {
+  cluster_id: string | null;
+  item_date: string;
+  amount: number;
+  item_kind: 'charge_due' | 'payment_collected';
+}
+
+export function condoPeriodBalance(incomeTotal: number, expensesPaid: number, expensesPending: number) {
+  const net = incomeTotal - expensesPaid;
+  return {
+    net,
+    withCommitments: incomeTotal - (expensesPaid + expensesPending),
+    label: net >= 0 ? 'Superávit del período' : 'Déficit del período',
+  };
+}
+
+export function condoCollectionStats(
+  rows: CondoCollectionFlowRow[],
+  period: FinancePeriod,
+  clusterFilter: CondoClusterFilter,
+  myClusterId: string | null,
+): { expected: number; collected: number; percent: number | null } {
+  const targetClusterId =
+    clusterFilter === 'all' || clusterFilter === 'general' ? myClusterId : clusterFilter;
+
+  if (!targetClusterId) {
+    return { expected: 0, collected: 0, percent: null };
+  }
+
+  const scoped = rows.filter(
+    (row) =>
+      row.cluster_id === targetClusterId && inFinancePeriod(row.item_date, period),
+  );
+
+  const expected = scoped
+    .filter((row) => row.item_kind === 'charge_due')
+    .reduce((sum, row) => sum + row.amount, 0);
+  const collected = scoped
+    .filter((row) => row.item_kind === 'payment_collected')
+    .reduce((sum, row) => sum + row.amount, 0);
+
+  return {
+    expected,
+    collected,
+    percent: expected > 0 ? (collected / expected) * 100 : null,
+  };
+}
+
+export interface CondoBudgetLine {
+  line_kind: 'expense' | 'income';
+  category: string;
+  annual_amount: number;
+}
+
+function periodBudgetFactor(period: FinancePeriod): number {
+  if (period === '1m') return 1 / 12;
+  if (period === '3m') return 3 / 12;
+  const month = new Date().getMonth() + 1;
+  return month / 12;
+}
+
+export function condoBudgetExecution(
+  lines: CondoBudgetLine[],
+  paidExpenses: CondoExpense[],
+  period: FinancePeriod,
+): {
+  totalBudget: number;
+  totalActual: number;
+  percentUsed: number | null;
+  highlights: { label: string; percentUsed: number; actual: number; budget: number }[];
+} {
+  const factor = periodBudgetFactor(period);
+  const expenseLines = lines.filter((line) => line.line_kind === 'expense');
+  const totalBudget = expenseLines.reduce((sum, line) => sum + line.annual_amount * factor, 0);
+
+  const actualByCategory = new Map<string, number>();
+  for (const expense of paidExpenses) {
+    if (!inFinancePeriod(expense.expense_date, period)) continue;
+    if (expense.status !== 'paid') continue;
+    const key = expense.category || 'otros';
+    actualByCategory.set(key, (actualByCategory.get(key) ?? 0) + expense.amount);
+  }
+
+  const totalActual = [...actualByCategory.values()].reduce((sum, value) => sum + value, 0);
+  const highlights = expenseLines
+    .map((line) => {
+      const budget = line.annual_amount * factor;
+      const actual = actualByCategory.get(line.category) ?? 0;
+      return {
+        label: expenseCategoryLabel(line.category),
+        budget,
+        actual,
+        percentUsed: budget > 0 ? (actual / budget) * 100 : actual > 0 ? 100 : 0,
+      };
+    })
+    .filter((row) => row.budget > 0 || row.actual > 0)
+    .sort((a, b) => b.actual - a.actual)
+    .slice(0, 3);
+
+  return {
+    totalBudget,
+    totalActual,
+    percentUsed: totalBudget > 0 ? (totalActual / totalBudget) * 100 : null,
+    highlights,
+  };
+}
+
+export function condoIncomeDetailRows(
+  rows: CondoIncomeRow[],
+  period: FinancePeriod,
+  clusterFilter: CondoClusterFilter,
+  myClusterId: string | null,
+): CondoIncomeRow[] {
+  return rows
+    .filter(
+      (row) =>
+        inFinancePeriod(row.income_date, period) &&
+        matchesCondoClusterFilter(row.cluster_id, clusterFilter, myClusterId),
+    )
+    .sort((a, b) => b.income_date.localeCompare(a.income_date));
+}
+
+export function incomeRowCategoryLabel(row: CondoIncomeRow): string {
+  if (row.source === 'payment') return 'Cuota cobrada';
+  return incomeCategoryLabel(row.category);
 }
 
