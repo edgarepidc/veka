@@ -17,6 +17,7 @@ interface RecurringFeeRow {
   due_day: number;
   fund_type: string;
   status: string;
+  amount_mode?: 'fixed' | 'variable' | null;
 }
 
 export async function generateChargesForRecurringFee(
@@ -26,6 +27,7 @@ export async function generateChargesForRecurringFee(
   userId?: string | null,
 ): Promise<number> {
   if (fee.status !== 'active') return 0;
+  if ((fee.amount_mode ?? 'fixed') === 'variable') return 0;
 
   const { data: revisions } = await supabase
     .from('recurring_fee_revisions')
@@ -80,6 +82,84 @@ export async function generateChargesForRecurringFee(
   return pendingUnits.length;
 }
 
+export async function generateChargesFromPeriodAmounts(
+  supabase: SupabaseClient,
+  fee: RecurringFeeRow,
+  periodMonth: string,
+  userId?: string | null,
+): Promise<number> {
+  if (fee.status !== 'active') return 0;
+  if ((fee.amount_mode ?? 'fixed') !== 'variable') return 0;
+
+  const { data: amounts, error: amountsError } = await supabase
+    .from('recurring_fee_period_amounts')
+    .select('unit_id, amount')
+    .eq('recurring_fee_id', fee.id)
+    .eq('period_month', periodMonth)
+    .gt('amount', 0);
+
+  if (amountsError) throw new Error(amountsError.message);
+  if (!amounts?.length) return 0;
+
+  const { data: existing } = await supabase
+    .from('charges')
+    .select('id, unit_id, status, amount_paid')
+    .eq('recurring_fee_id', fee.id)
+    .eq('period_month', periodMonth);
+
+  const existingByUnit = new Map((existing ?? []).map((row) => [row.unit_id, row]));
+  const dueDate = dueDateForPeriodMonth(periodMonth, fee.due_day);
+  const concept = `${fee.concept} — ${periodLabel(periodMonth)}`;
+
+  let affected = 0;
+
+  for (const row of amounts) {
+    const amount = Number(row.amount);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    const current = existingByUnit.get(row.unit_id);
+    if (!current) {
+      const { error } = await supabase.from('charges').insert({
+        condominium_id: fee.condominium_id,
+        unit_id: row.unit_id,
+        recurring_fee_id: fee.id,
+        concept,
+        amount,
+        fund_type: fee.fund_type,
+        due_date: dueDate,
+        period_month: periodMonth,
+        status: 'pending' as const,
+        created_by: userId ?? null,
+      });
+      if (error) throw new Error(error.message);
+      affected += 1;
+      continue;
+    }
+
+    if (current.status === 'paid' || current.status === 'forgiven' || current.status === 'cancelled') {
+      continue;
+    }
+
+    const paid = Number(current.amount_paid ?? 0);
+    if (amount < paid) continue;
+
+    const { error } = await supabase
+      .from('charges')
+      .update({
+        amount,
+        concept,
+        due_date: dueDate,
+        fund_type: fee.fund_type,
+      })
+      .eq('id', current.id);
+
+    if (error) throw new Error(error.message);
+    affected += 1;
+  }
+
+  return affected;
+}
+
 export async function ensureRecurringChargesForCondo(
   supabase: SupabaseClient,
   condominiumId: string,
@@ -88,7 +168,7 @@ export async function ensureRecurringChargesForCondo(
 ): Promise<number> {
   const { data: fees, error } = await supabase
     .from('recurring_fees')
-    .select('id, condominium_id, cluster_id, scope, concept, due_day, fund_type, status')
+    .select('id, condominium_id, cluster_id, scope, concept, due_day, fund_type, status, amount_mode')
     .eq('condominium_id', condominiumId)
     .eq('status', 'active');
 

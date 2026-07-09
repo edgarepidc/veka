@@ -1,10 +1,15 @@
-import type { RecurringFeeStatus } from './constants';
+import type { RecurringFeeAmountMode, RecurringFeeStatus } from './constants';
 import { applyCoefficient } from './finance-analytics';
 
 export const RECURRING_FEE_STATUS_LABELS: Record<RecurringFeeStatus, string> = {
   active: 'Activa',
   paused: 'Pausada',
   cancelled: 'Cancelada',
+};
+
+export const RECURRING_FEE_AMOUNT_MODE_LABELS: Record<RecurringFeeAmountMode, string> = {
+  fixed: 'Monto fijo',
+  variable: 'Consumo variable',
 };
 
 export interface FeeRevision {
@@ -14,6 +19,15 @@ export interface FeeRevision {
 
 export function recurringFeeStatusLabel(status: RecurringFeeStatus): string {
   return RECURRING_FEE_STATUS_LABELS[status];
+}
+
+export function recurringFeeAmountModeLabel(mode: RecurringFeeAmountMode): string {
+  return RECURRING_FEE_AMOUNT_MODE_LABELS[mode];
+}
+
+export function defaultVariableFeeConcept(clusterName?: string): string {
+  if (clusterName) return `Gas centralizado — ${clusterName}`;
+  return 'Gas centralizado';
 }
 
 export function monthStartFromParts(year: number, month: number): string {

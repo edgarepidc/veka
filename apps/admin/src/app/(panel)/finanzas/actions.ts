@@ -1,7 +1,14 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { ExpenseKind, ExpenseStatus, FeeScope, FundType, IncomeCategory } from '@veka/shared';
+import type {
+  ExpenseKind,
+  ExpenseStatus,
+  FeeScope,
+  FundType,
+  IncomeCategory,
+  RecurringFeeAmountMode,
+} from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_KINDS,
@@ -14,6 +21,7 @@ import {
   RESERVE_EXPENSE_CATEGORIES,
   RESERVE_INCOME_BASES,
   RESERVE_INCOME_CATEGORIES,
+  RECURRING_FEE_AMOUNT_MODES,
   applyCoefficient,
   buildInstallmentSchedule,
   chargeBalanceDue,
@@ -32,6 +40,7 @@ import { ensureLateFeesForCondo } from '@/lib/late-fees';
 import { deliverChargeReminder } from '@/lib/notifications';
 import {
   ensureRecurringChargesForCondo,
+  generateChargesFromPeriodAmounts,
   recurringFeeHasChargesForPeriod,
 } from '@/lib/recurring-fees';
 import { createClient } from '@/lib/supabase/server';
@@ -82,18 +91,24 @@ export async function createRecurringFee(formData: FormData) {
   const scope = String(formData.get('scope') ?? '') as 'general' | 'cluster';
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
-  const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
-  if (typeof baseAmountResult !== 'number') return baseAmountResult;
-  const baseAmount = baseAmountResult;
+  const amountModeRaw = String(formData.get('amount_mode') ?? 'fixed') as RecurringFeeAmountMode;
+  const amountMode = RECURRING_FEE_AMOUNT_MODES.includes(amountModeRaw) ? amountModeRaw : 'fixed';
   const dueDay = Number(formData.get('due_day'));
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
 
   if (scope !== 'general' && scope !== 'cluster') return { error: 'Alcance inválido.' };
   if (!concept) return { error: 'Concepto obligatorio.' };
-  if (!baseAmount || baseAmount <= 0) return { error: 'Monto inválido.' };
   if (!dueDay || dueDay < 1 || dueDay > 28) return { error: 'Día de vencimiento inválido (1–28).' };
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
   if (scope === 'cluster' && !clusterId) return { error: 'Selecciona la torre o cluster.' };
+
+  let baseAmount = 0;
+  if (amountMode === 'fixed') {
+    const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
+    if (typeof baseAmountResult !== 'number') return baseAmountResult;
+    baseAmount = baseAmountResult;
+    if (!baseAmount || baseAmount <= 0) return { error: 'Monto inválido.' };
+  }
 
   const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
   if (typeof condoResult !== 'string') return { error: condoResult.error };
@@ -108,28 +123,147 @@ export async function createRecurringFee(formData: FormData) {
       concept,
       due_day: dueDay,
       fund_type: fundType,
+      amount_mode: amountMode,
       status: 'active',
       created_by: user.id,
     })
-    .select('id, condominium_id, cluster_id, scope, concept, due_day, fund_type, status')
+    .select('id, condominium_id, cluster_id, scope, concept, due_day, fund_type, status, amount_mode')
     .single();
 
   if (feeError || !fee) return { error: feeError?.message ?? 'No se pudo crear la cuota periódica.' };
 
   const effectiveFrom = currentPeriodMonth();
-  const { error: revisionError } = await supabase.from('recurring_fee_revisions').insert({
-    recurring_fee_id: fee.id,
-    base_amount: baseAmount,
-    effective_from: effectiveFrom,
-    created_by: user.id,
-  });
 
-  if (revisionError) return { error: revisionError.message };
+  if (amountMode === 'fixed') {
+    const { error: revisionError } = await supabase.from('recurring_fee_revisions').insert({
+      recurring_fee_id: fee.id,
+      base_amount: baseAmount,
+      effective_from: effectiveFrom,
+      created_by: user.id,
+    });
 
-  await ensureRecurringChargesForCondo(supabase, condoId, user.id, effectiveFrom);
+    if (revisionError) return { error: revisionError.message };
+
+    await ensureRecurringChargesForCondo(supabase, condoId, user.id, effectiveFrom);
+  }
 
   revalidatePath('/finanzas');
   return { success: true };
+}
+
+export async function saveVariableFeePeriodAmounts(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const feeId = String(formData.get('fee_id') ?? '').trim();
+  const periodMonth = String(formData.get('period_month') ?? '').trim() || currentPeriodMonth();
+
+  if (!feeId) return { error: 'Cuota inválida.' };
+  if (!/^\d{4}-\d{2}-01$/.test(periodMonth)) return { error: 'Periodo inválido.' };
+
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
+
+  const { data: fee, error: feeError } = await supabase
+    .from('recurring_fees')
+    .select('id, condominium_id, cluster_id, scope, concept, due_day, fund_type, status, amount_mode')
+    .eq('id', feeId)
+    .eq('condominium_id', condoId)
+    .maybeSingle();
+
+  if (feeError) return { error: feeError.message };
+  if (!fee) return { error: 'Cuota no encontrada.' };
+  if (fee.amount_mode !== 'variable') {
+    return { error: 'Esta cuota no es de consumo variable.' };
+  }
+  if (fee.status !== 'active') return { error: 'La cuota debe estar activa para capturar montos.' };
+
+  let unitsQuery = supabase
+    .from('units')
+    .select('id')
+    .eq('condominium_id', condoId);
+
+  if (fee.scope === 'cluster' && fee.cluster_id) {
+    unitsQuery = unitsQuery.eq('cluster_id', fee.cluster_id);
+  }
+
+  const { data: units, error: unitsError } = await unitsQuery;
+  if (unitsError) return { error: unitsError.message };
+
+  const unitIds = new Set((units ?? []).map((unit) => unit.id));
+  const rows: { unit_id: string; amount: number }[] = [];
+
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith('amount_')) continue;
+    const unitId = key.slice('amount_'.length);
+    if (!unitIds.has(unitId)) continue;
+
+    const raw = String(value ?? '').trim();
+    if (!raw) continue;
+
+    const amount = parseBudgetAmount(raw);
+    if (amount === null) return { error: `Monto inválido para una unidad.` };
+    if (amount < 0) return { error: 'Los montos no pueden ser negativos.' };
+    if (amount === 0) continue;
+
+    rows.push({ unit_id: unitId, amount });
+  }
+
+  if (rows.length === 0) {
+    return { error: 'Captura al menos un monto mayor a cero para emitir cargos.' };
+  }
+
+  const { error: upsertError } = await supabase.from('recurring_fee_period_amounts').upsert(
+    rows.map((row) => ({
+      recurring_fee_id: feeId,
+      unit_id: row.unit_id,
+      period_month: periodMonth,
+      amount: row.amount,
+      created_by: user.id,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: 'recurring_fee_id,unit_id,period_month' },
+  );
+
+  if (upsertError) return { error: upsertError.message };
+
+  const zeroUnitIds = [...unitIds].filter((id) => !rows.some((row) => row.unit_id === id));
+  if (zeroUnitIds.length > 0) {
+    await supabase
+      .from('recurring_fee_period_amounts')
+      .delete()
+      .eq('recurring_fee_id', feeId)
+      .eq('period_month', periodMonth)
+      .in('unit_id', zeroUnitIds);
+  }
+
+  try {
+    const generated = await generateChargesFromPeriodAmounts(
+      supabase,
+      fee as {
+        id: string;
+        condominium_id: string;
+        cluster_id: string | null;
+        scope: 'general' | 'cluster';
+        concept: string;
+        due_day: number;
+        fund_type: string;
+        status: string;
+        amount_mode?: 'fixed' | 'variable' | null;
+      },
+      periodMonth,
+      user.id,
+    );
+    revalidatePath('/finanzas');
+    return { success: true, unitCount: rows.length, generated };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'No se pudieron emitir los cargos.' };
+  }
 }
 
 export async function updateRecurringFee(formData: FormData) {
@@ -142,28 +276,44 @@ export async function updateRecurringFee(formData: FormData) {
 
   const feeId = String(formData.get('fee_id') ?? '');
   const concept = String(formData.get('concept') ?? '').trim();
-  const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
-  if (typeof baseAmountResult !== 'number') return baseAmountResult;
-  const baseAmount = baseAmountResult;
   const dueDay = Number(formData.get('due_day'));
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
   let effectiveFrom = String(formData.get('effective_from') ?? '').trim();
 
   if (!feeId) return { error: 'Cuota inválida.' };
   if (!concept) return { error: 'Concepto obligatorio.' };
-  if (!baseAmount || baseAmount <= 0) return { error: 'Monto inválido.' };
   if (!dueDay || dueDay < 1 || dueDay > 28) return { error: 'Día de vencimiento inválido (1–28).' };
   if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condoId = condoResult;
+
+  const { data: fee, error: feeLookupError } = await supabase
+    .from('recurring_fees')
+    .select('id, amount_mode')
+    .eq('id', feeId)
+    .eq('condominium_id', condoId)
+    .maybeSingle();
+
+  if (feeLookupError) return { error: feeLookupError.message };
+  if (!fee) return { error: 'Cuota no encontrada.' };
+
+  const isVariable = fee.amount_mode === 'variable';
+  let baseAmount = 0;
+
+  if (!isVariable) {
+    const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
+    if (typeof baseAmountResult !== 'number') return baseAmountResult;
+    baseAmount = baseAmountResult;
+    if (!baseAmount || baseAmount <= 0) return { error: 'Monto inválido.' };
+  }
 
   const currentPeriod = currentPeriodMonth();
   if (!effectiveFrom) {
     const hasCurrent = await recurringFeeHasChargesForPeriod(supabase, feeId, currentPeriod);
     effectiveFrom = hasCurrent ? nextPeriodMonth(currentPeriod) : currentPeriod;
   }
-
-  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
-  if (typeof condoResult !== 'string') return { error: condoResult.error };
-  const condoId = condoResult;
 
   const { error: updateError } = await supabase
     .from('recurring_fees')
@@ -173,31 +323,33 @@ export async function updateRecurringFee(formData: FormData) {
 
   if (updateError) return { error: updateError.message };
 
-  const { data: latestRevision } = await supabase
-    .from('recurring_fee_revisions')
-    .select('base_amount, effective_from')
-    .eq('recurring_fee_id', feeId)
-    .order('effective_from', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  if (!isVariable) {
+    const { data: latestRevision } = await supabase
+      .from('recurring_fee_revisions')
+      .select('base_amount, effective_from')
+      .eq('recurring_fee_id', feeId)
+      .order('effective_from', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  const amountChanged =
-    !latestRevision ||
-    Number(latestRevision.base_amount) !== baseAmount ||
-    latestRevision.effective_from !== effectiveFrom;
+    const amountChanged =
+      !latestRevision ||
+      Number(latestRevision.base_amount) !== baseAmount ||
+      latestRevision.effective_from !== effectiveFrom;
 
-  if (amountChanged) {
-    const { error: revisionError } = await supabase.from('recurring_fee_revisions').insert({
-      recurring_fee_id: feeId,
-      base_amount: baseAmount,
-      effective_from: effectiveFrom,
-      created_by: user.id,
-    });
-    if (revisionError) return { error: revisionError.message };
-  }
+    if (amountChanged) {
+      const { error: revisionError } = await supabase.from('recurring_fee_revisions').insert({
+        recurring_fee_id: feeId,
+        base_amount: baseAmount,
+        effective_from: effectiveFrom,
+        created_by: user.id,
+      });
+      if (revisionError) return { error: revisionError.message };
+    }
 
-  if (effectiveFrom <= currentPeriod) {
-    await ensureRecurringChargesForCondo(supabase, condoId, user.id, currentPeriod);
+    if (effectiveFrom <= currentPeriod) {
+      await ensureRecurringChargesForCondo(supabase, condoId, user.id, currentPeriod);
+    }
   }
 
   revalidatePath('/finanzas');

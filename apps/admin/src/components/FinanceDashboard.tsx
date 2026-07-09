@@ -152,6 +152,7 @@ interface RecurringFeeRow {
   due_day: number;
   fund_type: FundType;
   status: RecurringFeeStatus;
+  amount_mode?: 'fixed' | 'variable' | null;
   cluster: { name: string } | null;
   revisions: { base_amount: number; effective_from: string }[];
 }
@@ -489,7 +490,7 @@ export function FinanceDashboard({
       supabase
         .from('recurring_fees')
         .select(
-          'id, scope, cluster_id, concept, due_day, fund_type, status, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
+          'id, scope, cluster_id, concept, due_day, fund_type, status, amount_mode, cluster:clusters(name), revisions:recurring_fee_revisions(base_amount, effective_from)',
         )
         .eq('condominium_id', condoId)
         .order('created_at', { ascending: false }),
@@ -1131,7 +1132,11 @@ export function FinanceDashboard({
         <CuotasPanel
           condominiumId={selectedCondoId}
           clusters={clusters}
-          units={units}
+          units={units.map((unit) => ({
+            id: unit.id,
+            identifier: unit.identifier,
+            cluster_id: unit.cluster_id,
+          }))}
           recurringFees={recurringFees}
           extraordinaryCampaigns={extraordinaryCampaigns}
           charges={charges}

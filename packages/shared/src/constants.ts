@@ -98,3 +98,6 @@ export type FeeCampaignStatus = (typeof FEE_CAMPAIGN_STATUSES)[number];
 
 export const RECURRING_FEE_STATUSES = ['active', 'paused', 'cancelled'] as const;
 export type RecurringFeeStatus = (typeof RECURRING_FEE_STATUSES)[number];
+
+export const RECURRING_FEE_AMOUNT_MODES = ['fixed', 'variable'] as const;
+export type RecurringFeeAmountMode = (typeof RECURRING_FEE_AMOUNT_MODES)[number];

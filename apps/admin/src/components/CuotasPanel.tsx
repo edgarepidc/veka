@@ -1,11 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import type { ChargeStatus, FeeCampaignStatus, FundType, RecurringFeeStatus } from '@veka/shared';
+import type {
+  ChargeStatus,
+  FeeCampaignStatus,
+  FundType,
+  RecurringFeeAmountMode,
+  RecurringFeeStatus,
+} from '@veka/shared';
 import {
+  RECURRING_FEE_AMOUNT_MODES,
   cardTagClass,
   currentPeriodMonth,
   defaultFeeConcept,
+  defaultVariableFeeConcept,
   feeCampaignStatusLabel,
   feeScopeLabel,
   formatCurrency,
@@ -14,6 +22,7 @@ import {
   matchesFinanceClusterFilter,
   nextPeriodMonth,
   periodLabel,
+  recurringFeeAmountModeLabel,
   recurringFeeStatusLabel,
   resolveBaseAmount,
 } from '@veka/shared';
@@ -22,6 +31,7 @@ import {
   cancelFeeCampaign,
   createExtraordinaryFee,
   createRecurringFee,
+  saveVariableFeePeriodAmounts,
   setRecurringFeeStatus,
   updateRecurringFee,
 } from '@/app/(panel)/finanzas/actions';
@@ -29,6 +39,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
+import { createClient } from '@/lib/supabase/client';
 
 interface ClusterRow {
   id: string;
@@ -37,6 +48,7 @@ interface ClusterRow {
 
 interface UnitOption {
   id: string;
+  identifier: string;
   cluster_id: string | null;
 }
 
@@ -55,6 +67,7 @@ interface RecurringFeeRow {
   due_day: number;
   fund_type: FundType;
   status: RecurringFeeStatus;
+  amount_mode?: RecurringFeeAmountMode | null;
   cluster: { name: string } | null;
   revisions: { base_amount: number; effective_from: string }[];
 }
@@ -117,8 +130,21 @@ export function CuotasPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [capturingFeeId, setCapturingFeeId] = useState<string | null>(null);
+  const [capturePeriod, setCapturePeriod] = useState(currentPeriodMonth());
+  const [captureAmounts, setCaptureAmounts] = useState<Record<string, string>>({});
+  const [captureLoading, setCaptureLoading] = useState(false);
 
   const currentPeriod = currentPeriodMonth();
+  const capturePeriodOptions = useMemo(() => {
+    const periods = [currentPeriod, nextPeriodMonth(currentPeriod)];
+    const [y, m] = currentPeriod.split('-').map(Number);
+    const prev = new Date(y!, m! - 2, 1);
+    periods.unshift(
+      `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-01`,
+    );
+    return periods;
+  }, [currentPeriod]);
 
   const scopedUnits = useMemo(() => {
     if (!clusterFilterId) return units;
@@ -153,6 +179,7 @@ export function CuotasPanel({
   const activeClusterName = clusters.find((cluster) => cluster.id === clusterFilterId)?.name;
 
   const [periodicForm, setPeriodicForm] = useState({
+    amountMode: 'fixed' as RecurringFeeAmountMode,
     concept: defaultFeeConcept('general'),
     baseAmount: '3500',
     dueDay: '5',
@@ -169,15 +196,54 @@ export function CuotasPanel({
   useEffect(() => {
     setPeriodicForm((prev) => ({
       ...prev,
-      concept: clusterFilterId
-        ? defaultFeeConcept('cluster', activeClusterName)
-        : defaultFeeConcept('general'),
+      concept:
+        prev.amountMode === 'variable'
+          ? defaultVariableFeeConcept(activeClusterName)
+          : clusterFilterId
+            ? defaultFeeConcept('cluster', activeClusterName)
+            : defaultFeeConcept('general'),
     }));
     setExtraForm((prev) => ({
       ...prev,
       concept: defaultFeeConcept('extraordinary'),
     }));
   }, [activeClusterName, clusterFilterId]);
+
+  useEffect(() => {
+    if (!capturingFeeId) return;
+
+    let cancelled = false;
+    setCaptureLoading(true);
+
+    void (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('recurring_fee_period_amounts')
+        .select('unit_id, amount')
+        .eq('recurring_fee_id', capturingFeeId)
+        .eq('period_month', capturePeriod);
+
+      if (cancelled) return;
+
+      if (error) {
+        setMessage(error.message);
+        setCaptureAmounts({});
+        setCaptureLoading(false);
+        return;
+      }
+
+      const next: Record<string, string> = {};
+      for (const row of data ?? []) {
+        if (Number(row.amount) > 0) next[row.unit_id] = String(row.amount);
+      }
+      setCaptureAmounts(next);
+      setCaptureLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [capturePeriod, capturingFeeId]);
 
   const [editForm, setEditForm] = useState({
     concept: '',
@@ -223,13 +289,21 @@ export function CuotasPanel({
 
   function openEdit(fee: RecurringFeeRow) {
     const baseAmount = resolveBaseAmount(fee.revisions, currentPeriod);
+    setCapturingFeeId(null);
     setEditingFeeId(fee.id);
     setEditForm({
       concept: fee.concept,
-      baseAmount: String(baseAmount),
+      baseAmount: fee.amount_mode === 'variable' ? '' : String(baseAmount || ''),
       dueDay: String(fee.due_day),
       fundType: fee.fund_type,
     });
+  }
+
+  function openCapture(fee: RecurringFeeRow) {
+    setEditingFeeId(null);
+    setCapturingFeeId(fee.id);
+    setCapturePeriod(currentPeriod);
+    setCaptureAmounts({});
   }
 
   function runCreatePeriodic(formData: FormData) {
@@ -240,13 +314,38 @@ export function CuotasPanel({
         setMessage(result.error);
         return;
       }
-      setMessage('Cuota periódica registrada. Los cargos del mes se generan automáticamente.');
+      const isVariable = formData.get('amount_mode') === 'variable';
+      setMessage(
+        isVariable
+          ? 'Cuota de consumo registrada. Captura los montos del mes para emitir cargos.'
+          : 'Cuota periódica registrada. Los cargos del mes se generan automáticamente.',
+      );
       setPeriodicForm((prev) => ({
         ...prev,
-        concept: clusterFilterId
-          ? defaultFeeConcept('cluster', activeClusterName)
-          : defaultFeeConcept('general'),
+        concept:
+          prev.amountMode === 'variable'
+            ? defaultVariableFeeConcept(activeClusterName)
+            : clusterFilterId
+              ? defaultFeeConcept('cluster', activeClusterName)
+              : defaultFeeConcept('general'),
       }));
+      onReload();
+    });
+  }
+
+  function runSaveVariableCapture(formData: FormData) {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await saveVariableFeePeriodAmounts(formData);
+      if ('error' in result && result.error) {
+        setMessage(result.error);
+        return;
+      }
+      const count = 'unitCount' in result ? result.unitCount : 0;
+      setMessage(
+        `Consumo de ${periodLabel(capturePeriod)} emitido para ${count} unidad${count === 1 ? '' : 'es'}.`,
+      );
+      setCapturingFeeId(null);
       onReload();
     });
   }
@@ -315,7 +414,7 @@ export function CuotasPanel({
       </p>
       {message ? (
         <p
-          className={`text-sm ${message.includes('registrada') || message.includes('actualizada') || message.includes('emitida') || message.includes('cancelada') || message.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
+          className={`text-sm ${message.includes('registrada') || message.includes('actualizada') || message.includes('emitida') || message.includes('emitido') || message.includes('cancelada') || message.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
         >
           {message}
         </p>
@@ -325,13 +424,43 @@ export function CuotasPanel({
         <GlassCard>
           <SectionHeading help={HELP.cuotas.periodica}>Cuota periódica</SectionHeading>
           <p className="mt-1 text-sm text-muted">
-            Regístrala una vez: se repite cada mes en el día que elijas. El monto base se multiplica por el
-            coeficiente de cada unidad en <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
+            Fija: monto base × coeficiente cada mes. Variable: capturas montos distintos por unidad cada
+            periodo (gas, agua, etc.) en{' '}
+            <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
           </p>
           <form action={runCreatePeriodic} className="mt-4 space-y-3">
             <input type="hidden" name="condominium_id" value={condominiumId} />
             <input type="hidden" name="scope" value={feeScope} />
             <input type="hidden" name="cluster_id" value={clusterFilterId} />
+            <input type="hidden" name="amount_mode" value={periodicForm.amountMode} />
+
+            <div className="flex flex-wrap gap-2">
+              {RECURRING_FEE_AMOUNT_MODES.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() =>
+                    setPeriodicForm((prev) => ({
+                      ...prev,
+                      amountMode: mode,
+                      concept:
+                        mode === 'variable'
+                          ? defaultVariableFeeConcept(activeClusterName)
+                          : clusterFilterId
+                            ? defaultFeeConcept('cluster', activeClusterName)
+                            : defaultFeeConcept('general'),
+                    }))
+                  }
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                    periodicForm.amountMode === mode
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'bg-[color-mix(in_srgb,var(--border)_50%,transparent)] text-muted hover:text-[var(--text)]'
+                  }`}
+                >
+                  {recurringFeeAmountModeLabel(mode)}
+                </button>
+              ))}
+            </div>
 
             <input
               name="concept"
@@ -341,14 +470,21 @@ export function CuotasPanel({
               className="glass-input"
               placeholder="Concepto"
             />
-            <MoneyInput
-              name="base_amount"
-              required
-              value={periodicForm.baseAmount}
-              onChange={(value) => setPeriodicForm((prev) => ({ ...prev, baseAmount: value }))}
-              className="w-full"
-              placeholder="Monto base mensual (× coeficiente)"
-            />
+            {periodicForm.amountMode === 'fixed' ? (
+              <MoneyInput
+                name="base_amount"
+                required
+                value={periodicForm.baseAmount}
+                onChange={(value) => setPeriodicForm((prev) => ({ ...prev, baseAmount: value }))}
+                className="w-full"
+                placeholder="Monto base mensual (× coeficiente)"
+              />
+            ) : (
+              <p className="rounded-xl bg-[color-mix(in_srgb,var(--border)_35%,transparent)] px-3 py-2 text-xs text-subtle">
+                No pide monto fijo. Después de registrarla, usa &quot;Capturar mes&quot; para cargar el consumo
+                por unidad y emitir los cargos.
+              </p>
+            )}
             <div>
               <label className="mb-1 block text-xs text-subtle">Día de vencimiento cada mes</label>
               <select
@@ -383,8 +519,10 @@ export function CuotasPanel({
             <p className="text-xs text-subtle">
               Aplica a{' '}
               <span className="font-semibold text-[var(--text)]">{periodicUnitsCount}</span> unidad
-              {periodicUnitsCount === 1 ? '' : 'es'}. Los cargos de {periodLabel(currentPeriod)} se crean al
-              guardar.
+              {periodicUnitsCount === 1 ? '' : 'es'}
+              {periodicForm.amountMode === 'fixed'
+                ? `. Los cargos de ${periodLabel(currentPeriod)} se crean al guardar.`
+                : '. Los cargos se crean al capturar el consumo del mes.'}
             </p>
             <button
               type="submit"
@@ -399,16 +537,26 @@ export function CuotasPanel({
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Cuotas periódicas activas</h2>
           <p className="mt-1 text-sm text-muted">
-            Se renuevan automáticamente cada mes. Edita el monto para aplicarlo en periodos futuros.
+            Fijas se renuevan solas. Variables requieren captura mensual por unidad.
           </p>
           <div className="mt-4 space-y-3">
             {activeRecurring.length === 0 ? (
               <p className="text-sm text-subtle">No hay cuotas periódicas activas.</p>
             ) : (
               activeRecurring.map((fee) => {
+                const isVariable = (fee.amount_mode ?? 'fixed') === 'variable';
                 const baseAmount = resolveBaseAmount(fee.revisions, currentPeriod);
                 const stats = recurringStats.get(fee.id) ?? { paid: 0, pending: 0, overdue: 0, total: 0 };
                 const isEditing = editingFeeId === fee.id;
+                const isCapturing = capturingFeeId === fee.id;
+                const feeUnits = scopedUnits.filter((unit) =>
+                  fee.scope === 'cluster' ? unit.cluster_id === fee.cluster_id : true,
+                );
+                const captureTotal = feeUnits.reduce((sum, unit) => {
+                  const amount = Number(captureAmounts[unit.id] || 0);
+                  return sum + (Number.isFinite(amount) ? amount : 0);
+                }, 0);
+
                 return (
                   <div key={fee.id} className="glass-card-deep p-4">
                     {isEditing ? (
@@ -422,13 +570,15 @@ export function CuotasPanel({
                           onChange={(e) => setEditForm((prev) => ({ ...prev, concept: e.target.value }))}
                           className="glass-input"
                         />
-                        <MoneyInput
-                          name="base_amount"
-                          required
-                          value={editForm.baseAmount}
-                          onChange={(value) => setEditForm((prev) => ({ ...prev, baseAmount: value }))}
-                          className="w-full"
-                        />
+                        {!isVariable ? (
+                          <MoneyInput
+                            name="base_amount"
+                            required
+                            value={editForm.baseAmount}
+                            onChange={(value) => setEditForm((prev) => ({ ...prev, baseAmount: value }))}
+                            className="w-full"
+                          />
+                        ) : null}
                         <select
                           name="due_day"
                           required
@@ -457,10 +607,16 @@ export function CuotasPanel({
                             {fundTypeLabel('reserve')}
                           </option>
                         </select>
-                        <p className="text-xs text-subtle">
-                          Si ya hay cargos de {periodLabel(currentPeriod)}, el nuevo monto aplicará desde{' '}
-                          {periodLabel(nextPeriodMonth(currentPeriod))}.
-                        </p>
+                        {!isVariable ? (
+                          <p className="text-xs text-subtle">
+                            Si ya hay cargos de {periodLabel(currentPeriod)}, el nuevo monto aplicará desde{' '}
+                            {periodLabel(nextPeriodMonth(currentPeriod))}.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-subtle">
+                            Los montos mensuales se capturan con &quot;Capturar mes&quot;, no aquí.
+                          </p>
+                        )}
                         <div className="flex flex-wrap gap-2">
                           <button type="submit" disabled={pending} className="glass-btn-primary text-sm">
                             Guardar cambios
@@ -474,16 +630,91 @@ export function CuotasPanel({
                           </button>
                         </div>
                       </form>
+                    ) : isCapturing ? (
+                      <form action={runSaveVariableCapture} className="space-y-3">
+                        <input type="hidden" name="condominium_id" value={condominiumId} />
+                        <input type="hidden" name="fee_id" value={fee.id} />
+                        <input type="hidden" name="period_month" value={capturePeriod} />
+                        <div className="flex flex-wrap items-end justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-[var(--text)]">{fee.concept}</p>
+                            <p className="mt-1 text-xs text-subtle">
+                              Captura de consumo · {periodLabel(capturePeriod)}
+                            </p>
+                          </div>
+                          <label className="block text-xs">
+                            <span className="mb-1 block text-subtle">Periodo</span>
+                            <select
+                              value={capturePeriod}
+                              onChange={(e) => setCapturePeriod(e.target.value)}
+                              className="glass-input min-w-[10rem] text-sm"
+                            >
+                              {capturePeriodOptions.map((period) => (
+                                <option key={period} value={period} className="bg-slate-900">
+                                  {periodLabel(period)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {captureLoading ? (
+                          <p className="text-sm text-subtle">Cargando montos…</p>
+                        ) : (
+                          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                            {feeUnits.map((unit) => (
+                              <label
+                                key={unit.id}
+                                className="flex items-center justify-between gap-3 text-sm"
+                              >
+                                <span className="text-muted">{unit.identifier}</span>
+                                <MoneyInput
+                                  name={`amount_${unit.id}`}
+                                  value={captureAmounts[unit.id] ?? ''}
+                                  onChange={(value) =>
+                                    setCaptureAmounts((prev) => ({ ...prev, [unit.id]: value }))
+                                  }
+                                  className="w-32"
+                                  placeholder="0"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs text-subtle">
+                            Total capturado:{' '}
+                            <span className="font-semibold text-[var(--text)]">
+                              {formatCurrency(captureTotal)}
+                            </span>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="submit" disabled={pending || captureLoading} className="glass-btn-primary text-sm">
+                              {pending ? 'Emitiendo…' : 'Guardar y emitir cargos'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCapturingFeeId(null)}
+                              className="text-sm text-muted hover:underline"
+                            >
+                              Cerrar
+                            </button>
+                          </div>
+                        </div>
+                      </form>
                     ) : (
                       <>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-[var(--text)]">{fee.concept}</p>
                             <p className="mt-1 text-xs text-subtle">
+                              {recurringFeeAmountModeLabel(isVariable ? 'variable' : 'fixed')}
+                              {' · '}
                               {feeScopeLabel(fee.scope)}
                               {fee.cluster?.name ? ` · ${fee.cluster.name}` : ''}
                               {' · '}
-                              {formatCurrency(baseAmount)} base / unidad
+                              {isVariable
+                                ? 'Monto por unidad / mes'
+                                : `${formatCurrency(baseAmount)} base / unidad`}
                               {' · '}
                               Vence día {fee.due_day} de cada mes
                             </p>
@@ -499,6 +730,15 @@ export function CuotasPanel({
                           ) : null}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                          {isVariable ? (
+                            <button
+                              type="button"
+                              onClick={() => openCapture(fee)}
+                              className="text-accent hover:underline"
+                            >
+                              Capturar mes
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => openEdit(fee)}
