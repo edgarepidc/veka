@@ -9,6 +9,7 @@ import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Tag } from '@/components/ui/Tag';
 import { useTheme } from '@/hooks/useTheme';
 import { saveViewToGallery, shareViewImage } from '@/lib/save-view-image';
+import { visitAccentTone } from '@/lib/card-accent';
 import type { VisitRow } from '@/hooks/useSecurity';
 
 interface VisitQrPassProps {
@@ -84,7 +85,7 @@ export function VisitQrPass({ visit, condominiumName, unitIdentifier }: VisitQrP
         </View>
       </ViewShot>
 
-      <GlassCard style={styles.previewMeta}>
+      <GlassCard variant="accent" accent={visitAccentTone(visit)} style={styles.previewMeta}>
         <View style={styles.previewTop}>
           <Text style={[styles.previewName, { color: theme.text, fontFamily: theme.serifFamily }]}>
             {visit.visitor_name}

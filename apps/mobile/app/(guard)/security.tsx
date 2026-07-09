@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { STAFF_ROLE_LABELS, formatVisitVehicle } from '@veka/shared';
 import type { MembershipRole } from '@veka/shared';
 
-import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
+import { Avatar, ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
@@ -27,6 +27,7 @@ import { useGuardSecurity } from '@/hooks/useGuardSecurity';
 import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
+import { packageAccentTone, visitAccentTone, visitStatusLabel, visitTagTone } from '@/lib/card-accent';
 import { useAuth } from '@/providers/AuthProvider';
 
 function formatTime(iso: string): string {
@@ -36,18 +37,6 @@ function formatTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function visitStatusLabel(checkedIn: string | null, checkedOut: string | null): string {
-  if (checkedOut) return 'Salió';
-  if (checkedIn) return 'Dentro';
-  return 'Pendiente';
-}
-
-function visitStatusTone(checkedIn: string | null, checkedOut: string | null): 'green' | 'blue' | 'gray' {
-  if (checkedOut) return 'gray';
-  if (checkedIn) return 'green';
-  return 'blue';
 }
 
 export default function GuardSecurityScreen() {
@@ -224,20 +213,17 @@ export default function GuardSecurityScreen() {
 
         {tab === 'ops' ? (
           <View style={styles.section}>
-            <Text style={[styles.dayHeading, { color: theme.accent }]}>Visitas vigentes hoy</Text>
+            <SectionLabel title="Visitas vigentes hoy" />
             {visits.length === 0 ? (
-              <GlassCard>
+              <GlassCard variant="muted">
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin visitas programadas para hoy.</Text>
               </GlassCard>
             ) : (
               visits.map((visit) => (
-                <GlassCard key={visit.id} style={styles.cardGap}>
+                <GlassCard key={visit.id} variant="accent" accent={visitAccentTone(visit)} style={styles.cardGap}>
                   <View style={styles.row}>
                     <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{visit.visitor_name}</Text>
-                    <Tag
-                      label={visitStatusLabel(visit.checked_in_at, visit.checked_out_at)}
-                      tone={visitStatusTone(visit.checked_in_at, visit.checked_out_at)}
-                    />
+                    <Tag label={visitStatusLabel(visit, { activeLabel: 'Pendiente' })} tone={visitTagTone(visit)} />
                   </View>
                   <Text style={[styles.meta, { color: theme.textSubtle }]}>
                     Unidad {visit.unit?.identifier ?? '—'} · {formatTime(visit.valid_from)} –{' '}
@@ -266,14 +252,16 @@ export default function GuardSecurityScreen() {
               ))
             )}
 
-            <Text style={[styles.dayHeading, { color: theme.accent, marginTop: 20 }]}>Paquetes en caseta</Text>
+            <View style={{ marginTop: 20 }}>
+              <SectionLabel title="Paquetes en caseta" />
+            </View>
             {packages.length === 0 ? (
-              <GlassCard>
+              <GlassCard variant="muted">
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin paquetes pendientes.</Text>
               </GlassCard>
             ) : (
               packages.map((pkg) => (
-                <GlassCard key={pkg.id} style={styles.cardGap}>
+                <GlassCard key={pkg.id} variant="accent" accent={packageAccentTone('received')} style={styles.cardGap}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>
                     {pkg.carrier ?? 'Paquete'} · Unidad {pkg.unit?.identifier ?? '—'}
                   </Text>

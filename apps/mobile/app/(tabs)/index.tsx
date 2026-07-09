@@ -22,6 +22,8 @@ import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { mapChargeTone } from '@/lib/tagTone';
+import { chargeAccentTone } from '@/lib/finance-accent';
+import { packageAccentTone, reservationAccentTone } from '@/lib/card-accent';
 import { useAuth } from '@/providers/AuthProvider';
 
 export default function DashboardScreen() {
@@ -140,7 +142,7 @@ export default function DashboardScreen() {
                     <GlassCard
                       style={styles.cardGap}
                       variant="accent"
-                      accent={data.nextPayment.status === 'overdue' ? 'danger' : 'blue'}
+                      accent={chargeAccentTone(data.nextPayment.status)}
                     >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -195,7 +197,7 @@ export default function DashboardScreen() {
                     <GlassCard
                       style={styles.cardGap}
                       variant="accent"
-                      accent={data.upcomingReservation.status === 'pending' ? 'orange' : 'blue'}
+                      accent={reservationAccentTone(data.upcomingReservation.status)}
                     >
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -235,7 +237,7 @@ export default function DashboardScreen() {
                   ) : null}
 
                   {data.pendingPackage ? (
-                    <GlassCard style={styles.cardGap} variant="accent" accent="orange">
+                    <GlassCard style={styles.cardGap} variant="accent" accent={packageAccentTone('received')}>
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: theme.text }]}>Paquete en recepción</Text>
                         <Tag label="Nuevo" tone="red" />

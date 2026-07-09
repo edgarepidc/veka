@@ -35,19 +35,19 @@ import { VisitSchedulePicker } from '@/components/VisitSchedulePicker';
 import { useMembership } from '@/hooks/useMembership';
 import { type VisitRow, useSecurity } from '@/hooks/useSecurity';
 import { useTheme } from '@/hooks/useTheme';
+import {
+  packageAccentTone,
+  packageStatusLabel,
+  packageTagTone,
+  visitAccentTone,
+  visitStatusLabel,
+  visitTagTone,
+} from '@/lib/card-accent';
 
 function formatVisitRange(from: string, until: string): string {
   const startKey = formatDateKey(new Date(from));
   const endKey = formatDateKey(new Date(until));
   return formatVisitDateRangeLabel(startKey, endKey);
-}
-
-function visitStatus(visit: VisitRow): { label: string; tone: 'green' | 'blue' | 'orange' | 'gray' } {
-  if (visit.checked_out_at) return { label: 'Salió', tone: 'gray' };
-  if (visit.checked_in_at) return { label: 'Dentro', tone: 'green' };
-  const now = Date.now();
-  if (new Date(visit.valid_until).getTime() < now) return { label: 'Expirado', tone: 'orange' };
-  return { label: 'Activo', tone: 'blue' };
 }
 
 function visitTypeLabel(type: VisitRow['visit_type']): string {
@@ -197,21 +197,19 @@ export default function SecurityScreen() {
               />
               {actionError ? <Text style={{ color: theme.danger, marginBottom: 8 }}>{actionError}</Text> : null}
               {visits.length === 0 ? (
-                <GlassCard>
+                <GlassCard variant="muted">
                   <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin visitas registradas</Text>
                   <Text style={[styles.emptyText, { color: theme.textMuted }]}>
                     Pre-autoriza visitas, servicios o rentas. El guardia escanea el QR al ingreso.
                   </Text>
                 </GlassCard>
               ) : (
-                visits.map((visit) => {
-                  const status = visitStatus(visit);
-                  return (
+                visits.map((visit) => (
                     <Pressable key={visit.id} onPress={() => { setSelectedVisitId(visit.id); setTab('qr'); }}>
-                      <GlassCard style={styles.cardGap}>
+                      <GlassCard variant="accent" accent={visitAccentTone(visit)} style={styles.cardGap}>
                         <View style={styles.cardTop}>
                           <Text style={[styles.cardTitle, { color: theme.text }]}>{visit.visitor_name}</Text>
-                          <Tag label={status.label} tone={status.tone} />
+                          <Tag label={visitStatusLabel(visit)} tone={visitTagTone(visit)} />
                         </View>
                         <Text style={{ color: theme.textMuted, fontSize: 13 }}>
                           {visitTypeLabel(visit.visit_type)} · {formatVisitRange(visit.valid_from, visit.valid_until)}
@@ -230,8 +228,7 @@ export default function SecurityScreen() {
                         ) : null}
                       </GlassCard>
                     </Pressable>
-                  );
-                })
+                  ))
               )}
             </>
           ) : null}
@@ -244,7 +241,7 @@ export default function SecurityScreen() {
                 unitIdentifier={primary.unit?.identifier ?? '—'}
               />
             ) : (
-              <GlassCard>
+              <GlassCard variant="muted">
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin QR activo</Text>
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>
                   Registra una visita para generar un código de acceso.
@@ -255,25 +252,20 @@ export default function SecurityScreen() {
 
           {tab === 'paquetes' ? (
             packages.length === 0 ? (
-              <GlassCard>
+              <GlassCard variant="muted">
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin paquetes</Text>
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>
                   Cuando recepción registre un paquete para tu unidad, aparecerá aquí.
                 </Text>
               </GlassCard>
             ) : (
-              packages.map((pkg) => {
-                const tone =
-                  pkg.status === 'received' ? 'orange' : pkg.status === 'delivered' ? 'green' : 'gray';
-                const label =
-                  pkg.status === 'received' ? 'En caseta' : pkg.status === 'delivered' ? 'Entregado' : 'Devuelto';
-                return (
-                  <GlassCard key={pkg.id} style={styles.cardGap}>
+              packages.map((pkg) => (
+                  <GlassCard key={pkg.id} variant="accent" accent={packageAccentTone(pkg.status)} style={styles.cardGap}>
                     <View style={styles.cardTop}>
                       <Text style={[styles.cardTitle, { color: theme.text }]}>
                         {pkg.carrier ?? 'Paquete'}
                       </Text>
-                      <Tag label={label} tone={tone} />
+                      <Tag label={packageStatusLabel(pkg.status)} tone={packageTagTone(pkg.status)} />
                     </View>
                     {pkg.tracking_number ? (
                       <Text style={{ color: theme.textMuted, fontSize: 13 }}>Guía: {pkg.tracking_number}</Text>
@@ -285,8 +277,7 @@ export default function SecurityScreen() {
                       )}
                     </Text>
                   </GlassCard>
-                );
-              })
+                ))
             )
           ) : null}
         </View>

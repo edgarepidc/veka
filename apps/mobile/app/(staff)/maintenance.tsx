@@ -38,6 +38,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { pickImagesFromLibrary } from '@/lib/pick-image';
 import { useAuth } from '@/providers/AuthProvider';
+import { routineCardVariant } from '@/lib/card-accent';
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -237,7 +238,7 @@ export default function StaffMaintenanceScreen() {
         </View>
 
         {routines.length === 0 ? (
-          <GlassCard style={styles.mt}>
+          <GlassCard variant="muted" style={styles.mt}>
             <Text style={{ color: theme.textMuted, fontSize: 14 }}>
               Sin actividades todavía. Usa «Nuevo a demanda» para registrar un trabajo fuera del calendario.
             </Text>
@@ -251,7 +252,12 @@ export default function StaffMaintenanceScreen() {
                   const evidenceGroups = groupEvidenceByDate(routine.evidence, periodFilter);
                   const editable = canEditRoutine(routine.created_by);
                   return (
-                    <GlassCard key={routine.id} style={styles.routineCard}>
+                    <GlassCard
+                      key={routine.id}
+                      style={styles.routineCard}
+                      variant={routineCardVariant(evidenceGroups.length > 0)}
+                      accent="green"
+                    >
                       <View style={styles.row}>
                         <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{routine.title}</Text>
                         <Tag label={recurrenceLabel(routine.recurrence)} tone="blue" />

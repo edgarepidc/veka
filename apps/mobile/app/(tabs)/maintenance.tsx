@@ -36,14 +36,8 @@ import { Tag } from '@/components/ui/Tag';
 import { useMaintenance } from '@/hooks/useMaintenance';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
+import { ticketAccentTone, ticketTagTone, routineCardVariant } from '@/lib/card-accent';
 import { pickImageFromLibrary } from '@/lib/pick-image';
-
-function statusTone(status: string): 'green' | 'blue' | 'orange' | 'gray' {
-  if (status === 'resolved' || status === 'closed') return 'green';
-  if (status === 'in_progress') return 'blue';
-  if (status === 'open') return 'orange';
-  return 'gray';
-}
 
 export default function MaintenanceScreen() {
   const theme = useTheme();
@@ -194,7 +188,7 @@ export default function MaintenanceScreen() {
               style={styles.createAction}
             />
             {tickets.length === 0 ? (
-              <GlassCard style={styles.mt}>
+              <GlassCard variant="muted" style={styles.mt}>
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>No tienes tickets todavía.</Text>
               </GlassCard>
             ) : (
@@ -207,6 +201,8 @@ export default function MaintenanceScreen() {
                   collapsable={false}
                 >
                 <GlassCard
+                  variant="accent"
+                  accent={ticketAccentTone(ticket.status)}
                   style={[
                     styles.mt,
                     highlightTicketId === ticket.id
@@ -216,7 +212,7 @@ export default function MaintenanceScreen() {
                 >
                   <View style={styles.row}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{ticket.title}</Text>
-                    <Tag label={ticketStatusLabel(ticket.status)} tone={statusTone(ticket.status)} />
+                    <Tag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
                   </View>
                   <Text style={[styles.meta, { color: theme.textSubtle }]}>
                     {ticketCategoryLabel(ticket.category)} · {new Date(ticket.created_at).toLocaleDateString('es-MX')}
@@ -252,7 +248,7 @@ export default function MaintenanceScreen() {
               onChange={(key) => setPeriodFilter(key as MaintenancePeriodFilter)}
             />
             {routines.length === 0 ? (
-              <GlassCard style={styles.mt}>
+              <GlassCard variant="muted" style={styles.mt}>
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>
                   Sin actividades programadas. El administrador publicará el programa mensual aquí.
                 </Text>
@@ -265,7 +261,12 @@ export default function MaintenanceScreen() {
                     {group.items.map((routine) => {
                       const evidenceGroups = groupEvidenceByDate(routine.evidence, periodFilter);
                       return (
-                        <GlassCard key={routine.id} style={styles.routineCard}>
+                        <GlassCard
+                          key={routine.id}
+                          style={styles.routineCard}
+                          variant={routineCardVariant(evidenceGroups.length > 0)}
+                          accent="green"
+                        >
                           <View style={styles.row}>
                             <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{routine.title}</Text>
                             <Tag label={recurrenceLabel(routine.recurrence)} tone="blue" />

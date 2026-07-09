@@ -27,6 +27,7 @@ import { useAmenityAvailability } from '@/hooks/useAmenityAvailability';
 import { type Amenity, type Reservation, useSpaces } from '@/hooks/useSpaces';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
+import { reservationAccentTone, reservationTagTone } from '@/lib/card-accent';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
@@ -55,12 +56,6 @@ function amenityEmoji(name: string): string {
     if (lower.includes(key)) return emoji;
   }
   return '🏢';
-}
-
-function reservationTone(status: Reservation['status']): 'green' | 'orange' | 'gray' {
-  if (status === 'pending') return 'orange';
-  if (status === 'confirmed') return 'green';
-  return 'gray';
 }
 
 type ReservationsView = 'list' | 'calendar';
@@ -316,7 +311,7 @@ export default function SpacesScreen() {
 
           <View style={styles.section}>
             {reservations.length === 0 ? (
-              <GlassCard>
+              <GlassCard variant="muted">
                 <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
               </GlassCard>
             ) : reservationsView === 'calendar' ? (
@@ -341,7 +336,7 @@ export default function SpacesScreen() {
                       style={styles.cardGap}
                       noPadding
                       variant="accent"
-                      accent={reservation.status === 'pending' ? 'orange' : 'blue'}
+                      accent={reservationAccentTone(reservation.status)}
                     >
                       <View style={styles.reservationRow}>
                       {imageUri ? (
@@ -358,7 +353,7 @@ export default function SpacesScreen() {
                           </Text>
                           <Tag
                             label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
-                            tone={reservationTone(reservation.status)}
+                            tone={reservationTagTone(reservation.status)}
                           />
                         </View>
                         <Text style={{ color: theme.textMuted, fontSize: 13 }}>
