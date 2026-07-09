@@ -1,4 +1,5 @@
 import type { ExpenseCategory, FundType, IncomeCategory } from './constants';
+import { parseAmountInput } from './money-input';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from './constants';
 import {
   inFinancePeriod,
@@ -244,12 +245,19 @@ export function buildBudgetSummary({
   };
 }
 
+export function findAnnualBudget<
+  T extends { fiscal_year: number; fund_type: FundType; cluster_id?: string | null },
+>(budgets: T[], fiscalYear: number, fundType: FundType, clusterId = ''): T | undefined {
+  return budgets.find(
+    (budget) =>
+      budget.fiscal_year === fiscalYear &&
+      budget.fund_type === fundType &&
+      (clusterId ? budget.cluster_id === clusterId : !budget.cluster_id),
+  );
+}
+
 export function parseBudgetAmount(value: string): number | null {
-  const normalized = value.trim().replace(/,/g, '');
-  if (!normalized) return 0;
-  const amount = Number(normalized);
-  if (!Number.isFinite(amount) || amount < 0) return null;
-  return roundMoney(amount);
+  return parseAmountInput(value);
 }
 
 export function isValidBudgetCategory(kind: BudgetLineKind, category: string): boolean {

@@ -16,6 +16,7 @@ import {
 } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { createClient } from '@/lib/supabase/client';
 
 type PaymentMode = 'transfer' | 'online';
@@ -392,14 +393,10 @@ export function ResidentAccountPanel({
           <div className="mt-4 space-y-3">
             <label className="block text-sm">
               <span className="mb-1 block text-subtle">Monto a pagar (abono parcial permitido)</span>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                max={groupMax}
+              <MoneyInput
                 value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
-                className="glass-input w-full"
+                onChange={setPayAmount}
+                className="w-full"
               />
             </label>
             <p className="text-xs text-subtle">

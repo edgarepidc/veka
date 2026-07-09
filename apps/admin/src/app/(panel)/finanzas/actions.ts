@@ -28,6 +28,12 @@ import {
   recurringFeeHasChargesForPeriod,
 } from '@/lib/recurring-fees';
 import { createClient } from '@/lib/supabase/server';
+
+function readMoneyAmount(formData: FormData, key: string, label: string): number | { error: string } {
+  const amount = parseBudgetAmount(String(formData.get(key) ?? ''));
+  if (amount === null) return { error: `${label} inválido.` };
+  return amount;
+}
 import { assertAdminAction } from '@/lib/require-admin';
 
 async function resolveCondoId(value?: string | null): Promise<string | { error: string }> {
@@ -69,7 +75,9 @@ export async function createRecurringFee(formData: FormData) {
   const scope = String(formData.get('scope') ?? '') as 'general' | 'cluster';
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
-  const baseAmount = Number(formData.get('base_amount'));
+  const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
+  if (typeof baseAmountResult !== 'number') return baseAmountResult;
+  const baseAmount = baseAmountResult;
   const dueDay = Number(formData.get('due_day'));
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
 
@@ -127,7 +135,9 @@ export async function updateRecurringFee(formData: FormData) {
 
   const feeId = String(formData.get('fee_id') ?? '');
   const concept = String(formData.get('concept') ?? '').trim();
-  const baseAmount = Number(formData.get('base_amount'));
+  const baseAmountResult = readMoneyAmount(formData, 'base_amount', 'Monto');
+  if (typeof baseAmountResult !== 'number') return baseAmountResult;
+  const baseAmount = baseAmountResult;
   const dueDay = Number(formData.get('due_day'));
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
   let effectiveFrom = String(formData.get('effective_from') ?? '').trim();
@@ -234,7 +244,9 @@ export async function createExtraordinaryFee(formData: FormData) {
 
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
-  const amount = Number(formData.get('amount'));
+  const amountResult = readMoneyAmount(formData, 'amount', 'Monto');
+  if (typeof amountResult !== 'number') return amountResult;
+  const amount = amountResult;
   const dueDate = String(formData.get('due_date') ?? '');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
 
@@ -350,7 +362,9 @@ export async function createIncome(formData: FormData) {
   const condominiumId = condoResult;
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
-  const amount = Number(formData.get('amount'));
+  const amountResult = readMoneyAmount(formData, 'amount', 'Monto');
+  if (typeof amountResult !== 'number') return amountResult;
+  const amount = amountResult;
   const category = String(formData.get('category') ?? 'otros');
   const incomeDate = String(formData.get('income_date') ?? '');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
@@ -395,7 +409,9 @@ export async function createExpense(formData: FormData) {
   const condominiumId = condoResult;
   const clusterId = String(formData.get('cluster_id') ?? '').trim();
   const concept = String(formData.get('concept') ?? '').trim();
-  const amount = Number(formData.get('amount'));
+  const amountResult = readMoneyAmount(formData, 'amount', 'Monto');
+  if (typeof amountResult !== 'number') return amountResult;
+  const amount = amountResult;
   const category = String(formData.get('category') ?? '');
   const expenseDate = String(formData.get('expense_date') ?? '');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
@@ -477,6 +493,21 @@ export async function saveAnnualBudget(formData: FormData) {
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
 
+  const clusterIdRaw = String(formData.get('cluster_id') ?? '').trim();
+  const clusterId = clusterIdRaw || null;
+
+  if (clusterId) {
+    const { data: cluster, error: clusterError } = await supabase
+      .from('clusters')
+      .select('id')
+      .eq('id', clusterId)
+      .eq('condominium_id', condominiumId)
+      .maybeSingle();
+
+    if (clusterError) return { error: clusterError.message };
+    if (!cluster) return { error: 'Torre / cluster inválido.' };
+  }
+
   const lines: { line_kind: 'expense' | 'income'; category: string; annual_amount: number }[] = [];
 
   for (const category of EXPENSE_CATEGORIES) {
@@ -493,33 +524,58 @@ export async function saveAnnualBudget(formData: FormData) {
     if (amount > 0) lines.push({ line_kind: 'income', category, annual_amount: amount });
   }
 
-  const { data: budget, error: budgetError } = await supabase
+  let budgetQuery = supabase
     .from('annual_budgets')
-    .upsert(
-      {
+    .select('id')
+    .eq('condominium_id', condominiumId)
+    .eq('fiscal_year', fiscalYear)
+    .eq('fund_type', fundType);
+
+  budgetQuery = clusterId ? budgetQuery.eq('cluster_id', clusterId) : budgetQuery.is('cluster_id', null);
+
+  const { data: existingBudget, error: existingBudgetError } = await budgetQuery.maybeSingle();
+  if (existingBudgetError) return { error: existingBudgetError.message };
+
+  let budgetId = existingBudget?.id;
+
+  if (budgetId) {
+    const { error: updateError } = await supabase
+      .from('annual_budgets')
+      .update({
+        notes: notes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', budgetId);
+
+    if (updateError) return { error: updateError.message };
+  } else {
+    const { data: createdBudget, error: createError } = await supabase
+      .from('annual_budgets')
+      .insert({
         condominium_id: condominiumId,
         fiscal_year: fiscalYear,
         fund_type: fundType,
+        cluster_id: clusterId,
         notes: notes || null,
         created_by: user.id,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'condominium_id,fiscal_year,fund_type' },
-    )
-    .select('id')
-    .single();
+      })
+      .select('id')
+      .single();
 
-  if (budgetError || !budget) {
-    return { error: budgetError?.message ?? 'No se pudo guardar el presupuesto.' };
+    if (createError || !createdBudget) {
+      return { error: createError?.message ?? 'No se pudo guardar el presupuesto.' };
+    }
+
+    budgetId = createdBudget.id;
   }
 
-  const { error: deleteError } = await supabase.from('budget_lines').delete().eq('budget_id', budget.id);
+  const { error: deleteError } = await supabase.from('budget_lines').delete().eq('budget_id', budgetId);
   if (deleteError) return { error: deleteError.message };
 
   if (lines.length > 0) {
     const { error: linesError } = await supabase.from('budget_lines').insert(
       lines.map((line) => ({
-        budget_id: budget.id,
+        budget_id: budgetId,
         line_kind: line.line_kind,
         category: line.category,
         annual_amount: line.annual_amount,
@@ -543,7 +599,14 @@ export async function saveLateFeeSettings(formData: FormData) {
   const enabled = formData.get('enabled') === 'on' || formData.get('enabled') === 'true';
   const graceDays = Number(formData.get('grace_days'));
   const feeType = String(formData.get('fee_type') ?? 'fixed');
-  const feeValue = Number(formData.get('fee_value'));
+  const feeValueRaw = String(formData.get('fee_value') ?? '');
+  const feeValue =
+    feeType === 'fixed'
+      ? (() => {
+          const parsed = parseBudgetAmount(feeValueRaw);
+          return parsed === null ? NaN : parsed;
+        })()
+      : Number(feeValueRaw);
   const applyMode = String(formData.get('apply_mode') ?? 'once');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
   const notes = String(formData.get('notes') ?? '').trim();

@@ -19,6 +19,7 @@ import {
   seedDefaultAccountingMaps,
 } from '@/app/(panel)/finanzas/fiscal-actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 
@@ -148,13 +149,10 @@ export function FinanceCompliancePanel({
         </label>
         <label className="mt-3 block text-sm">
           <span className="mb-1 block text-subtle">Umbral (MXN)</span>
-          <input
-            type="number"
-            min={0}
-            step="100"
+          <MoneyInput
             value={dualThreshold}
-            onChange={(e) => setDualThreshold(e.target.value)}
-            className="glass-input w-40"
+            onChange={setDualThreshold}
+            className="w-40"
           />
         </label>
         <div className="mt-4 flex justify-end">

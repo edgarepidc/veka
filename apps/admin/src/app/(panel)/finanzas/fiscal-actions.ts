@@ -7,6 +7,7 @@ import {
   DEFAULT_INCOME_ACCOUNT_MAPS,
   isCfdiBillingEnabled,
   parseApprovalSettings,
+  parseBudgetAmount,
 } from '@veka/shared';
 
 import { issueCfdiForPaymentManual } from '@/lib/cfdi';
@@ -27,7 +28,9 @@ export async function saveApprovalSettings(formData: FormData) {
 
   const condominiumId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
   const dualEnabled = formData.get('payments_dual_enabled') === 'true';
-  const threshold = Number(formData.get('payments_dual_threshold') ?? DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold);
+  const thresholdRaw = String(formData.get('payments_dual_threshold') ?? DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold);
+  const thresholdParsed = parseBudgetAmount(thresholdRaw);
+  const threshold = thresholdParsed === null ? DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold : thresholdParsed;
 
   const { data: condo } = await supabase
     .from('condominiums')

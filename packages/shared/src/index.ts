@@ -5,6 +5,7 @@ export * from './bank-import';
 export * from './payment-plans';
 export * from './payments';
 export * from './budget';
+export * from './money-input';
 export * from './constants';
 export * from './fees';
 export * from './finance';

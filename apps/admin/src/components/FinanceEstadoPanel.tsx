@@ -4,13 +4,13 @@ import { useMemo, useState, useTransition } from 'react';
 import type { CardAccentTone, ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
 import {
   EXPENSE_CHART_COLORS,
-  budgetProrateRatio,
   buildBudgetSummary,
   cashFlowBars,
   collectionRateByCluster,
   dateInMonth,
   delinquencyAgingBars,
   expenseCategoryLabel,
+  findAnnualBudget,
   formatCurrency,
   formatExportDate,
   formatPercentChange,
@@ -23,6 +23,7 @@ import {
   parseYearMonth,
   paymentPeriodDate,
   percentChange,
+  parseAmountInput,
   type FinancialReportExport,
 } from '@veka/shared';
 
@@ -36,6 +37,7 @@ import {
   TrendBarChart,
 } from '@/components/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import {
   downloadFinancialReportCsv,
   exportFinancialReportPdf,
@@ -101,6 +103,7 @@ interface BudgetLineRow {
 interface AnnualBudgetRow {
   fiscal_year: number;
   fund_type: FundType;
+  cluster_id?: string | null;
   lines: BudgetLineRow[];
 }
 
@@ -307,10 +310,20 @@ export function FinanceEstadoPanel({
     };
   }, [clusterId, clusters, month, periodMode, scopeCharges, scopeExpenses, scopeIncomeEntries, scopePayments, year]);
 
-  const scoped = Boolean(clusterId);
-  const prorate = budgetProrateRatio(clusterUnitCount, totalUnitCount, scoped);
-  const operatingBudget = budgets.find((budget) => budget.fiscal_year === year && budget.fund_type === 'operating');
-  const reserveBudget = budgets.find((budget) => budget.fiscal_year === year && budget.fund_type === 'reserve');
+  const budgetScopeExpenses = useMemo(
+    () => (clusterId ? expenses.filter((expense) => expense.cluster_id === clusterId) : expenses),
+    [clusterId, expenses],
+  );
+  const budgetScopeIncomeEntries = useMemo(
+    () => (clusterId ? incomeEntries.filter((income) => income.cluster_id === clusterId) : incomeEntries),
+    [clusterId, incomeEntries],
+  );
+  const budgetScopePayments = useMemo(
+    () => (clusterId ? payments.filter((payment) => payment.unit?.cluster_id === clusterId) : payments),
+    [clusterId, payments],
+  );
+  const operatingBudget = findAnnualBudget(budgets, year, 'operating', clusterId);
+  const reserveBudget = findAnnualBudget(budgets, year, 'reserve', clusterId);
   const budgetSummary = useMemo(
     () =>
       buildBudgetSummary({
@@ -319,21 +332,17 @@ export function FinanceEstadoPanel({
         month,
         fundType: 'operating',
         budgetLines: operatingBudget?.lines ?? [],
-        expenses: scopeExpenses,
-        incomeEntries: scopeIncomeEntries,
-        payments: scopePayments,
-        prorateRatio: prorate,
-        scoped,
+        expenses: budgetScopeExpenses,
+        incomeEntries: budgetScopeIncomeEntries,
+        payments: budgetScopePayments,
       }),
     [
+      budgetScopeExpenses,
+      budgetScopeIncomeEntries,
+      budgetScopePayments,
       month,
       operatingBudget?.lines,
       periodMode,
-      prorate,
-      scopeExpenses,
-      scopeIncomeEntries,
-      scopePayments,
-      scoped,
       year,
     ],
   );
@@ -346,21 +355,17 @@ export function FinanceEstadoPanel({
         month,
         fundType: 'reserve',
         budgetLines: reserveBudget?.lines ?? [],
-        expenses: scopeExpenses,
-        incomeEntries: scopeIncomeEntries,
-        payments: scopePayments,
-        prorateRatio: prorate,
-        scoped,
+        expenses: budgetScopeExpenses,
+        incomeEntries: budgetScopeIncomeEntries,
+        payments: budgetScopePayments,
       }),
     [
+      budgetScopeExpenses,
+      budgetScopeIncomeEntries,
+      budgetScopePayments,
       month,
       periodMode,
-      prorate,
       reserveBudget?.lines,
-      scopeExpenses,
-      scopeIncomeEntries,
-      scopePayments,
-      scoped,
       year,
     ],
   );
@@ -814,8 +819,8 @@ function FundBalanceCard({
   const [pending, startTransition] = useTransition();
 
   function handleSave() {
-    const amount = Number(openingInput.replace(/,/g, ''));
-    if (!Number.isFinite(amount)) {
+    const amount = parseAmountInput(openingInput);
+    if (amount === null) {
       setMessage('Monto inválido.');
       return;
     }
@@ -842,12 +847,10 @@ function FundBalanceCard({
       </p>
       {editing ? (
         <div className="mt-3 space-y-2">
-          <input
-            type="number"
-            step="0.01"
+          <MoneyInput
             value={openingInput}
-            onChange={(e) => setOpeningInput(e.target.value)}
-            className="glass-input text-sm"
+            onChange={setOpeningInput}
+            className="w-full text-sm"
             placeholder="Saldo inicial"
           />
           <div className="flex flex-wrap gap-2">

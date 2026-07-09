@@ -16,6 +16,7 @@ import {
   fundTypeLabel,
   lateFeeApplyModeLabel,
   lateFeeTypeLabel,
+  parseAmountInput,
   type LateFeeApplyMode,
   type LateFeeSettings,
   type LateFeeType,
@@ -30,6 +31,7 @@ import {
   sendPaymentReminder,
 } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { HelpHint } from '@/components/ui/HelpHint';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { StatusTag } from '@/components/ui/StatusTag';
@@ -136,7 +138,8 @@ export function MorosidadPanel({
       enabled,
       grace_days: Number(graceDays) || 0,
       fee_type: feeType,
-      fee_value: Number(feeValue) || 0,
+      fee_value:
+        feeType === 'fixed' ? (parseAmountInput(feeValue) ?? 0) : Number(feeValue) || 0,
       apply_mode: applyMode,
       fund_type: fundType,
       notes,
@@ -313,16 +316,26 @@ export function MorosidadPanel({
               <span className="mb-1 block text-subtle">
                 {feeType === 'fixed' ? 'Monto fijo (MXN)' : 'Porcentaje (%)'}
               </span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={feeValue}
-                onChange={(event) => setFeeValue(event.target.value)}
-                disabled={!enabled}
-                className="glass-input w-full"
-                placeholder={feeType === 'fixed' ? '500' : '5'}
-              />
+              {feeType === 'fixed' ? (
+                <MoneyInput
+                  value={feeValue}
+                  onChange={setFeeValue}
+                  disabled={!enabled}
+                  className="w-full"
+                  placeholder="500"
+                />
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={feeValue}
+                  onChange={(event) => setFeeValue(event.target.value)}
+                  disabled={!enabled}
+                  className="glass-input w-full"
+                  placeholder="5"
+                />
+              )}
             </label>
             <label className="block text-sm">
               <span className="mb-1 block text-subtle">Frecuencia</span>

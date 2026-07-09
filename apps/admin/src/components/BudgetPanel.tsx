@@ -6,9 +6,9 @@ import {
   EXPENSE_CATEGORIES,
   FUND_TYPES,
   INCOME_CATEGORIES,
-  budgetProrateRatio,
   buildBudgetSummary,
   expenseCategoryLabel,
+  findAnnualBudget,
   formatCurrency,
   fundTypeLabel,
   incomeCategoryLabel,
@@ -16,6 +16,7 @@ import {
 
 import { saveAnnualBudget } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 
@@ -30,6 +31,7 @@ interface AnnualBudgetRow {
   id: string;
   fiscal_year: number;
   fund_type: FundType;
+  cluster_id?: string | null;
   notes: string | null;
   lines: BudgetLineRow[];
 }
@@ -71,12 +73,61 @@ interface PaymentForBudgetPanel {
   } | null;
 }
 
+function BudgetExecutionBar({
+  label,
+  actual,
+  budget,
+  percent,
+  tone,
+}: {
+  label: string;
+  actual: number;
+  budget: number;
+  percent: number | null;
+  tone: 'expense' | 'income';
+}) {
+  const used = percent ?? (budget > 0 ? Math.round((actual / budget) * 100) : 0);
+  const width = Math.min(Math.max(used, 0), 100);
+  const over = used > 100;
+  const barColor =
+    tone === 'expense'
+      ? over
+        ? 'bg-red-500'
+        : 'bg-[var(--accent)]'
+      : over
+        ? 'bg-[var(--accent-3)]'
+        : 'bg-[var(--accent)]';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</p>
+          <p className="mt-1 text-sm font-semibold text-[var(--text)]">
+            {formatCurrency(actual)}{' '}
+            <span className="font-normal text-muted">/ {formatCurrency(budget)}</span>
+          </p>
+        </div>
+        <p
+          className={`text-lg font-bold tabular-nums ${over ? (tone === 'expense' ? 'text-red-500' : 'text-[var(--accent-3)]') : 'text-accent'}`}
+        >
+          {budget > 0 ? `${used}%` : '—'}
+        </p>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--border)_70%,transparent)]">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: budget > 0 ? `${width}%` : '0%' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function BudgetPanel({
   condominiumId,
   budgets,
   clusterFilterId,
-  clusterUnitCount,
-  totalUnitCount,
   scopeLabel,
   expenses,
   incomeEntries,
@@ -86,8 +137,6 @@ export function BudgetPanel({
   condominiumId: string;
   budgets: AnnualBudgetRow[];
   clusterFilterId: string;
-  clusterUnitCount: number;
-  totalUnitCount: number;
   scopeLabel: string;
   expenses: ExpenseForBudgetPanel[];
   incomeEntries: IncomeForBudgetPanel[];
@@ -113,17 +162,15 @@ export function BudgetPanel({
 
   const existing = useMemo(
     () =>
-      budgets.find(
-        (budget) => budget.fiscal_year === Number(fiscalYear) && budget.fund_type === fundType,
-      ),
-    [budgets, fiscalYear, fundType],
+      findAnnualBudget(budgets, Number(fiscalYear), fundType, clusterFilterId),
+    [budgets, clusterFilterId, fiscalYear, fundType],
   );
 
   useEffect(() => {
     const nextExpenses = emptyAmounts(EXPENSE_CATEGORIES);
     const nextIncome = emptyAmounts(INCOME_CATEGORIES);
     for (const line of existing?.lines ?? []) {
-      const value = String(line.annual_amount);
+      const value = line.annual_amount > 0 ? String(line.annual_amount) : '';
       if (line.line_kind === 'expense') nextExpenses[line.category] = value;
       if (line.line_kind === 'income') nextIncome[line.category] = value;
     }
@@ -150,18 +197,17 @@ export function BudgetPanel({
     [incomeAmounts],
   );
 
-  const scoped = Boolean(clusterFilterId);
-  const prorate = budgetProrateRatio(clusterUnitCount, totalUnitCount, scoped);
   const budgetSummary = useMemo(() => {
-    const scopedExpenses = expenses.filter((row) =>
-      !clusterFilterId || row.cluster_id === clusterFilterId || row.cluster_id == null,
-    );
-    const scopedIncome = incomeEntries.filter((row) =>
-      !clusterFilterId || row.cluster_id === clusterFilterId || row.cluster_id == null,
-    );
-    const scopedPayments = payments.filter((row) =>
-      !clusterFilterId || row.unit?.cluster_id === clusterFilterId,
-    );
+    const scopedExpenses = clusterFilterId
+      ? expenses.filter((row) => row.cluster_id === clusterFilterId)
+      : expenses;
+    const scopedIncome = clusterFilterId
+      ? incomeEntries.filter((row) => row.cluster_id === clusterFilterId)
+      : incomeEntries;
+    const scopedPayments = clusterFilterId
+      ? payments.filter((row) => row.unit?.cluster_id === clusterFilterId)
+      : payments;
+
     return buildBudgetSummary({
       fiscalYear: Number(fiscalYear),
       periodMode: 'year',
@@ -171,8 +217,6 @@ export function BudgetPanel({
       expenses: scopedExpenses,
       incomeEntries: scopedIncome,
       payments: scopedPayments,
-      prorateRatio: prorate,
-      scoped,
     });
   }, [
     clusterFilterId,
@@ -182,8 +226,6 @@ export function BudgetPanel({
     fundType,
     incomeEntries,
     payments,
-    prorate,
-    scoped,
   ]);
 
   function handleSave() {
@@ -192,6 +234,7 @@ export function BudgetPanel({
     formData.set('fiscal_year', fiscalYear);
     formData.set('condominium_id', condominiumId);
     formData.set('fund_type', fundType);
+    formData.set('cluster_id', clusterFilterId);
     formData.set('notes', notes);
     for (const category of EXPENSE_CATEGORIES) {
       formData.set(`expense_${category}`, expenseAmounts[category] ?? '');
@@ -212,30 +255,31 @@ export function BudgetPanel({
   }
 
   return (
-    <div className="space-y-6">
-      {clusterFilterId ? (
-        <p className="text-sm text-muted">
-          Presupuesto prorrateado para: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>
-          {budgetSummary.proratedNote ? ` · ${budgetSummary.proratedNote}` : ''}
-        </p>
-      ) : null}
-
-      <GlassCard>
-        <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (año en curso)</h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl bg-white/5 px-4 py-3">
-            <p className="text-xs text-subtle">Egresos</p>
-            <p className="text-lg font-semibold text-[var(--text)]">
-              {formatCurrency(budgetSummary.totalExpenseActual)} / {formatCurrency(budgetSummary.totalExpenseBudget)}
-            </p>
-          </div>
-          <div className="rounded-xl bg-white/5 px-4 py-3">
-            <p className="text-xs text-subtle">Ingresos</p>
-            <p className="text-lg font-semibold text-[var(--text)]">
-              {formatCurrency(budgetSummary.totalIncomeActual)} / {formatCurrency(budgetSummary.totalIncomeBudget)}
-            </p>
-          </div>
+    <div className="space-y-4">
+      <GlassCard className="!p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-semibold text-[var(--text)]">Presupuesto vs real (año en curso)</h3>
+          <p className="text-xs text-muted">{scopeLabel}</p>
         </div>
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">
+          <BudgetExecutionBar
+            label="Egresos"
+            actual={budgetSummary.totalExpenseActual}
+            budget={budgetSummary.totalExpenseBudget}
+            percent={budgetSummary.expensePercentUsed}
+            tone="expense"
+          />
+          <BudgetExecutionBar
+            label="Ingresos"
+            actual={budgetSummary.totalIncomeActual}
+            budget={budgetSummary.totalIncomeBudget}
+            percent={budgetSummary.incomePercentUsed}
+            tone="income"
+          />
+        </div>
+        {budgetSummary.proratedNote ? (
+          <p className="mt-3 text-xs text-subtle">{budgetSummary.proratedNote}</p>
+        ) : null}
       </GlassCard>
 
       <GlassCard>
@@ -243,8 +287,9 @@ export function BudgetPanel({
           <div>
             <SectionHeading help={HELP.presupuesto}>Presupuesto anual</SectionHeading>
             <p className="mt-1 text-sm text-muted">
-              Define montos anuales por categoría. En el estado financiero se comparan con lo real del
-              periodo.
+              Presupuesto independiente para{' '}
+              <span className="font-medium text-[var(--text)]">{scopeLabel}</span>. Define montos anuales por
+              categoría.
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
@@ -309,16 +354,10 @@ export function BudgetPanel({
             {EXPENSE_CATEGORIES.map((category) => (
               <label key={category} className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted">{expenseCategoryLabel(category)}</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
+                <MoneyInput
                   value={expenseAmounts[category]}
-                  onChange={(event) =>
-                    setExpenseAmounts((prev) => ({ ...prev, [category]: event.target.value }))
-                  }
-                  className="glass-input w-36 text-right"
-                  placeholder="0"
+                  onChange={(value) => setExpenseAmounts((prev) => ({ ...prev, [category]: value }))}
+                  className="w-36"
                 />
               </label>
             ))}
@@ -337,16 +376,10 @@ export function BudgetPanel({
             {INCOME_CATEGORIES.map((category) => (
               <label key={category} className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted">{incomeCategoryLabel(category)}</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
+                <MoneyInput
                   value={incomeAmounts[category]}
-                  onChange={(event) =>
-                    setIncomeAmounts((prev) => ({ ...prev, [category]: event.target.value }))
-                  }
-                  className="glass-input w-36 text-right"
-                  placeholder="0"
+                  onChange={(value) => setIncomeAmounts((prev) => ({ ...prev, [category]: value }))}
+                  className="w-36"
                 />
               </label>
             ))}

@@ -304,7 +304,7 @@ values (
   'operating',
   'Presupuesto demo — aprobado en asamblea ordinaria'
 )
-on conflict (condominium_id, fiscal_year, fund_type) do update set notes = excluded.notes;
+on conflict (condominium_id, fiscal_year, fund_type, budget_scope_key) do update set notes = excluded.notes;
 
 insert into public.budget_lines (id, budget_id, line_kind, category, annual_amount)
 values
@@ -318,6 +318,29 @@ values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb11', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'cuotas', 136800.00),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb12', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'servicios', 24000.00),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb13', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'income', 'extraordinario', 60000.00)
+on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;
+
+-- Torre A operating budget (independent from general)
+insert into public.annual_budgets (
+  id, condominium_id, fiscal_year, fund_type, cluster_id, notes
+)
+values (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2',
+  '22222222-2222-2222-2222-222222222222',
+  extract(year from current_date)::int,
+  'operating',
+  '33333333-3333-3333-3333-333333333301',
+  'Presupuesto demo Torre A'
+)
+on conflict (condominium_id, fiscal_year, fund_type, budget_scope_key) do update set notes = excluded.notes;
+
+insert into public.budget_lines (id, budget_id, line_kind, category, annual_amount)
+values
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc01', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'expense', 'mantenimiento', 28000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'expense', 'servicios', 12000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc03', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'expense', 'nomina', 54000.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc11', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'income', 'cuotas', 45600.00),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc12', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'income', 'servicios', 8000.00)
 on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;
 
 -- Demo CLABE for SPEI / admin reconciliation

@@ -54,6 +54,7 @@ import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
 import { UnitStatementPanel } from '@/components/UnitStatementPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyField } from '@/components/ui/MoneyField';
 import { HelpHint } from '@/components/ui/HelpHint';
 import { StatusTag } from '@/components/ui/StatusTag';
 import { createClient } from '@/lib/supabase/client';
@@ -221,6 +222,7 @@ interface AnnualBudgetRow {
   id: string;
   fiscal_year: number;
   fund_type: FundType;
+  cluster_id: string | null;
   notes: string | null;
   lines: BudgetLineRow[];
 }
@@ -484,7 +486,7 @@ export function FinanceDashboard({
         .order('income_date', { ascending: false }),
       supabase
         .from('annual_budgets')
-        .select('id, fiscal_year, fund_type, notes, lines:budget_lines(id, line_kind, category, annual_amount)')
+        .select('id, fiscal_year, fund_type, cluster_id, notes, lines:budget_lines(id, line_kind, category, annual_amount)')
         .eq('condominium_id', condoId)
         .order('fiscal_year', { ascending: false }),
       supabase
@@ -1032,8 +1034,6 @@ export function FinanceDashboard({
           condominiumId={selectedCondoId}
           budgets={budgets}
           clusterFilterId={selectedClusterId}
-          clusterUnitCount={clusterUnitCount}
-          totalUnitCount={totalUnitCount}
           scopeLabel={scopeLabel}
           expenses={expenses}
           incomeEntries={incomeEntries}
@@ -1098,15 +1098,7 @@ export function FinanceDashboard({
               <form action={runCreateIncome} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="condominium_id" value={selectedCondoId} />
                 <input name="concept" required placeholder="Concepto del ingreso" className="glass-input sm:col-span-2" />
-                <input
-                  name="amount"
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Monto"
-                  className="glass-input"
-                />
+                <MoneyField name="amount" required placeholder="Monto" className="w-full" />
                 <input
                   name="income_date"
                   required
@@ -1159,15 +1151,7 @@ export function FinanceDashboard({
               <form action={runCreateExpense} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="condominium_id" value={selectedCondoId} />
                 <input name="concept" required placeholder="Concepto del gasto" className="glass-input sm:col-span-2" />
-              <input
-                name="amount"
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Monto"
-                className="glass-input"
-              />
+              <MoneyField name="amount" required placeholder="Monto" className="w-full" />
               <input
                 name="expense_date"
                 required

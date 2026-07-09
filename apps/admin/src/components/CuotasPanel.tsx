@@ -26,6 +26,7 @@ import {
   updateRecurringFee,
 } from '@/app/(panel)/finanzas/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 
@@ -385,15 +386,12 @@ export function CuotasPanel({
               className="glass-input"
               placeholder="Concepto"
             />
-            <input
+            <MoneyInput
               name="base_amount"
               required
-              type="number"
-              min="0"
-              step="0.01"
               value={periodicForm.baseAmount}
-              onChange={(e) => setPeriodicForm((prev) => ({ ...prev, baseAmount: e.target.value }))}
-              className="glass-input"
+              onChange={(value) => setPeriodicForm((prev) => ({ ...prev, baseAmount: value }))}
+              className="w-full"
               placeholder="Monto base mensual (× coeficiente)"
             />
             <div>
@@ -469,15 +467,12 @@ export function CuotasPanel({
                           onChange={(e) => setEditForm((prev) => ({ ...prev, concept: e.target.value }))}
                           className="glass-input"
                         />
-                        <input
+                        <MoneyInput
                           name="base_amount"
                           required
-                          type="number"
-                          min="0"
-                          step="0.01"
                           value={editForm.baseAmount}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, baseAmount: e.target.value }))}
-                          className="glass-input"
+                          onChange={(value) => setEditForm((prev) => ({ ...prev, baseAmount: value }))}
+                          className="w-full"
                         />
                         <select
                           name="due_day"
@@ -641,15 +636,12 @@ export function CuotasPanel({
               className="glass-input"
               placeholder="Concepto"
             />
-            <input
+            <MoneyInput
               name="amount"
               required
-              type="number"
-              min="0"
-              step="0.01"
               value={extraForm.amount}
-              onChange={(e) => setExtraForm((prev) => ({ ...prev, amount: e.target.value }))}
-              className="glass-input"
+              onChange={(value) => setExtraForm((prev) => ({ ...prev, amount: value }))}
+              className="w-full"
               placeholder="Monto base por unidad (× coeficiente)"
             />
             <input
