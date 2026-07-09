@@ -229,7 +229,7 @@ export function CuotasPanel({
     setMessage(null);
     startTransition(async () => {
       const result = await createRecurringFee(formData);
-      if (result.error) {
+      if ('error' in result && result.error) {
         setMessage(result.error);
         return;
       }
@@ -246,7 +246,7 @@ export function CuotasPanel({
     setMessage(null);
     startTransition(async () => {
       const result = await updateRecurringFee(formData);
-      if (result.error) {
+      if ('error' in result && result.error) {
         setMessage(result.error);
         return;
       }
@@ -265,7 +265,7 @@ export function CuotasPanel({
     setMessage(null);
     startTransition(async () => {
       const result = await createExtraordinaryFee(formData);
-      if (result.error) {
+      if ('error' in result && result.error) {
         setMessage(result.error);
         return;
       }

@@ -928,7 +928,7 @@ export function FinanceDashboard({
     setIncomeMessage(null);
     startIncome(async () => {
       const result = await createIncome(formData);
-      if (result.error) {
+      if ('error' in result && result.error) {
         setIncomeMessage(result.error);
         return;
       }
@@ -941,7 +941,7 @@ export function FinanceDashboard({
     setExpenseMessage(null);
     startExpense(async () => {
       const result = await createExpense(formData);
-      if (result.error) {
+      if ('error' in result && result.error) {
         setExpenseMessage(result.error);
         return;
       }
