@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { VekaLogo } from '@/components/brand/VekaLogo';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -45,10 +46,11 @@ export default function LoginPage() {
     <GlassBackground>
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <GlassCard className="w-full max-w-md">
+          <div className="mb-6 flex justify-center">
+            <VekaLogo variant="stacked" />
+          </div>
           <p className="text-sm font-medium text-accent">Panel administrativo</p>
-          <h1 className="serif-title mt-2 text-3xl text-[var(--text)]">
-            Bienvenido a <span className="text-accent italic">Veka</span>
-          </h1>
+          <h1 className="serif-title mt-2 text-3xl text-[var(--text)]">Bienvenido</h1>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <label className="block text-sm font-medium text-muted">

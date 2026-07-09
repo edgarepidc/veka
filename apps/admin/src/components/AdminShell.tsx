@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 import { AdminNav } from '@/components/AdminNav';
+import { VekaLogo } from '@/components/brand/VekaLogo';
 import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { CondominiumSwitcher } from '@/components/CondominiumSwitcher';
 import { GlassBackground } from '@/components/ui/GlassBackground';
@@ -74,7 +75,9 @@ export function AdminShell({
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoUrl} alt="" className="h-10 w-10 rounded-lg object-contain" />
-              ) : null}
+              ) : (
+                <VekaLogo variant="mark" framed className="!px-2 !py-1.5" />
+              )}
               <div className="min-w-0">
                 <h1 className="serif-title truncate text-2xl text-[var(--text)]">
                   {session.membership?.condominium_name ?? 'Veka'}

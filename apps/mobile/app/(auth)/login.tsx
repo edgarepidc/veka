@@ -17,6 +17,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { VekaLogo } from '@/components/brand/VekaLogo';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -69,7 +70,7 @@ export default function LoginScreen() {
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <View>
-              <Text style={[styles.brand, { color: theme.text, fontFamily: theme.serifFamily }]}>Veka</Text>
+              <VekaLogo variant="stacked" style={{ marginBottom: 16 }} />
               <Text style={[styles.tagline, { color: theme.textMuted }]}>
                 Gestión condominal para{' '}
                 <Text style={{ color: theme.accent, fontStyle: 'italic', fontFamily: theme.serifFamily }}>

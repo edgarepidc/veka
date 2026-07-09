@@ -21,6 +21,10 @@ const dmSerif = DM_Serif_Display({
 export const metadata: Metadata = {
   title: 'Veka Admin',
   description: 'Panel administrativo de gestión condominal',
+  icons: {
+    icon: '/brand/veka-mark.png',
+    apple: '/brand/veka-mark.png',
+  },
 };
 
 export default function RootLayout({

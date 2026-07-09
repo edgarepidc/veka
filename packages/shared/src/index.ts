@@ -27,3 +27,4 @@ export * from './community-scope';
 export * from './visit-qr';
 export * from './security';
 export * from './card-accent';
+export * from './brand';
