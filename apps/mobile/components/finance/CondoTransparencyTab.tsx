@@ -30,9 +30,10 @@ import {
   expenseCategoryBreakdown,
   incomeRowCategoryLabel,
   matchesCondoClusterFilter,
-  type CondoBudgetLine,
+  selectOperatingBudgetLines,
   type CondoCollectionFlowRow,
   type CondoIncomeRow,
+  type CondoOperatingBudget,
 } from '@/lib/finance-stats';
 
 interface CondoTransparencyTabProps {
@@ -44,7 +45,7 @@ interface CondoTransparencyTabProps {
   visibleExpenses: CondoExpense[];
   condoIncomeRows: CondoIncomeRow[];
   collectionFlowRows: CondoCollectionFlowRow[];
-  budgetLines: CondoBudgetLine[];
+  operatingBudgets: CondoOperatingBudget[];
   expenseGroups: CondoExpenseGroup[];
 }
 
@@ -57,7 +58,7 @@ export function CondoTransparencyTab({
   visibleExpenses,
   condoIncomeRows,
   collectionFlowRows,
-  budgetLines,
+  operatingBudgets,
   expenseGroups,
 }: CondoTransparencyTabProps) {
   const theme = useTheme();
@@ -114,9 +115,14 @@ export function CondoTransparencyTab({
     [clusterFilter, collectionFlowRows, myClusterId, period],
   );
 
+  const activeBudgetLines = useMemo(
+    () => selectOperatingBudgetLines(operatingBudgets, clusterFilter),
+    [clusterFilter, operatingBudgets],
+  );
+
   const budget = useMemo(
-    () => condoBudgetExecution(budgetLines, scopedExpenses, period),
-    [budgetLines, period, scopedExpenses],
+    () => condoBudgetExecution(activeBudgetLines, scopedExpenses, period),
+    [activeBudgetLines, period, scopedExpenses],
   );
 
   const incomeDetails = useMemo(

@@ -10,7 +10,7 @@ import {
 import type { FeeSourceRef } from '@veka/shared';
 
 import type { ActiveMembership } from '@/hooks/useMembership';
-import { filterVisibleCondoExpenses, type CondoBudgetLine, type CondoCollectionFlowRow, type CondoIncomeRow } from '@/lib/finance-stats';
+import { filterVisibleCondoExpenses, type CondoBudgetLine, type CondoCollectionFlowRow, type CondoIncomeRow, type CondoOperatingBudget } from '@/lib/finance-stats';
 import { supabase } from '@/lib/supabase';
 
 export interface FinanceCharge {
@@ -127,6 +127,7 @@ export function useFinance(primary: ActiveMembership | null) {
   const [paymentIncomeRows, setPaymentIncomeRows] = useState<CondoIncomeRow[]>([]);
   const [collectionFlowRows, setCollectionFlowRows] = useState<CondoCollectionFlowRow[]>([]);
   const [budgetLines, setBudgetLines] = useState<CondoBudgetLine[]>([]);
+  const [operatingBudgets, setOperatingBudgets] = useState<CondoOperatingBudget[]>([]);
   const [bankAccounts, setBankAccounts] = useState<CondoBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -193,12 +194,10 @@ export function useFinance(primary: ActiveMembership | null) {
         }),
         supabase
           .from('annual_budgets')
-          .select('fiscal_year, budget_lines(line_kind, category, annual_amount)')
+          .select('fiscal_year, cluster_id, budget_lines(line_kind, category, annual_amount)')
           .eq('condominium_id', primary.condominium_id)
           .eq('fund_type', 'operating')
-          .order('fiscal_year', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+          .order('fiscal_year', { ascending: false }),
         supabase
           .from('payment_plans')
           .select(
@@ -331,17 +330,31 @@ export function useFinance(primary: ActiveMembership | null) {
             item_kind: row.item_kind,
           })),
     );
-    const budgetRow = budgetRes.data as {
+    const budgetRows = (budgetRes.data as {
       fiscal_year: number;
+      cluster_id: string | null;
       budget_lines: CondoBudgetLine[];
-    } | null;
-    setBudgetLines(
-      (budgetRow?.budget_lines ?? []).map((line) => ({
+    }[] | null) ?? [];
+
+    const parsedBudgets: CondoOperatingBudget[] = budgetRows.map((row) => ({
+      fiscal_year: row.fiscal_year,
+      cluster_id: row.cluster_id,
+      lines: (row.budget_lines ?? []).map((line) => ({
         line_kind: line.line_kind,
         category: line.category,
         annual_amount: Number(line.annual_amount),
       })),
+    }));
+
+    setOperatingBudgets(parsedBudgets);
+
+    const latestYear = parsedBudgets.length
+      ? Math.max(...parsedBudgets.map((budget) => budget.fiscal_year))
+      : null;
+    const generalBudget = parsedBudgets.find(
+      (budget) => budget.fiscal_year === latestYear && !budget.cluster_id,
     );
+    setBudgetLines(generalBudget?.lines ?? []);
     setBankAccounts((banksRes.data as CondoBankAccount[]) ?? []);
     setLoading(false);
   }, [primary?.condominium_id, primary?.unit_id]);
@@ -461,6 +474,7 @@ export function useFinance(primary: ActiveMembership | null) {
     condoIncomeRows,
     collectionFlowRows,
     budgetLines,
+    operatingBudgets,
     expenseGroups,
     bankAccounts,
     paymentTarget,

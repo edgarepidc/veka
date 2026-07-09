@@ -298,6 +298,23 @@ export interface CondoBudgetLine {
   annual_amount: number;
 }
 
+export interface CondoOperatingBudget {
+  fiscal_year: number;
+  cluster_id: string | null;
+  lines: CondoBudgetLine[];
+}
+
+export function selectOperatingBudgetLines(
+  budgets: CondoOperatingBudget[],
+  clusterFilter: string,
+): CondoBudgetLine[] {
+  if (!budgets.length) return [];
+  const latestYear = Math.max(...budgets.map((budget) => budget.fiscal_year));
+  const yearBudgets = budgets.filter((budget) => budget.fiscal_year === latestYear);
+  const clusterId = clusterFilter === 'all' || clusterFilter === 'general' ? null : clusterFilter;
+  return yearBudgets.find((budget) => (budget.cluster_id ?? null) === clusterId)?.lines ?? [];
+}
+
 function periodBudgetFactor(period: FinancePeriod): number {
   if (period === '1m') return 1 / 12;
   if (period === '3m') return 3 / 12;

@@ -123,7 +123,7 @@ export default function FinanceScreen() {
             visibleExpenses={finance.visibleExpenses}
             condoIncomeRows={finance.condoIncomeRows}
             collectionFlowRows={finance.collectionFlowRows}
-            budgetLines={finance.budgetLines}
+            operatingBudgets={finance.operatingBudgets}
             expenseGroups={finance.expenseGroups}
           />
         )}

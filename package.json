@@ -24,6 +24,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:migrate": "supabase migration up",
+    "db:push:remote": "node scripts/apply-remote-migration.mjs",
     "db:types": "supabase gen types typescript --local > packages/supabase/src/database.types.ts",
     "setup:supabase": "bash scripts/setup-supabase.sh",
     "create:supabase": "bash scripts/create-supabase-project.sh",

@@ -11,6 +11,7 @@ import {
   formatCurrency,
   installmentBalanceDue,
   installmentStatusLabel,
+  parseAmountInput,
   paymentMethodLabel,
   paymentStatusLabel,
   paymentStatusTone,
@@ -24,7 +25,7 @@ import { PaymentProofUploader } from '@/components/PaymentProofUploader';
 import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatPill } from '@/components/ui/StatPill';
-import { GlassInput } from '@/components/ui/GlassInput';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionLabel } from '@/components/ui/Avatar';
 import { Tag } from '@/components/ui/Tag';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -78,7 +79,7 @@ export function PersonalAccountTab({
   const theme = useTheme();
   const [period, setPeriod] = useState<FinancePeriod>('1m');
   const paymentTotal = paymentTarget?.maxAmount ?? 0;
-  const payAmount = Number(payAmountInput.replace(/,/g, ''));
+  const payAmount = parseAmountInput(payAmountInput) ?? 0;
   const planProgress = activePlan ? planInstallmentsProgress(activePlan.installments) : null;
 
   const filteredCharges = useMemo(
@@ -231,10 +232,9 @@ export function PersonalAccountTab({
             <Text style={{ color: theme.textSubtle, fontSize: 12, marginBottom: 6, marginTop: 8 }}>
               Monto a pagar (abono parcial permitido)
             </Text>
-            <GlassInput
+            <MoneyInput
               value={payAmountInput}
               onChangeText={onPayAmountChange}
-              keyboardType="decimal-pad"
               placeholder="0.00"
               style={{ marginBottom: 8 }}
             />
