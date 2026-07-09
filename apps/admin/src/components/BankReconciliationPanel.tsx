@@ -8,6 +8,7 @@ import {
   ignoreBankTransaction,
   matchBankTransaction,
   saveBankAccount,
+  unmatchBankTransaction,
 } from '@/app/(panel)/finanzas/bank-actions';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeading } from '@/components/ui/SectionHeading';
@@ -18,6 +19,7 @@ interface BankAccountRow {
   name: string;
   bank_name: string | null;
   account_last4: string | null;
+  clabe: string | null;
 }
 
 interface BankTransactionRow {
@@ -81,6 +83,7 @@ export function BankReconciliationPanel({
   const [accountName, setAccountName] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountLast4, setAccountLast4] = useState('');
+  const [clabe, setClabe] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(bankAccounts[0]?.id ?? '');
   const [importContent, setImportContent] = useState('');
   const [importFileName, setImportFileName] = useState<string | null>(null);
@@ -91,6 +94,11 @@ export function BankReconciliationPanel({
 
   const unmatched = useMemo(
     () => bankTransactions.filter((row) => row.status === 'unmatched'),
+    [bankTransactions],
+  );
+
+  const resolved = useMemo(
+    () => bankTransactions.filter((row) => row.status === 'matched' || row.status === 'ignored'),
     [bankTransactions],
   );
 
@@ -134,6 +142,7 @@ export function BankReconciliationPanel({
     formData.set('name', accountName);
     formData.set('bank_name', bankName);
     formData.set('account_last4', accountLast4);
+    formData.set('clabe', clabe);
     startTransition(async () => {
       const result = await saveBankAccount(formData);
       setMessage(result.error ?? 'Cuenta bancaria registrada.');
@@ -141,6 +150,7 @@ export function BankReconciliationPanel({
         setAccountName('');
         setBankName('');
         setAccountLast4('');
+        setClabe('');
         onReload();
       }
     });
@@ -225,7 +235,11 @@ export function BankReconciliationPanel({
           Importa movimientos del banco (OFX o CSV) y concílialos con pagos, ingresos o egresos del libro.
         </p>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <p className="mt-2 text-xs text-subtle">
+          La CLABE (18 dígitos) es la que ven los residentes para transferir. Sin ella, la app no puede
+          mostrar datos de pago útiles.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <input
             value={accountName}
             onChange={(event) => setAccountName(event.target.value)}
@@ -239,12 +253,32 @@ export function BankReconciliationPanel({
             className="glass-input"
           />
           <input
+            value={clabe}
+            onChange={(event) => setClabe(event.target.value.replace(/[^\d]/g, '').slice(0, 18))}
+            placeholder="CLABE (18 dígitos)"
+            inputMode="numeric"
+            className="glass-input"
+          />
+          <input
             value={accountLast4}
-            onChange={(event) => setAccountLast4(event.target.value)}
-            placeholder="Últimos 4 dígitos"
+            onChange={(event) => setAccountLast4(event.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+            placeholder="Últimos 4 dígitos (opcional)"
+            inputMode="numeric"
             className="glass-input"
           />
         </div>
+        {bankAccounts.length > 0 ? (
+          <ul className="mt-3 space-y-1 text-xs text-subtle">
+            {bankAccounts.map((account) => (
+              <li key={account.id}>
+                {account.name}
+                {account.bank_name ? ` · ${account.bank_name}` : ''}
+                {account.clabe ? ` · CLABE ${account.clabe}` : ' · sin CLABE'}
+                {account.account_last4 ? ` ···${account.account_last4}` : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div className="mt-3 flex justify-end">
           <button
             type="button"
@@ -465,6 +499,66 @@ export function BankReconciliationPanel({
           </div>
         )}
       </GlassCard>
+
+      {resolved.length > 0 ? (
+        <GlassCard>
+          <SectionHeading as="h3" className="text-base font-semibold text-[var(--text)]">
+            Conciliados o ignorados ({resolved.length})
+          </SectionHeading>
+          <p className="mt-1 text-xs text-subtle">
+            Puedes deshacer un match o volver a poner en cola un movimiento ignorado.
+          </p>
+          <div className="mt-4 space-y-2">
+            {resolved.slice(0, 40).map((row) => {
+              const amount = Number(row.amount);
+              return (
+                <div
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-medium text-[var(--text)]">
+                      {row.transaction_date} · {formatCurrency(amount)} ·{' '}
+                      {row.status === 'matched' ? 'Conciliado' : 'Ignorado'}
+                    </p>
+                    <p className="text-xs text-subtle">
+                      {row.description || row.reference || 'Sin descripción'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      if (
+                        !confirm(
+                          row.status === 'matched'
+                            ? '¿Deshacer esta conciliación?'
+                            : '¿Volver a poner este movimiento como pendiente?',
+                        )
+                      ) {
+                        return;
+                      }
+                      startTransition(async () => {
+                        const result = await unmatchBankTransaction(row.id);
+                        setMessage(
+                          result.error ??
+                            (row.status === 'matched'
+                              ? 'Conciliación deshecha.'
+                              : 'Movimiento vuelto a pendientes.'),
+                        );
+                        if (result.success) onReload();
+                      });
+                    }}
+                    className="glass-btn px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                  >
+                    Deshacer
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      ) : null}
     </div>
   );
 }

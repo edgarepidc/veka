@@ -69,6 +69,25 @@ export function ResidentPaymentsReview({
   );
   const history = historyAll.slice(0, historyLimit);
 
+  function handleApprove(payment: ResidentPaymentRow, isSecondReview: boolean) {
+    const isTransfer = payment.payment_method !== 'gateway';
+    if (isTransfer && !payment.proof_url) {
+      window.alert(
+        'No se puede aprobar sin comprobante. Pide al residente que suba el archivo o rechaza el intento.',
+      );
+      return;
+    }
+    const amount = formatCurrency(Number(payment.amount));
+    const unit = payment.unit?.identifier ?? 'unidad';
+    const confirmMessage = isSecondReview
+      ? `¿Confirmar 2ª aprobación de ${amount} para ${unit}? Esto liquidará los cargos.`
+      : `¿Aprobar pago de ${amount} para ${unit}?${
+          isTransfer ? ' Verifica el comprobante antes de continuar.' : ''
+        }`;
+    if (!window.confirm(confirmMessage)) return;
+    onReview(payment.id, 'approve');
+  }
+
   function handleReject(id: string) {
     const reason = window.prompt('Motivo del rechazo (opcional):') ?? undefined;
     if (!window.confirm('¿Rechazar este comprobante de pago?')) return;
@@ -101,7 +120,7 @@ export function ResidentPaymentsReview({
                 key={payment.id}
                 payment={payment}
                 approveLabel="Aprobar (1ª revisión o final)"
-                onApprove={() => onReview(payment.id, 'approve')}
+                onApprove={() => handleApprove(payment, false)}
                 onReject={() => handleReject(payment.id)}
                 onViewProof={onViewProof}
               />
@@ -117,12 +136,12 @@ export function ResidentPaymentsReview({
             Un administrador distinto debe confirmar estos pagos para liquidar cargos.
           </p>
           <div className="mt-4 space-y-3">
-            {secondReview.map((payment) => (
+            {            secondReview.map((payment) => (
               <PaymentReviewCard
                 key={payment.id}
                 payment={payment}
                 approveLabel="Confirmar 2ª aprobación"
-                onApprove={() => onReview(payment.id, 'approve')}
+                onApprove={() => handleApprove(payment, true)}
                 onReject={() => handleReject(payment.id)}
                 onViewProof={onViewProof}
               />
@@ -260,11 +279,18 @@ function PaymentReviewCard({
           exitosos por pasarela se aprueban solos.
         </p>
       ) : (
-        <p className="mt-3 text-xs text-subtle">Sin comprobante adjunto.</p>
+        <p className="mt-3 text-xs text-amber-200/80">
+          Sin comprobante adjunto. No se puede aprobar hasta que el residente suba el archivo.
+        </p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" onClick={onApprove} className="glass-btn-primary text-sm">
+        <button
+          type="button"
+          onClick={onApprove}
+          disabled={payment.payment_method !== 'gateway' && !payment.proof_url}
+          className="glass-btn-primary text-sm disabled:opacity-50"
+        >
           {approveLabel}
         </button>
         <button type="button" onClick={onReject} className="glass-btn-danger text-sm">

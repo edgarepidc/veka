@@ -138,7 +138,7 @@ export async function approvePayment(
   const { data: payment, error: fetchError } = await supabase
     .from('payments')
     .select(
-      'id, charge_id, condominium_id, unit_id, amount, status, payment_method, payment_plan_installment_id, first_reviewed_by',
+      'id, charge_id, condominium_id, unit_id, amount, status, payment_method, proof_url, payment_plan_installment_id, first_reviewed_by',
     )
     .eq('id', paymentId)
     .single();
@@ -148,6 +148,11 @@ export async function approvePayment(
   if (payment.status === 'rejected') return { error: 'Este pago fue rechazado.' };
   if (payment.status === 'awaiting_payment') {
     return { error: 'El residente aún no completa el pago (Oxxo/SPEI).' };
+  }
+  if (payment.payment_method !== 'gateway' && !payment.proof_url) {
+    return {
+      error: 'No se puede aprobar una transferencia sin comprobante. Pide al residente que suba el archivo o rechaza el intento.',
+    };
   }
 
   const approvalSettings = await loadApprovalSettings(supabase, payment.condominium_id);

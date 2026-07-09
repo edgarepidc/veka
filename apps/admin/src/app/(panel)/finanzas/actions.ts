@@ -575,7 +575,7 @@ export async function createExpense(formData: FormData) {
   const expenseDate = String(formData.get('expense_date') ?? '');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
   const expenseKind = String(formData.get('expense_kind') ?? 'general') as ExpenseKind;
-  const status = String(formData.get('status') ?? 'paid') as ExpenseStatus;
+  const status = String(formData.get('status') ?? 'pending') as ExpenseStatus;
   const vendorName = String(formData.get('vendor_name') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const evidencePath = String(formData.get('evidence_path') ?? '').trim();
@@ -726,7 +726,7 @@ export async function updateExpense(formData: FormData) {
   const expenseDate = String(formData.get('expense_date') ?? '');
   const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
   const expenseKind = String(formData.get('expense_kind') ?? 'general') as ExpenseKind;
-  const status = String(formData.get('status') ?? 'paid') as ExpenseStatus;
+  const status = String(formData.get('status') ?? 'pending') as ExpenseStatus;
   const vendorName = String(formData.get('vendor_name') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
   const evidencePath = String(formData.get('evidence_path') ?? '').trim();

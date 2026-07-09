@@ -180,6 +180,7 @@ interface BankAccountRow {
   name: string;
   bank_name: string | null;
   account_last4: string | null;
+  clabe: string | null;
 }
 
 interface BankTransactionRow {
@@ -332,7 +333,7 @@ export function FinanceDashboard({
     category: 'mantenimiento',
     fund_type: 'operating' as FundType,
     expense_kind: 'general' as ExpenseKind,
-    status: 'paid' as ExpenseStatus,
+    status: 'pending' as ExpenseStatus,
     vendor_name: '',
     notes: '',
   });
@@ -558,7 +559,7 @@ export function FinanceDashboard({
         .limit(200),
       supabase
         .from('bank_accounts')
-        .select('id, name, bank_name, account_last4')
+        .select('id, name, bank_name, account_last4, clabe')
         .eq('condominium_id', condoId)
         .order('name'),
       supabase
@@ -1326,12 +1327,12 @@ export function FinanceDashboard({
                   {expenseKindLabel('payroll')}
                 </option>
               </select>
-              <select name="status" defaultValue="paid" className="glass-input">
-                <option value="paid" className="bg-slate-900">
-                  {expenseStatusLabel('paid')}
-                </option>
+              <select name="status" defaultValue="pending" className="glass-input">
                 <option value="pending" className="bg-slate-900">
                   {expenseStatusLabel('pending')}
+                </option>
+                <option value="paid" className="bg-slate-900">
+                  {expenseStatusLabel('paid')}
                 </option>
               </select>
               <input

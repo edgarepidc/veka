@@ -6,10 +6,15 @@ import {
   ofxAccountLast4,
   parseBankImportContent,
   parseOfxAccountInfo,
+  roundMoney,
 } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
+
+function normalizeClabe(value: string): string {
+  return value.replace(/\s+/g, '');
+}
 
 export async function saveBankAccount(formData: FormData) {
   const condoResult = await requireActiveCondominiumId(String(formData.get('condominium_id') ?? ''));
@@ -25,9 +30,12 @@ export async function saveBankAccount(formData: FormData) {
   const name = String(formData.get('name') ?? '').trim();
   const bankName = String(formData.get('bank_name') ?? '').trim();
   const accountLast4 = String(formData.get('account_last4') ?? '').trim();
-  const clabe = String(formData.get('clabe') ?? '').trim();
+  const clabe = normalizeClabe(String(formData.get('clabe') ?? '').trim());
 
   if (!name) return { error: 'Nombre de cuenta obligatorio.' };
+  if (clabe && !/^\d{18}$/.test(clabe)) {
+    return { error: 'La CLABE debe tener exactamente 18 dígitos.' };
+  }
 
   const { error } = await supabase.from('bank_accounts').insert({
     condominium_id: condominiumId,
@@ -87,11 +95,7 @@ export async function importBankTransactions(formData: FormData) {
         .maybeSingle();
 
       const ofxLast4 = ofxAccountLast4(ofxAccount.accountId);
-      if (
-        account?.account_last4 &&
-        ofxLast4 &&
-        account.account_last4 !== ofxLast4
-      ) {
+      if (account?.account_last4 && ofxLast4 && account.account_last4 !== ofxLast4) {
         accountWarning = `El archivo OFX corresponde a una cuenta terminada en ${ofxLast4}, distinta a la seleccionada (···${account.account_last4}).`;
       }
     }
@@ -120,6 +124,35 @@ export async function importBankTransactions(formData: FormData) {
   };
 }
 
+async function loadMatchTargetAmount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  matchType: 'payment' | 'income' | 'expense',
+  paymentId: string,
+  incomeEntryId: string,
+  expenseId: string,
+): Promise<{ amount: number } | { error: string }> {
+  if (matchType === 'payment') {
+    if (!paymentId) return { error: 'Selecciona un pago.' };
+    const { data, error } = await supabase.from('payments').select('amount').eq('id', paymentId).maybeSingle();
+    if (error || !data) return { error: 'Pago no encontrado.' };
+    return { amount: Number(data.amount) };
+  }
+  if (matchType === 'income') {
+    if (!incomeEntryId) return { error: 'Selecciona un ingreso.' };
+    const { data, error } = await supabase
+      .from('income_entries')
+      .select('amount')
+      .eq('id', incomeEntryId)
+      .maybeSingle();
+    if (error || !data) return { error: 'Ingreso no encontrado.' };
+    return { amount: Number(data.amount) };
+  }
+  if (!expenseId) return { error: 'Selecciona un egreso.' };
+  const { data, error } = await supabase.from('expenses').select('amount').eq('id', expenseId).maybeSingle();
+  if (error || !data) return { error: 'Egreso no encontrado.' };
+  return { amount: Number(data.amount) };
+}
+
 export async function matchBankTransaction(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -134,6 +167,41 @@ export async function matchBankTransaction(formData: FormData) {
   const expenseId = String(formData.get('expense_id') ?? '').trim();
 
   if (!bankTransactionId || !matchType) return { error: 'Datos incompletos.' };
+  if (!['payment', 'income', 'expense'].includes(matchType)) {
+    return { error: 'Tipo de conciliación inválido.' };
+  }
+
+  const { data: bankTx, error: bankError } = await supabase
+    .from('bank_transactions')
+    .select('id, amount, status')
+    .eq('id', bankTransactionId)
+    .maybeSingle();
+
+  if (bankError || !bankTx) return { error: 'Movimiento bancario no encontrado.' };
+  if (bankTx.status !== 'unmatched') {
+    return { error: 'Este movimiento ya está conciliado o ignorado.' };
+  }
+
+  const target = await loadMatchTargetAmount(supabase, matchType, paymentId, incomeEntryId, expenseId);
+  if ('error' in target) return target;
+
+  const bankAmount = Number(bankTx.amount);
+  const targetAmount = Number(target.amount);
+  const absBank = Math.abs(bankAmount);
+  const absTarget = Math.abs(targetAmount);
+
+  if (roundMoney(Math.abs(absBank - absTarget)) > 0.01) {
+    return {
+      error: `El monto no coincide (banco ${absBank.toFixed(2)} vs libro ${absTarget.toFixed(2)}).`,
+    };
+  }
+
+  if (matchType === 'expense' && bankAmount > 0.01) {
+    return { error: 'Un egreso debe conciliarse con un movimiento bancario de salida (monto negativo).' };
+  }
+  if ((matchType === 'payment' || matchType === 'income') && bankAmount < -0.01) {
+    return { error: 'Un ingreso/pago debe conciliarse con un movimiento bancario de entrada (monto positivo).' };
+  }
 
   const { error: matchError } = await supabase.from('bank_reconciliation_matches').upsert(
     {

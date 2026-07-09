@@ -4,7 +4,7 @@ export interface ApprovalSettings {
 }
 
 export const DEFAULT_APPROVAL_SETTINGS: ApprovalSettings = {
-  payments_dual_enabled: false,
+  payments_dual_enabled: true,
   payments_dual_threshold: 5000,
 };
 
@@ -14,8 +14,12 @@ export function parseApprovalSettings(raw: unknown): ApprovalSettings {
   }
   const row = raw as Record<string, unknown>;
   return {
-    payments_dual_enabled: Boolean(row.payments_dual_enabled),
-    payments_dual_threshold: Number(row.payments_dual_threshold) || DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold,
+    payments_dual_enabled:
+      typeof row.payments_dual_enabled === 'boolean'
+        ? row.payments_dual_enabled
+        : DEFAULT_APPROVAL_SETTINGS.payments_dual_enabled,
+    payments_dual_threshold:
+      Number(row.payments_dual_threshold) || DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold,
   };
 }
 
