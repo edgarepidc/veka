@@ -1748,11 +1748,21 @@ export function FinanceDashboard({
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Pagos y adeudos a proveedores</h2>
           <p className="mt-1 text-sm text-muted">
-            Estado de cuenta por proveedor · {scopeLabel}.
+            Vista agrupada de egresos tipo <span className="font-medium text-[var(--text)]">Proveedor</span>{' '}
+            registrados en Ingresos y egresos · {scopeLabel}.
+          </p>
+          <p className="mt-2 text-xs text-subtle">
+            No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
+            <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
+            <span className="font-medium text-[var(--text)]">Proveedor</span>, escribe el nombre del proveedor y
+            marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
+            <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
           </p>
           <div className="mt-4 space-y-4">
             {suppliersByVendor.length === 0 ? (
-              <p className="text-sm text-subtle">Sin movimientos de proveedores.</p>
+              <p className="text-sm text-subtle">
+                Sin movimientos de proveedores. Registra el primero en Ingresos y egresos con tipo Proveedor.
+              </p>
             ) : (
               suppliersByVendor.map((vendor) => (
                 <div key={vendor.vendor} className="glass-card-deep p-4">

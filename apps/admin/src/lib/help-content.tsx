@@ -12,7 +12,8 @@ export const HELP = {
       'Registra ingresos manuales y egresos, valida pagos de residentes y concilia el banco. Exporta CSV o póliza contable desde aquí.',
     cuentas:
       'Estado de cuenta por unidad: cargos, abonos, saldo y comprobantes. Útil para responder dudas de residentes.',
-    proveedores: 'Directorio de proveedores vinculado a egresos. Registra RFC y contacto para trazabilidad.',
+    proveedores:
+      'Resumen de egresos tipo Proveedor (pagados y pendientes), agrupados por nombre. Se registran en Ingresos y egresos, no en esta pestaña.',
     nomina: 'Empleados del condominio y egresos de nómina asociados.',
     morosidad:
       'Cargos vencidos por torre, recargos automáticos, recordatorios y planes de pago. Puedes condonar saldos o abrir un plan de parcialidades.',
