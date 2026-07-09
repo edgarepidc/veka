@@ -1,30 +1,7 @@
 @import "tailwindcss";
 
-/* Default + dark theme (glass) */
+/* Light theme (default) */
 :root,
-[data-theme='dark'] {
-  --bg-gradient: linear-gradient(160deg, #0d1b3e 0%, #0a1628 30%, #0d0d1a 60%, #1a0d2e 100%);
-  --glass: rgba(255, 255, 255, 0.13);
-  --glass-deep: rgba(255, 255, 255, 0.07);
-  --glass-border: rgba(255, 255, 255, 0.22);
-  --surface: rgba(255, 255, 255, 0.1);
-  --surface-muted: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.14);
-  --accent: #5a8f6a;
-  --accent-strong: #6fa980;
-  --accent-2: #38bdf8;
-  --accent-3: #c4783a;
-  --success: #5a8f6a;
-  --danger: #f87171;
-  --purple: #a78bfa;
-  --text: rgba(255, 255, 255, 0.95);
-  --text-muted: rgba(255, 255, 255, 0.6);
-  --text-subtle: rgba(255, 255, 255, 0.35);
-  --on-accent: #0a1a12;
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.18);
-  --body-bg: #0d0d1a;
-}
-
 [data-theme='light'] {
   --bg-gradient: linear-gradient(160deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%);
   --glass: #ffffff;
@@ -34,7 +11,7 @@
   --surface-muted: #f7f7f7;
   --border: #ebebeb;
   --accent: #2f5a44;
-  --accent-strong: #245239;
+  --accent-strong: #4a9468;
   --accent-2: #2563eb;
   --accent-3: #b45309;
   --success: #2f5a44;
@@ -46,6 +23,29 @@
   --on-accent: #ffffff;
   --shadow-glass: 0 8px 24px rgba(15, 23, 42, 0.08);
   --body-bg: #ffffff;
+}
+
+[data-theme='dark'] {
+  --bg-gradient: linear-gradient(160deg, #0d1b3e 0%, #0a1628 30%, #0d0d1a 60%, #1a0d2e 100%);
+  --glass: rgba(255, 255, 255, 0.13);
+  --glass-deep: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --surface: rgba(255, 255, 255, 0.1);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.14);
+  --accent: #5a8f6a;
+  --accent-strong: #82c49a;
+  --accent-2: #38bdf8;
+  --accent-3: #c4783a;
+  --success: #5a8f6a;
+  --danger: #f87171;
+  --purple: #a78bfa;
+  --text: rgba(255, 255, 255, 0.95);
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-subtle: rgba(255, 255, 255, 0.35);
+  --on-accent: #0a1a12;
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --body-bg: #0d0d1a;
 }
 
 [data-theme='light'] .glass-card,

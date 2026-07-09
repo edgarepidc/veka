@@ -23,8 +23,8 @@ function applyDocumentTheme(mode: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreferenceState] = useState<ThemePreference>('dark');
-  const [mode, setMode] = useState<ThemeMode>('dark');
+  const [preference, setPreferenceState] = useState<ThemePreference>('light');
+  const [mode, setMode] = useState<ThemeMode>('light');
 
   useEffect(() => {
     const stored = readStoredThemePreference();

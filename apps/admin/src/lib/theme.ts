@@ -8,12 +8,12 @@ export function resolveThemeMode(preference: ThemePreference): ThemeMode {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
   if (preference === 'light' || preference === 'dark') return preference;
-  return 'dark';
+  return 'light';
 }
 
 export function readStoredThemePreference(): ThemePreference {
-  if (typeof localStorage === 'undefined') return 'dark';
+  if (typeof localStorage === 'undefined') return 'light';
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
-  return 'dark';
+  return 'light';
 }
