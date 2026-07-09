@@ -26,7 +26,9 @@ export async function saveApprovalSettings(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
   const dualEnabled = formData.get('payments_dual_enabled') === 'true';
   const thresholdRaw = String(formData.get('payments_dual_threshold') ?? DEFAULT_APPROVAL_SETTINGS.payments_dual_threshold);
   const thresholdParsed = parseBudgetAmount(thresholdRaw);
@@ -70,7 +72,9 @@ export async function saveFiscalProfile(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
   const legalName = String(formData.get('legal_name') ?? '').trim();
   const rfc = String(formData.get('rfc') ?? '').trim().toUpperCase();
   const taxRegime = String(formData.get('tax_regime') ?? '').trim();
@@ -153,7 +157,9 @@ export async function saveAccountingCategoryMap(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: 'No autorizado' };
 
-  const condominiumId = resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
   const movementType = String(formData.get('movement_type') ?? '') as 'income' | 'expense';
   const vekaCategory = String(formData.get('veka_category') ?? '').trim();
   const accountCode = String(formData.get('account_code') ?? '').trim();
@@ -176,6 +182,56 @@ export async function saveAccountingCategoryMap(formData: FormData) {
     { onConflict: 'condominium_id,movement_type,veka_category,fund_type' },
   );
 
+  if (error) return { error: error.message };
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function updateAccountingCategoryMap(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const mapId = String(formData.get('map_id') ?? '').trim();
+  const movementType = String(formData.get('movement_type') ?? '') as 'income' | 'expense';
+  const vekaCategory = String(formData.get('veka_category') ?? '').trim();
+  const accountCode = String(formData.get('account_code') ?? '').trim();
+  const accountName = String(formData.get('account_name') ?? '').trim();
+  const fundType = String(formData.get('fund_type') ?? '').trim();
+
+  if (!mapId || !movementType || !vekaCategory || !accountCode) {
+    return { error: 'Completa tipo, categoría y cuenta contable.' };
+  }
+
+  const { error } = await supabase
+    .from('accounting_category_maps')
+    .update({
+      movement_type: movementType,
+      veka_category: vekaCategory,
+      account_code: accountCode,
+      account_name: accountName || null,
+      fund_type: fundType || null,
+    })
+    .eq('id', mapId);
+
+  if (error) return { error: error.message };
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function deleteAccountingCategoryMap(mapId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const id = mapId.trim();
+  if (!id) return { error: 'Mapeo no válido.' };
+
+  const { error } = await supabase.from('accounting_category_maps').delete().eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/finanzas');
   return { success: true };

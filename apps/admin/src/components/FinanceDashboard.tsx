@@ -76,7 +76,7 @@ type FinanceTab =
   | 'proveedores'
   | 'nomina'
   | 'morosidad'
-  | 'contabilidad';
+  | 'cumplimiento';
 
 interface UnitOption {
   id: string;
@@ -242,7 +242,7 @@ const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'proveedores', label: 'Proveedores' },
   { id: 'nomina', label: 'Empleados' },
   { id: 'morosidad', label: 'Morosidad' },
-  { id: 'contabilidad', label: 'Contabilidad' },
+  { id: 'cumplimiento', label: 'Cumplimiento' },
 ];
 
 const TAB_HELP: Record<FinanceTab, string> = {
@@ -254,7 +254,7 @@ const TAB_HELP: Record<FinanceTab, string> = {
   proveedores: HELP.finanzas.proveedores,
   nomina: HELP.finanzas.nomina,
   morosidad: HELP.finanzas.morosidad,
-  contabilidad: HELP.finanzas.contabilidad,
+  cumplimiento: HELP.finanzas.cumplimiento,
 };
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {
@@ -796,6 +796,11 @@ export function FinanceDashboard({
         (payment) =>
           payment.status === 'pending_review' || payment.status === 'pending_second_review',
       ).length,
+    [scopedPayments],
+  );
+
+  const pendingSecondReviewCount = useMemo(
+    () => scopedPayments.filter((payment) => payment.status === 'pending_second_review').length,
     [scopedPayments],
   );
 
@@ -1875,7 +1880,7 @@ export function FinanceDashboard({
         </>
       ) : null}
 
-      {tab === 'contabilidad' ? (
+      {tab === 'cumplimiento' ? (
         <FinanceCompliancePanel
           condominiumId={selectedCondoId}
           approvalSettings={approvalSettings}
@@ -1884,7 +1889,9 @@ export function FinanceDashboard({
           accountingMaps={accountingMaps}
           cfdiInvoices={cfdiInvoices}
           units={units}
+          pendingSecondReviewCount={pendingSecondReviewCount}
           onReload={() => void load()}
+          onOpenPaymentsReview={() => setTab('movimientos')}
         />
       ) : null}
     </div>

@@ -18,8 +18,8 @@ export const HELP = {
       'Resumen de egresos tipo Nómina (pagados y pendientes). Se registran en Ingresos y egresos, no en esta pestaña.',
     morosidad:
       'Cargos vencidos por torre (generados desde Cuotas), recargos, recordatorios y planes de pago. Aquí se gestionan; no se capturan adeudos manuales.',
-    contabilidad:
-      'Maker-checker para transferencias, mapeo a cuentas contables y export de póliza. La facturación CFDI está pausada hasta tener datos fiscales.',
+    cumplimiento:
+      'Políticas de aprobación, mapeo a cuentas contables y (cuando esté activo) CFDI. No se registran movimientos aquí; la póliza se exporta desde Ingresos y egresos.',
   },
   cuotas: {
     periodica:
@@ -55,15 +55,15 @@ export const HELP = {
     conciliar:
       'Empareja cada línea del banco con un pago aprobado, ingreso manual o egreso. Marca como conciliado cuando cuadre.',
   },
-  contabilidad: {
+  cumplimiento: {
     makerChecker:
       'Solo aplica a transferencias con comprobante. Pagos en línea (tarjeta/Oxxo/SPEI) no pasan por doble aprobación.',
     export:
       'Mapea categorías Veka a cuentas del catálogo contable. Descarga la póliza CSV desde Ingresos y egresos.',
     cfdiPausa:
-      'Cuando tengas RFC del condominio y de cada unidad, activa CFDI_BILLING_ENABLED en el servidor y configura Facturapi.',
+      'Facturación electrónica cuando el condominio y las unidades tengan datos fiscales. Por ahora está pausada en el piloto.',
     speiOxxo:
-      'Requiere Oxxo y SPEI habilitados en Stripe México y webhooks async en la pasarela.',
+      'Los residentes pagan con Oxxo o SPEI si Stripe México y los webhooks async están configurados en la pasarela.',
   },
   comunidad: {
     avisos: 'Publica comunicados visibles para residentes en la app. Puedes fijar prioridad o vigencia.',
