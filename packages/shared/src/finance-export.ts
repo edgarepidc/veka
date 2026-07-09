@@ -148,11 +148,12 @@ export interface MovementExportRow {
 }
 
 export function buildMovementsCsv(
-  meta: { condominiumName: string; scopeLabel: string; generatedAt: string },
+  meta: { condominiumName: string; scopeLabel: string; generatedAt: string; periodLabel?: string },
   movements: MovementExportRow[],
 ): string {
   const rows: (string | number)[][] = [
     ['Libro de movimientos', meta.condominiumName],
+    ['Periodo', meta.periodLabel ?? 'Todos'],
     ['Alcance', meta.scopeLabel],
     ['Generado', meta.generatedAt],
     [],
@@ -171,4 +172,48 @@ export function buildMovementsCsv(
   ];
 
   return rowsToCsv(rows);
+}
+
+export interface DelinquencyAgingExportRow {
+  unitIdentifier: string;
+  clusterName: string;
+  concept: string;
+  dueDate: string;
+  daysPastDue: number;
+  agingBucket: string;
+  balanceDue: number;
+  status: string;
+}
+
+export function agingBucketLabel(days: number): string {
+  if (days <= 30) return '0–30 días';
+  if (days <= 60) return '31–60 días';
+  if (days <= 90) return '61–90 días';
+  return 'Más de 90 días';
+}
+
+export function buildDelinquencyAgingCsv(
+  meta: { condominiumName: string; scopeLabel: string; generatedAt: string; totalReceivable: number },
+  rows: DelinquencyAgingExportRow[],
+): string {
+  const csvRows: (string | number)[][] = [
+    ['Corte de cartera / antigüedad', meta.condominiumName],
+    ['Alcance', meta.scopeLabel],
+    ['Total morosidad', formatExportAmount(meta.totalReceivable)],
+    ['Generado', meta.generatedAt],
+    [],
+    ['Unidad', 'Torre', 'Concepto', 'Vencimiento', 'Días vencido', 'Tramo', 'Saldo', 'Estado'],
+    ...rows.map((row) => [
+      row.unitIdentifier,
+      row.clusterName,
+      row.concept,
+      row.dueDate,
+      row.daysPastDue,
+      row.agingBucket,
+      formatExportAmount(row.balanceDue),
+      row.status,
+    ]),
+  ];
+
+  return rowsToCsv(csvRows);
 }

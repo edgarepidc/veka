@@ -9,6 +9,7 @@ import type {
   FeeScope,
   FundType,
   PaymentStatus,
+  PeriodMode,
 } from '@veka/shared';
 import {
   EXPENSE_CATEGORIES,
@@ -18,11 +19,14 @@ import {
   expenseEvidencePath,
   expenseKindLabel,
   expenseStatusLabel,
+  financePeriodLabel,
   formatCurrency,
   formatExportDate,
   fundTypeLabel,
   incomeCategoryLabel,
+  inFinancePeriod,
   matchesFinanceClusterFilter,
+  parseYearMonth,
   paymentIncomeCategory,
   paymentPeriodDate,
   paymentStatusLabel,
@@ -299,6 +303,10 @@ export function FinanceDashboard({
   const supabase = createClient();
   const expenseFileId = useId().replace(/:/g, '');
   const [tab, setTab] = useState<FinanceTab>('estado');
+  const now = useMemo(() => new Date(), []);
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
+  const [selectedMonth, setSelectedMonth] = useState(now.toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [loading, setLoading] = useState(true);
   const [expandedClusters, setExpandedClusters] = useState<Record<string, boolean>>({});
   const [expenseMessage, setExpenseMessage] = useState<string | null>(null);
@@ -818,9 +826,42 @@ export function FinanceDashboard({
     return clusters.find((cluster) => cluster.id === selectedClusterId)?.name ?? 'Torre';
   }, [clusters, selectedClusterId]);
 
+  const parsedMonth = parseYearMonth(selectedMonth);
+  const periodYear =
+    periodMode === 'year' ? Number(selectedYear) : (parsedMonth?.year ?? now.getFullYear());
+  const periodMonth = parsedMonth?.month ?? now.getMonth() + 1;
+  const periodLabel = financePeriodLabel(periodMode, periodYear, periodMonth);
+  const inSelectedPeriod = useCallback(
+    (iso: string) => inFinancePeriod(iso, periodMode, periodYear, periodMonth),
+    [periodMode, periodMonth, periodYear],
+  );
+
   const condominiumName = useMemo(
     () => condominiums.find((condo) => condo.id === selectedCondoId)?.name ?? 'Condominio',
     [condominiums, selectedCondoId],
+  );
+
+  const periodApprovedPayments = useMemo(
+    () =>
+      approvedPayments.filter((payment) =>
+        inSelectedPeriod(paymentPeriodDate(payment.paid_at, payment.created_at)),
+      ),
+    [approvedPayments, inSelectedPeriod],
+  );
+
+  const periodIncomeEntries = useMemo(
+    () => scopedIncomeEntries.filter((income) => inSelectedPeriod(income.income_date)),
+    [inSelectedPeriod, scopedIncomeEntries],
+  );
+
+  const periodExpenses = useMemo(
+    () => scopedExpenses.filter((expense) => inSelectedPeriod(expense.expense_date)),
+    [inSelectedPeriod, scopedExpenses],
+  );
+
+  const periodPaidExpenses = useMemo(
+    () => periodExpenses.filter((expense) => expense.status === 'paid'),
+    [periodExpenses],
   );
 
   const movementExportRows = useMemo(() => {
@@ -832,7 +873,7 @@ export function FinanceDashboard({
 
     const rows: MovementExportRow[] = [];
 
-    for (const payment of approvedPayments) {
+    for (const payment of periodApprovedPayments) {
       const date = paymentPeriodDate(payment.paid_at, payment.created_at).slice(0, 10);
       rows.push({
         movementType: 'Ingreso',
@@ -847,7 +888,7 @@ export function FinanceDashboard({
       });
     }
 
-    for (const income of scopedIncomeEntries) {
+    for (const income of periodIncomeEntries) {
       rows.push({
         movementType: 'Ingreso',
         date: income.income_date,
@@ -861,7 +902,7 @@ export function FinanceDashboard({
       });
     }
 
-    for (const expense of scopedExpenses) {
+    for (const expense of periodPaidExpenses) {
       rows.push({
         movementType: 'Egreso',
         date: expense.expense_date,
@@ -876,22 +917,23 @@ export function FinanceDashboard({
     }
 
     return rows.sort((a, b) => b.date.localeCompare(a.date));
-  }, [approvedPayments, clusters, scopedExpenses, scopedIncomeEntries]);
+  }, [clusters, periodApprovedPayments, periodIncomeEntries, periodPaidExpenses]);
 
   const movementsExportMeta = useMemo(
     () => ({
       condominiumName,
       scopeLabel,
+      periodLabel,
       generatedAt: formatExportDate(),
     }),
-    [condominiumName, scopeLabel],
+    [condominiumName, periodLabel, scopeLabel],
   );
 
   const polizaExportRows = useMemo(() => {
     const clusterNameById = new Map(clusters.map((cluster) => [cluster.id, cluster.name]));
     const inputs = [];
 
-    for (const payment of approvedPayments) {
+    for (const payment of periodApprovedPayments) {
       const date = paymentPeriodDate(payment.paid_at, payment.created_at).slice(0, 10);
       inputs.push({
         date,
@@ -908,7 +950,7 @@ export function FinanceDashboard({
       });
     }
 
-    for (const income of scopedIncomeEntries) {
+    for (const income of periodIncomeEntries) {
       inputs.push({
         date: income.income_date,
         concept: income.concept,
@@ -921,7 +963,7 @@ export function FinanceDashboard({
       });
     }
 
-    for (const expense of scopedExpenses.filter((row) => row.status === 'paid')) {
+    for (const expense of periodPaidExpenses) {
       inputs.push({
         date: expense.expense_date,
         concept: expense.concept,
@@ -935,15 +977,15 @@ export function FinanceDashboard({
     }
 
     return buildPolizaRows(inputs, accountingMaps);
-  }, [accountingMaps, approvedPayments, clusters, scopedExpenses, scopedIncomeEntries]);
+  }, [accountingMaps, clusters, periodApprovedPayments, periodIncomeEntries, periodPaidExpenses]);
 
   const polizaExportMeta = useMemo(
     () => ({
       condominiumName,
-      periodLabel: scopeLabel,
+      periodLabel: `${periodLabel} · ${scopeLabel}`,
       generatedAt: formatExportDate(),
     }),
-    [condominiumName, scopeLabel],
+    [condominiumName, periodLabel, scopeLabel],
   );
 
   async function reviewPayment(
@@ -1117,6 +1159,13 @@ export function FinanceDashboard({
           clusterUnitCount={clusterUnitCount}
           totalReceivable={totalReceivable}
           totalPayables={totalPayables}
+          periodMode={periodMode}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          onPeriodModeChange={setPeriodMode}
+          onSelectedMonthChange={setSelectedMonth}
+          onSelectedYearChange={setSelectedYear}
+          onOpenPaymentsReview={() => setTab('movimientos')}
           onSaveOpeningBalance={async (fundType, amount) => {
             const result = await saveFundOpeningBalance(selectedCondoId, fundType, amount);
             if (result.error) return { error: result.error };
@@ -1693,15 +1742,51 @@ export function FinanceDashboard({
             <div>
               <h2 className="text-lg font-semibold text-[var(--text)]">Libro de movimientos</h2>
               <p className="mt-1 text-sm text-muted">
-                Exporta ingresos y egresos del alcance actual ({scopeLabel}).
+                Exporta ingresos cobrados y egresos pagados del periodo{' '}
+                <span className="font-medium text-[var(--text)]">{periodLabel}</span> · {scopeLabel}.
               </p>
             </div>
-            <ExportMenu
-              disabled={movementExportRows.length === 0}
-              onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
-              onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
-              onPolizaCsv={() => downloadPolizaCsv(polizaExportMeta, polizaExportRows)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="glass-tab-strip inline-flex shrink-0" role="group" aria-label="Periodo export">
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('month')}
+                  className={`glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs ${periodMode === 'month' ? 'glass-tab-active' : ''}`}
+                >
+                  Mes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('year')}
+                  className={`glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs ${periodMode === 'year' ? 'glass-tab-active' : ''}`}
+                >
+                  Año
+                </button>
+              </div>
+              {periodMode === 'month' ? (
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="glass-input glass-input-compact w-[7.25rem] max-w-[7.25rem] shrink-0"
+                />
+              ) : (
+                <input
+                  type="number"
+                  min="2020"
+                  max="2100"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="glass-input glass-input-compact w-16 shrink-0"
+                />
+              )}
+              <ExportMenu
+                disabled={movementExportRows.length === 0}
+                onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
+                onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
+                onPolizaCsv={() => downloadPolizaCsv(polizaExportMeta, polizaExportRows)}
+              />
+            </div>
           </GlassCard>
 
           <BankReconciliationPanel
@@ -1751,18 +1836,31 @@ export function FinanceDashboard({
 
       {tab === 'proveedores' ? (
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Pagos y adeudos a proveedores</h2>
-          <p className="mt-1 text-sm text-muted">
-            Vista agrupada de egresos tipo <span className="font-medium text-[var(--text)]">Proveedor</span>{' '}
-            registrados en Ingresos y egresos · {scopeLabel}.
-          </p>
-          <p className="mt-2 text-xs text-subtle">
-            No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
-            <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
-            <span className="font-medium text-[var(--text)]">Proveedor</span>, escribe el nombre del proveedor y
-            marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
-            <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-[var(--text)]">Pagos y adeudos a proveedores</h2>
+              <p className="mt-1 text-sm text-muted">
+                Vista agrupada de egresos tipo <span className="font-medium text-[var(--text)]">Proveedor</span>{' '}
+                registrados en Ingresos y egresos · {scopeLabel}.
+              </p>
+              <p className="mt-2 text-xs text-subtle">
+                No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
+                <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
+                <span className="font-medium text-[var(--text)]">Proveedor</span>, escribe el nombre del proveedor y
+                marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
+                <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
+              </p>
+            </div>
+            <div className="glass-tab-strip inline-flex shrink-0" role="group">
+              <button
+                type="button"
+                onClick={() => setTab('movimientos')}
+                className="glass-tab glass-tab-active !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
+              >
+                Registrar en Ingresos y egresos
+              </button>
+            </div>
+          </div>
           <div className="mt-4 space-y-4">
             {suppliersByVendor.length === 0 ? (
               <p className="text-sm text-subtle">
@@ -1807,18 +1905,31 @@ export function FinanceDashboard({
 
       {tab === 'nomina' ? (
         <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Pago a empleados</h2>
-          <p className="mt-1 text-sm text-muted">
-            Vista de egresos tipo <span className="font-medium text-[var(--text)]">Nómina</span> registrados
-            en Ingresos y egresos · {scopeLabel}.
-          </p>
-          <p className="mt-2 text-xs text-subtle">
-            No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
-            <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
-            <span className="font-medium text-[var(--text)]">Nómina</span>, escribe el nombre del empleado y
-            marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
-            <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-[var(--text)]">Pago a empleados</h2>
+              <p className="mt-1 text-sm text-muted">
+                Vista de egresos tipo <span className="font-medium text-[var(--text)]">Nómina</span> registrados
+                en Ingresos y egresos · {scopeLabel}.
+              </p>
+              <p className="mt-2 text-xs text-subtle">
+                No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
+                <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
+                <span className="font-medium text-[var(--text)]">Nómina</span>, escribe el nombre del empleado y
+                marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
+                <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
+              </p>
+            </div>
+            <div className="glass-tab-strip inline-flex shrink-0" role="group">
+              <button
+                type="button"
+                onClick={() => setTab('movimientos')}
+                className="glass-tab glass-tab-active !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
+              >
+                Registrar en Ingresos y egresos
+              </button>
+            </div>
+          </div>
           <div className="mt-4 space-y-3">
             {payrollExpenses.length === 0 ? (
               <p className="text-sm text-subtle">
@@ -1851,15 +1962,10 @@ export function FinanceDashboard({
 
       {tab === 'morosidad' ? (
         <>
-          <PaymentPlansPanel
-            condominiumId={selectedCondoId}
-            units={units}
-            charges={charges}
-            plans={paymentPlans}
-            onReload={() => void load()}
-          />
           <MorosidadPanel
             condominiumId={selectedCondoId}
+            condominiumName={condominiumName}
+            scopeLabel={scopeLabel}
             lateFeeSettings={lateFeeSettings}
             dueSoonReminderRule={dueSoonReminderRule}
             overdueReminderRule={overdueReminderRule}
@@ -1876,6 +1982,13 @@ export function FinanceDashboard({
               setStatementUnitId(unitId);
               setTab('cuentas');
             }}
+          />
+          <PaymentPlansPanel
+            condominiumId={selectedCondoId}
+            units={units}
+            charges={charges}
+            plans={paymentPlans}
+            onReload={() => void load()}
           />
         </>
       ) : null}

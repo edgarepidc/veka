@@ -1,12 +1,14 @@
 'use client';
 
 import type {
+  DelinquencyAgingExportRow,
   FinancialReportExport,
   MovementExportRow,
   PolizaExportRow,
   UnitStatementExport,
 } from '@veka/shared';
 import {
+  buildDelinquencyAgingCsv,
   buildFinancialReportCsv,
   buildMovementsCsv,
   buildPolizaCsv,
@@ -36,11 +38,21 @@ export function downloadUnitStatementCsv(statement: UnitStatementExport): void {
 }
 
 export function downloadMovementsCsv(
-  meta: { condominiumName: string; scopeLabel: string; generatedAt: string },
+  meta: { condominiumName: string; scopeLabel: string; generatedAt: string; periodLabel?: string },
   movements: MovementExportRow[],
 ): void {
-  const slug = sanitizeExportFilename(`${meta.condominiumName}-${meta.scopeLabel}`);
+  const slug = sanitizeExportFilename(
+    `${meta.condominiumName}-${meta.periodLabel ?? meta.scopeLabel}`,
+  );
   downloadCsv(`movimientos-${slug}.csv`, buildMovementsCsv(meta, movements));
+}
+
+export function downloadDelinquencyAgingCsv(
+  meta: { condominiumName: string; scopeLabel: string; generatedAt: string; totalReceivable: number },
+  rows: DelinquencyAgingExportRow[],
+): void {
+  const slug = sanitizeExportFilename(`${meta.condominiumName}-${meta.scopeLabel}-cartera`);
+  downloadCsv(`corte-cartera-${slug}.csv`, buildDelinquencyAgingCsv(meta, rows));
 }
 
 export function downloadPolizaCsv(

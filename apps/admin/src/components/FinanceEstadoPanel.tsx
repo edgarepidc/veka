@@ -126,6 +126,13 @@ export function FinanceEstadoPanel({
   clusterUnitCount,
   totalReceivable,
   totalPayables,
+  periodMode,
+  selectedMonth,
+  selectedYear,
+  onPeriodModeChange,
+  onSelectedMonthChange,
+  onSelectedYearChange,
+  onOpenPaymentsReview,
   onSaveOpeningBalance,
 }: {
   condominiumName: string;
@@ -142,13 +149,16 @@ export function FinanceEstadoPanel({
   clusterUnitCount: number;
   totalReceivable: number;
   totalPayables: number;
+  periodMode: PeriodMode;
+  selectedMonth: string;
+  selectedYear: string;
+  onPeriodModeChange: (mode: PeriodMode) => void;
+  onSelectedMonthChange: (value: string) => void;
+  onSelectedYearChange: (value: string) => void;
+  onOpenPaymentsReview?: () => void;
   onSaveOpeningBalance: (fundType: FundType, amount: number) => Promise<{ error?: string }>;
 }) {
   const now = new Date();
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
-  const [selectedMonth, setSelectedMonth] = useState(now.toISOString().slice(0, 7));
-  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
-
   const parsedMonth = parseYearMonth(selectedMonth);
   const year = periodMode === 'year' ? Number(selectedYear) : (parsedMonth?.year ?? now.getFullYear());
   const month = parsedMonth?.month ?? now.getMonth() + 1;
@@ -462,14 +472,14 @@ export function FinanceEstadoPanel({
             <div className="glass-tab-strip inline-flex shrink-0" role="group" aria-label="Periodo">
               <button
                 type="button"
-                onClick={() => setPeriodMode('month')}
+                onClick={() => onPeriodModeChange('month')}
                 className={`glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs ${periodMode === 'month' ? 'glass-tab-active' : ''}`}
               >
                 Mes
               </button>
               <button
                 type="button"
-                onClick={() => setPeriodMode('year')}
+                onClick={() => onPeriodModeChange('year')}
                 className={`glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs ${periodMode === 'year' ? 'glass-tab-active' : ''}`}
               >
                 Año
@@ -479,7 +489,7 @@ export function FinanceEstadoPanel({
               <input
                 type="month"
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                onChange={(e) => onSelectedMonthChange(e.target.value)}
                 className="glass-input glass-input-compact w-[7.25rem] max-w-[7.25rem] shrink-0"
               />
             ) : (
@@ -488,7 +498,7 @@ export function FinanceEstadoPanel({
                 min="2020"
                 max="2100"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
+                onChange={(e) => onSelectedYearChange(e.target.value)}
                 className="glass-input glass-input-compact w-16 shrink-0"
               />
             )}
@@ -537,12 +547,26 @@ export function FinanceEstadoPanel({
 
       {pendingReviewCount > 0 ? (
         <GlassCard variant="accent" accent="orange" className="!p-4">
-          <p className="text-sm text-[var(--text)]">
-            <span className="font-semibold">{pendingReviewCount}</span> comprobante
-            {pendingReviewCount === 1 ? '' : 's'} de residentes pendiente
-            {pendingReviewCount === 1 ? '' : 's'} de validación. Revísalo en{' '}
-            <span className="font-semibold">Ingresos y egresos</span>.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[var(--text)]">
+              <span className="font-semibold">{pendingReviewCount}</span> comprobante
+              {pendingReviewCount === 1 ? '' : 's'} de residentes pendiente
+              {pendingReviewCount === 1 ? '' : 's'} de validación.
+            </p>
+            {onOpenPaymentsReview ? (
+              <div className="glass-tab-strip inline-flex shrink-0" role="group">
+                <button
+                  type="button"
+                  onClick={onOpenPaymentsReview}
+                  className="glass-tab glass-tab-active !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
+                >
+                  Ir a validar
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs font-semibold text-[var(--text)]">Ingresos y egresos</span>
+            )}
+          </div>
         </GlassCard>
       ) : null}
 

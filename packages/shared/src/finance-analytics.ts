@@ -72,6 +72,11 @@ export function monthLabel(year: number, month: number): string {
   return new Date(year, month - 1, 1).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
 }
 
+export function financePeriodLabel(periodMode: PeriodMode, year: number, month: number): string {
+  if (periodMode === 'month') return monthLabel(year, month);
+  return String(year);
+}
+
 export function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100;
 }

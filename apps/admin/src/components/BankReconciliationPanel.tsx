@@ -85,11 +85,47 @@ export function BankReconciliationPanel({
   const [importContent, setImportContent] = useState('');
   const [importFileName, setImportFileName] = useState<string | null>(null);
   const [detectedFormat, setDetectedFormat] = useState<'csv' | 'ofx' | null>(null);
+  const [manualPickByTx, setManualPickByTx] = useState<Record<string, string>>({});
+  const [manualFilterByTx, setManualFilterByTx] = useState<Record<string, string>>({});
+  const [showAllByTx, setShowAllByTx] = useState<Record<string, boolean>>({});
 
   const unmatched = useMemo(
     () => bankTransactions.filter((row) => row.status === 'unmatched'),
     [bankTransactions],
   );
+
+  const matchOptions = useMemo(() => {
+    const options: { key: string; type: 'payment' | 'income' | 'expense'; id: string; label: string; amount: number }[] =
+      [];
+    for (const payment of payments) {
+      options.push({
+        key: `payment:${payment.id}`,
+        type: 'payment',
+        id: payment.id,
+        label: `Pago · ${payment.charge?.concept ?? 'Cuota'} · ${formatCurrency(Number(payment.amount))}`,
+        amount: Number(payment.amount),
+      });
+    }
+    for (const income of incomeEntries) {
+      options.push({
+        key: `income:${income.id}`,
+        type: 'income',
+        id: income.id,
+        label: `Ingreso · ${income.concept} · ${formatCurrency(Number(income.amount))}`,
+        amount: Number(income.amount),
+      });
+    }
+    for (const expense of expenses) {
+      options.push({
+        key: `expense:${expense.id}`,
+        type: 'expense',
+        id: expense.id,
+        label: `Egreso · ${expense.concept} · ${formatCurrency(Number(expense.amount))}`,
+        amount: Number(expense.amount),
+      });
+    }
+    return options;
+  }, [expenses, incomeEntries, payments]);
 
   function saveAccount() {
     setMessage(null);
@@ -309,51 +345,118 @@ export function BankReconciliationPanel({
             {unmatched.map((row) => {
               const suggestion = suggestMatch(Number(row.amount));
               const amount = Number(row.amount);
+              const absAmount = Math.abs(amount);
+              const filter = (manualFilterByTx[row.id] ?? '').trim().toLowerCase();
+              const showAll = showAllByTx[row.id] ?? false;
+              const nearbyOptions = matchOptions.filter(
+                (option) => Math.abs(option.amount - absAmount) <= Math.max(1, absAmount * 0.05),
+              );
+              const baseOptions = showAll || nearbyOptions.length === 0 ? matchOptions : nearbyOptions;
+              const optionsForSelect = (
+                filter
+                  ? baseOptions.filter((option) => option.label.toLowerCase().includes(filter))
+                  : baseOptions
+              ).slice(0, 80);
+              const selectedKey = manualPickByTx[row.id] ?? '';
+              const selected =
+                optionsForSelect.find((option) => option.key === selectedKey) ??
+                matchOptions.find((option) => option.key === selectedKey) ??
+                null;
               return (
                 <div
                   key={row.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                  className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
                 >
-                  <div>
-                    <p className="font-medium text-[var(--text)]">
-                      {row.transaction_date} · {formatCurrency(amount)}
-                      {amount < 0 ? (
-                        <span className="ml-2 text-xs text-amber-200">egreso</span>
-                      ) : (
-                        <span className="ml-2 text-xs text-emerald-200">ingreso</span>
-                      )}
-                    </p>
-                    <p className="text-sm text-muted">{row.description || row.reference || 'Sin descripción'}</p>
-                    {suggestion ? (
-                      <p className="mt-1 text-xs text-emerald-300">
-                        Sugerencia: {suggestion.label} ({suggestion.type})
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-[var(--text)]">
+                        {row.transaction_date} · {formatCurrency(amount)}
+                        {amount < 0 ? (
+                          <span className="ml-2 text-xs text-amber-200">egreso</span>
+                        ) : (
+                          <span className="ml-2 text-xs text-emerald-200">ingreso</span>
+                        )}
                       </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestion ? (
+                      <p className="text-sm text-muted">
+                        {row.description || row.reference || 'Sin descripción'}
+                      </p>
+                      {suggestion ? (
+                        <p className="mt-1 text-xs text-emerald-300">
+                          Sugerencia: {suggestion.label} ({suggestion.type})
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-subtle">Sin sugerencia automática · elige un match manual.</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestion ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => matchRow(row.id, suggestion.type, suggestion.id)}
+                          className="glass-btn-primary px-3 py-1.5 text-xs font-semibold"
+                        >
+                          Conciliar sugerido
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={pending}
-                        onClick={() => matchRow(row.id, suggestion.type, suggestion.id)}
-                        className="glass-btn-primary px-3 py-1.5 text-xs font-semibold"
+                        onClick={() => {
+                          startTransition(async () => {
+                            const result = await ignoreBankTransaction(row.id);
+                            setMessage(result.error ?? 'Movimiento ignorado.');
+                            if (result.success) onReload();
+                          });
+                        }}
+                        className="glass-btn px-3 py-1.5 text-xs"
                       >
-                        Conciliar sugerido
+                        Ignorar
                       </button>
-                    ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <input
+                      value={manualFilterByTx[row.id] ?? ''}
+                      onChange={(event) =>
+                        setManualFilterByTx((prev) => ({ ...prev, [row.id]: event.target.value }))
+                      }
+                      className="glass-input min-w-[12rem] flex-1 text-xs"
+                      placeholder="Filtrar por concepto o monto…"
+                    />
+                    <select
+                      value={selectedKey}
+                      onChange={(event) =>
+                        setManualPickByTx((prev) => ({ ...prev, [row.id]: event.target.value }))
+                      }
+                      className="glass-input min-w-[16rem] flex-1 text-xs"
+                    >
+                      <option value="">Elegir pago / ingreso / egreso…</option>
+                      {optionsForSelect.map((option) => (
+                        <option key={option.key} value={option.key} className="bg-slate-900">
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
-                      disabled={pending}
-                      onClick={() => {
-                        startTransition(async () => {
-                          const result = await ignoreBankTransaction(row.id);
-                          setMessage(result.error ?? 'Movimiento ignorado.');
-                          if (result.success) onReload();
-                        });
-                      }}
-                      className="glass-btn px-3 py-1.5 text-xs"
+                      onClick={() =>
+                        setShowAllByTx((prev) => ({ ...prev, [row.id]: !showAll }))
+                      }
+                      className="glass-btn px-3 py-1.5 text-xs font-semibold"
                     >
-                      Ignorar
+                      {showAll ? 'Solo cercanos' : 'Ver todos'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending || !selected}
+                      onClick={() => {
+                        if (!selected) return;
+                        matchRow(row.id, selected.type, selected.id);
+                      }}
+                      className="glass-btn px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                    >
+                      Conciliar manual
                     </button>
                   </div>
                 </div>

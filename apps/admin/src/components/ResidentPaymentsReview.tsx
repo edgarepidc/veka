@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { PaymentStatus } from '@veka/shared';
 import { formatCurrency, paymentAccentTone, paymentStatusLabel, paymentTagTone } from '@veka/shared';
 
@@ -63,9 +63,11 @@ export function ResidentPaymentsReview({
   const pending = payments.filter((payment) => payment.status === 'pending_review');
   const secondReview = payments.filter((payment) => payment.status === 'pending_second_review');
   const awaiting = payments.filter((payment) => payment.status === 'awaiting_payment');
-  const history = payments
-    .filter((payment) => payment.status === 'approved' || payment.status === 'rejected')
-    .slice(0, 12);
+  const [historyLimit, setHistoryLimit] = useState(100);
+  const historyAll = payments.filter(
+    (payment) => payment.status === 'approved' || payment.status === 'rejected',
+  );
+  const history = historyAll.slice(0, historyLimit);
 
   function handleReject(id: string) {
     const reason = window.prompt('Motivo del rechazo (opcional):') ?? undefined;
@@ -160,38 +162,49 @@ export function ResidentPaymentsReview({
           {history.length === 0 ? (
             <p className="text-sm text-subtle">Aún no hay pagos validados.</p>
           ) : (
-            history.map((payment) => {
-              const accent = paymentAccentTone(payment.status);
-              return (
-              <div
-                key={payment.id}
-                className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm`}
-              >
-                <div>
-                  <p className="font-medium text-[var(--text)]">
-                    {payment.unit?.identifier ?? 'Unidad'} · {formatCurrency(Number(payment.amount))}
-                  </p>
-                  <p className="text-xs text-subtle">
-                    {payment.charge?.concept ?? 'Cuota de mantenimiento'}
-                    {' · '}
-                    {formatDateTime(payment.paid_at ?? payment.created_at)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusPill status={payment.status} />
-                  {payment.proof_url ? (
-                    <button
-                      type="button"
-                      onClick={() => onViewProof(payment.proof_url!)}
-                      className="text-xs text-accent hover:underline"
-                    >
-                      Comprobante
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            );
-            })
+            <>
+              {history.map((payment) => {
+                const accent = paymentAccentTone(payment.status);
+                return (
+                  <div
+                    key={payment.id}
+                    className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm`}
+                  >
+                    <div>
+                      <p className="font-medium text-[var(--text)]">
+                        {payment.unit?.identifier ?? 'Unidad'} · {formatCurrency(Number(payment.amount))}
+                      </p>
+                      <p className="text-xs text-subtle">
+                        {payment.charge?.concept ?? 'Cuota de mantenimiento'}
+                        {' · '}
+                        {formatDateTime(payment.paid_at ?? payment.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusPill status={payment.status} />
+                      {payment.proof_url ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewProof(payment.proof_url!)}
+                          className="text-xs text-accent hover:underline"
+                        >
+                          Comprobante
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+              {historyAll.length > historyLimit ? (
+                <button
+                  type="button"
+                  onClick={() => setHistoryLimit((prev) => prev + 100)}
+                  className="mt-2 text-xs font-semibold text-[var(--text)] underline-offset-2 hover:underline"
+                >
+                  Ver más ({historyAll.length - historyLimit} restantes)
+                </button>
+              ) : null}
+            </>
           )}
         </div>
       </GlassCard>

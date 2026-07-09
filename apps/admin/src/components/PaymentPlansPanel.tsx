@@ -68,6 +68,7 @@ export function PaymentPlansPanel({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [createOpen, setCreateOpen] = useState(false);
   const [unitId, setUnitId] = useState('');
   const [installmentCount, setInstallmentCount] = useState('3');
   const [firstDueDate, setFirstDueDate] = useState('');
@@ -160,12 +161,26 @@ export function PaymentPlansPanel({
   return (
     <div className="space-y-6">
       <GlassCard>
-        <SectionHeading help={HELP.planes}>Planes de pago</SectionHeading>
-        <p className="mt-1 text-sm text-muted">
-          Acuerda pagos en parcialidades sobre cargos vencidos. Los abonos se aplican a los cargos
-          vinculados en orden de antigüedad.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <SectionHeading help={HELP.planes}>Planes de pago</SectionHeading>
+            <p className="mt-1 text-sm text-muted">
+              Acuerda pagos en parcialidades sobre cargos vencidos. Los abonos se aplican a los cargos
+              vinculados en orden de antigüedad.
+            </p>
+          </div>
+          <div className="glass-tab-strip inline-flex shrink-0" role="group">
+            <button
+              type="button"
+              onClick={() => setCreateOpen((open) => !open)}
+              className={`glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs ${createOpen ? 'glass-tab-active' : ''}`}
+            >
+              {createOpen ? 'Ocultar formulario' : 'Nuevo plan'}
+            </button>
+          </div>
+        </div>
 
+        {createOpen ? (
         <form action={runCreate} className="mt-4 space-y-3">
           <input type="hidden" name="condominium_id" value={condominiumId} />
           <input type="hidden" name="unit_id" value={unitId} />
@@ -285,6 +300,7 @@ export function PaymentPlansPanel({
             {pending ? 'Creando…' : 'Crear plan de pago'}
           </button>
         </form>
+        ) : null}
 
         {message ? (
           <p

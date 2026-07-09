@@ -6,13 +6,16 @@ import {
   FUND_TYPES,
   LATE_FEE_APPLY_MODES,
   LATE_FEE_TYPES,
+  agingBucketLabel,
   chargeKindLabel,
   chargeBalanceDue,
   chargeStatusLabel,
   chargeAccentTone,
   chargeTagTone,
+  daysPastDue,
   describeLateFeeSettings,
   formatCurrency,
+  formatExportDate,
   fundTypeLabel,
   lateFeeApplyModeLabel,
   lateFeeTypeLabel,
@@ -35,6 +38,7 @@ import { MoneyInput } from '@/components/ui/MoneyInput';
 import { HelpHint } from '@/components/ui/HelpHint';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { StatusTag } from '@/components/ui/StatusTag';
+import { downloadDelinquencyAgingCsv } from '@/lib/finance-export-client';
 import { HELP } from '@/lib/help-content';
 
 interface ChargeRow {
@@ -76,6 +80,8 @@ function Chevron({ open }: { open: boolean }) {
 
 export function MorosidadPanel({
   condominiumId,
+  condominiumName,
+  scopeLabel,
   lateFeeSettings,
   dueSoonReminderRule,
   overdueReminderRule,
@@ -89,6 +95,8 @@ export function MorosidadPanel({
   onOpenUnitStatement,
 }: {
   condominiumId: string;
+  condominiumName: string;
+  scopeLabel: string;
   lateFeeSettings: LateFeeSettings;
   dueSoonReminderRule: NotificationRuleRow | null;
   overdueReminderRule: NotificationRuleRow | null;
@@ -101,6 +109,7 @@ export function MorosidadPanel({
   onReload: (options?: { silent?: boolean }) => void;
   onOpenUnitStatement?: (unitId: string) => void;
 }) {
+  const [configOpen, setConfigOpen] = useState(false);
   const [enabled, setEnabled] = useState(lateFeeSettings.enabled);
   const [graceDays, setGraceDays] = useState(String(lateFeeSettings.grace_days));
   const [feeType, setFeeType] = useState<LateFeeType>(lateFeeSettings.fee_type);
@@ -123,6 +132,26 @@ export function MorosidadPanel({
   const [maintenancePending, startMaintenance] = useTransition();
   const [reminderPendingId, setReminderPendingId] = useState<string | null>(null);
   const [forgivePendingId, setForgivePendingId] = useState<string | null>(null);
+
+  const agingExportRows = useMemo(() => {
+    const rows = [];
+    for (const [, group] of morosityByCluster) {
+      for (const charge of group.items) {
+        const days = daysPastDue(charge.due_date);
+        rows.push({
+          unitIdentifier: charge.unit?.identifier ?? 'Unidad',
+          clusterName: group.clusterName,
+          concept: charge.concept,
+          dueDate: charge.due_date,
+          daysPastDue: days,
+          agingBucket: agingBucketLabel(days),
+          balanceDue: chargeBalanceDue(charge),
+          status: chargeStatusLabel(charge.status),
+        });
+      }
+    }
+    return rows.sort((a, b) => b.daysPastDue - a.daysPastDue);
+  }, [morosityByCluster]);
 
   const lastReminderByCharge = useMemo(() => {
     const map = new Map<string, string>();
@@ -266,8 +295,174 @@ export function MorosidadPanel({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <GlassCard>
+      <GlassCard variant="accent" accent="orange" className="!p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <p className="text-sm text-muted">
+                  Unidades con cuotas vencidas, agrupadas por torre. Los adeudos vienen de cargos generados en{' '}
+                  <span className="font-medium text-[var(--text)]">Cuotas</span> (y recargos si están activos); no
+                  se capturan aquí.
+                </p>
+                <p className="mt-1 text-xs text-subtle">
+                  Para cobrar o abonar usa pagos o el estado de cuenta. Aquí condonas, envías avisos o abres un
+                  plan de parcialidades.
+                </p>
+              </div>
+              <HelpHint label="Ayuda: cartera vencida">{HELP.morosidad.cartera}</HelpHint>
+            </div>
+            <p className="mt-2 text-lg font-bold text-accent-3">
+              Total morosidad: {formatCurrency(totalReceivable)}
+            </p>
+          </div>
+          <div className="glass-tab-strip inline-flex shrink-0" role="group" aria-label="Exportar cartera">
+            <button
+              type="button"
+              disabled={agingExportRows.length === 0}
+              onClick={() =>
+                downloadDelinquencyAgingCsv(
+                  {
+                    condominiumName,
+                    scopeLabel,
+                    generatedAt: formatExportDate(),
+                    totalReceivable,
+                  },
+                  agingExportRows,
+                )
+              }
+              className="glass-tab glass-tab-active !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-50"
+            >
+              Excel corte cartera
+            </button>
+          </div>
+        </div>
+      </GlassCard>
+
+      {morosityByCluster.length === 0 ? (
+        <GlassCard variant="muted" className="!p-4">
+          <p className="text-sm text-subtle">No hay unidades morosas registradas.</p>
+        </GlassCard>
+      ) : (
+        morosityByCluster.map(([clusterId, group]) => {
+          const open = expandedClusters[clusterId] ?? true;
+          return (
+            <GlassCard key={clusterId} className="overflow-hidden !p-0">
+              <button
+                type="button"
+                onClick={() => onToggleCluster(clusterId)}
+                className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-white/5"
+              >
+                <Chevron open={open} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[var(--text)]">{group.clusterName}</p>
+                  <p className="mt-1 text-xs text-subtle">
+                    {group.items.length} cargo{group.items.length === 1 ? '' : 's'} vencido
+                    {group.items.length === 1 ? '' : 's'} · {formatCurrency(group.total)}
+                  </p>
+                </div>
+              </button>
+              {open ? (
+                <ul className="space-y-2 border-t border-white/10 px-4 pb-4 pt-3">
+                  {group.items.map((charge) => {
+                    const lastReminder = lastReminderByCharge.get(charge.id);
+                    const accent = chargeAccentTone(charge.status);
+                    return (
+                      <li
+                        key={charge.id}
+                        className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-[var(--text)]">{charge.unit?.identifier}</p>
+                            {activePlanUnitIds?.has(charge.unit_id) ? (
+                              <StatusTag label="Plan activo" tone="blue" />
+                            ) : null}
+                            {charge.charge_kind === 'late_fee' ? (
+                              <StatusTag label={chargeKindLabel(charge.charge_kind)} tone="orange" />
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-subtle">
+                            {charge.concept} · vence {charge.due_date} · {agingBucketLabel(daysPastDue(charge.due_date))}
+                          </p>
+                          {lastReminder ? (
+                            <p className="mt-1 text-[10px] text-subtle">
+                              Último recordatorio:{' '}
+                              {new Date(lastReminder).toLocaleString('es-MX', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })}
+                            </p>
+                          ) : null}
+                          {chargeMessage[charge.id] ? (
+                            <p className="mt-1 text-[10px] text-emerald-300">{chargeMessage[charge.id]}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-accent-3">
+                            {formatCurrency(chargeBalanceDue(charge))}
+                          </span>
+                          <StatusTag label={chargeStatusLabel(charge.status)} tone={chargeTagTone(charge.status)} />
+                          <div
+                            className="glass-tab-strip inline-flex shrink-0"
+                            role="group"
+                            aria-label={`Acciones ${charge.unit?.identifier ?? 'cargo'}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => void handleSendReminder(charge.id)}
+                              disabled={reminderPendingId === charge.id || forgivePendingId === charge.id}
+                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
+                            >
+                              {reminderPendingId === charge.id ? '…' : 'Recordar'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleForgiveCharge(charge.id)}
+                              disabled={forgivePendingId === charge.id || reminderPendingId === charge.id}
+                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
+                            >
+                              {forgivePendingId === charge.id ? '…' : 'Condonar'}
+                            </button>
+                            {onOpenUnitStatement && charge.unit ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenUnitStatement(charge.unit_id)}
+                                className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
+                              >
+                                Estado de cuenta
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </GlassCard>
+          );
+        })
+      )}
+
+      <GlassCard className="overflow-hidden !p-0">
+        <button
+          type="button"
+          onClick={() => setConfigOpen((open) => !open)}
+          className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-white/5"
+        >
+          <Chevron open={configOpen} />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-[var(--text)]">Recargos y recordatorios</p>
+            <p className="mt-1 text-xs text-subtle">
+              Configuración opcional · {enabled ? 'recargos activos' : 'recargos apagados'}
+              {reminderEnabled || dueSoonEnabled ? ' · avisos activos' : ''}
+            </p>
+          </div>
+        </button>
+        {configOpen ? (
+          <div className="grid gap-6 border-t border-white/10 p-4 lg:grid-cols-2">
+        <div>
           <SectionHeading help={HELP.morosidad.recargos}>Recargos por mora</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Opcional. Si lo activas, se generan cargos adicionales cuando una cuota supera los días de
@@ -399,9 +594,9 @@ export function MorosidadPanel({
               {settingsPending ? 'Guardando…' : 'Guardar recargos'}
             </button>
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard>
+        <div>
           <SectionHeading help={HELP.morosidad.recordatorios}>Recordatorios de cobro</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Avisos automáticos antes y después del vencimiento (push y correo). El cron diario corre a
@@ -516,134 +711,10 @@ export function MorosidadPanel({
               {reminderPending ? 'Guardando…' : 'Guardar recordatorios'}
             </button>
           </div>
-        </GlassCard>
-      </div>
-
-      <GlassCard variant="accent" accent="orange" className="!p-4">
-        <div className="flex items-start gap-2">
-          <div className="flex-1">
-            <p className="text-sm text-muted">
-              Unidades con cuotas vencidas, agrupadas por torre. Los adeudos vienen de cargos generados en{' '}
-              <span className="font-medium text-[var(--text)]">Cuotas</span> (y recargos si están activos); no
-              se capturan aquí.
-            </p>
-            <p className="mt-1 text-xs text-subtle">
-              Para cobrar o abonar usa pagos o el estado de cuenta. Aquí configuras recargos y recordatorios,
-              condonas, envías avisos o abres un plan de parcialidades.
-            </p>
-          </div>
-          <HelpHint label="Ayuda: cartera vencida">{HELP.morosidad.cartera}</HelpHint>
         </div>
-        <p className="mt-2 text-lg font-bold text-accent-3">
-          Total morosidad: {formatCurrency(totalReceivable)}
-        </p>
+          </div>
+        ) : null}
       </GlassCard>
-
-      {morosityByCluster.length === 0 ? (
-        <GlassCard variant="muted" className="!p-4">
-          <p className="text-sm text-subtle">No hay unidades morosas registradas.</p>
-        </GlassCard>
-      ) : (
-        morosityByCluster.map(([clusterId, group]) => {
-          const open = expandedClusters[clusterId] ?? true;
-          return (
-            <GlassCard key={clusterId} className="overflow-hidden !p-0">
-              <button
-                type="button"
-                onClick={() => onToggleCluster(clusterId)}
-                className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-white/5"
-              >
-                <Chevron open={open} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-[var(--text)]">{group.clusterName}</p>
-                  <p className="mt-1 text-xs text-subtle">
-                    {group.items.length} cargo{group.items.length === 1 ? '' : 's'} vencido
-                    {group.items.length === 1 ? '' : 's'} · {formatCurrency(group.total)}
-                  </p>
-                </div>
-              </button>
-              {open ? (
-                <ul className="space-y-2 border-t border-white/10 px-4 pb-4 pt-3">
-                  {group.items.map((charge) => {
-                    const lastReminder = lastReminderByCharge.get(charge.id);
-                    const accent = chargeAccentTone(charge.status);
-                    return (
-                      <li
-                        key={charge.id}
-                        className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm`}
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-[var(--text)]">{charge.unit?.identifier}</p>
-                            {activePlanUnitIds?.has(charge.unit_id) ? (
-                              <StatusTag label="Plan activo" tone="blue" />
-                            ) : null}
-                            {charge.charge_kind === 'late_fee' ? (
-                              <StatusTag label={chargeKindLabel(charge.charge_kind)} tone="orange" />
-                            ) : null}
-                          </div>
-                          <p className="text-xs text-subtle">
-                            {charge.concept} · vence {charge.due_date}
-                          </p>
-                          {lastReminder ? (
-                            <p className="mt-1 text-[10px] text-subtle">
-                              Último recordatorio:{' '}
-                              {new Date(lastReminder).toLocaleString('es-MX', {
-                                dateStyle: 'short',
-                                timeStyle: 'short',
-                              })}
-                            </p>
-                          ) : null}
-                          {chargeMessage[charge.id] ? (
-                            <p className="mt-1 text-[10px] text-emerald-300">{chargeMessage[charge.id]}</p>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-accent-3">
-                            {formatCurrency(chargeBalanceDue(charge))}
-                          </span>
-                          <StatusTag label={chargeStatusLabel(charge.status)} tone={chargeTagTone(charge.status)} />
-                          <div
-                            className="glass-tab-strip inline-flex shrink-0"
-                            role="group"
-                            aria-label={`Acciones ${charge.unit?.identifier ?? 'cargo'}`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => void handleSendReminder(charge.id)}
-                              disabled={reminderPendingId === charge.id || forgivePendingId === charge.id}
-                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
-                            >
-                              {reminderPendingId === charge.id ? '…' : 'Recordar'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleForgiveCharge(charge.id)}
-                              disabled={forgivePendingId === charge.id || reminderPendingId === charge.id}
-                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
-                            >
-                              {forgivePendingId === charge.id ? '…' : 'Condonar'}
-                            </button>
-                            {onOpenUnitStatement && charge.unit ? (
-                              <button
-                                type="button"
-                                onClick={() => onOpenUnitStatement(charge.unit_id)}
-                                className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
-                              >
-                                Estado de cuenta
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : null}
-            </GlassCard>
-          );
-        })
-      )}
     </div>
   );
 }
