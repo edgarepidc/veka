@@ -1,6 +1,11 @@
-import type { ExpenseCategory, FundType, IncomeCategory } from './constants';
+import type { ExpenseCategory, FundType, IncomeCategory, ReserveIncomeBase, ReserveBudgetMode } from './constants';
 import { parseAmountInput } from './money-input';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from './constants';
+import {
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
+  RESERVE_EXPENSE_CATEGORIES,
+  RESERVE_INCOME_CATEGORIES,
+} from './constants';
 import {
   inFinancePeriod,
   roundMoney,
@@ -8,7 +13,7 @@ import {
 } from './finance-analytics';
 import { paymentIncomeCategory } from './fees';
 import { expenseCategoryLabel } from './finance';
-import { incomeCategoryLabel } from './finance-scope';
+import { incomeCategoryLabel, reserveExpenseCategoryLabel } from './finance-scope';
 
 export type BudgetLineKind = 'expense' | 'income';
 
@@ -34,6 +39,7 @@ export interface IncomeForBudget {
   amount: number;
   category: string;
   income_date: string;
+  fund_type?: FundType;
 }
 
 export interface PaymentForBudget {
@@ -43,9 +49,18 @@ export interface PaymentForBudget {
   created_at?: string;
   charge?: {
     charge_kind?: string;
+    fund_type?: FundType;
     fee_campaign?: { scope: string } | null;
     recurring_fee?: { scope: string } | null;
   } | null;
+}
+
+export interface AnnualBudgetReserveMeta {
+  fund_type: FundType;
+  reserve_mode?: ReserveBudgetMode | null;
+  reserve_percent?: number | null;
+  reserve_income_base?: ReserveIncomeBase | null;
+  lines?: BudgetLineRow[];
 }
 
 export interface BudgetVsActualRow {
@@ -132,8 +147,13 @@ function periodBudgetFactor(
   return { factor: monthsElapsed / 12, label: `acumulado a ${monthsElapsed} meses` };
 }
 
-function categoryLabel(kind: BudgetLineKind, category: string): string {
-  return kind === 'expense' ? expenseCategoryLabel(category) : incomeCategoryLabel(category);
+function categoryLabel(kind: BudgetLineKind, category: string, fundType: FundType): string {
+  if (fundType === 'reserve') {
+    if (kind === 'expense') return reserveExpenseCategoryLabel(category);
+    return incomeCategoryLabel(category);
+  }
+  if (kind === 'expense') return expenseCategoryLabel(category);
+  return incomeCategoryLabel(category);
 }
 
 function buildRows(
@@ -143,6 +163,7 @@ function buildRows(
   actualByCategory: Record<string, number>,
   budgetFactor: number,
   prorate: number,
+  fundType: FundType,
 ): BudgetVsActualRow[] {
   const budgetMap = new Map(
     budgetLines.filter((line) => line.line_kind === kind).map((line) => [line.category, line.annual_amount]),
@@ -157,7 +178,7 @@ function buildRows(
       const percentUsed = budget > 0 ? roundMoney((actual / budget) * 100) : null;
       return {
         category,
-        label: categoryLabel(kind, category),
+        label: categoryLabel(kind, category, fundType),
         budget,
         actual,
         variance,
@@ -165,6 +186,46 @@ function buildRows(
       };
     })
     .filter((row) => row.budget > 0 || row.actual > 0);
+}
+
+export function sumOperatingIncomeBudget(
+  operatingLines: BudgetLineRow[],
+  base: ReserveIncomeBase = 'total',
+): number {
+  const incomeLines = operatingLines.filter((line) => line.line_kind === 'income');
+  if (base === 'fees') {
+    return incomeLines.find((line) => line.category === 'cuotas')?.annual_amount ?? 0;
+  }
+  return roundMoney(incomeLines.reduce((sum, line) => sum + line.annual_amount, 0));
+}
+
+export function computePercentReserveContribution(
+  operatingLines: BudgetLineRow[],
+  percent: number,
+  base: ReserveIncomeBase = 'total',
+): number {
+  const baseAmount = sumOperatingIncomeBudget(operatingLines, base);
+  return roundMoney(baseAmount * (percent / 100));
+}
+
+export function resolveReserveBudgetLines(
+  reserveBudget: AnnualBudgetReserveMeta | undefined,
+  operatingLines: BudgetLineRow[],
+): BudgetLineRow[] {
+  if (!reserveBudget || reserveBudget.fund_type !== 'reserve') {
+    return reserveBudget?.lines ?? [];
+  }
+
+  const mode = reserveBudget.reserve_mode ?? 'percent';
+  if (mode === 'percent') {
+    const percent = reserveBudget.reserve_percent ?? 15;
+    const base = reserveBudget.reserve_income_base ?? 'total';
+    const amount = computePercentReserveContribution(operatingLines, percent, base);
+    if (amount <= 0) return [];
+    return [{ line_kind: 'income', category: 'aportacion', annual_amount: amount }];
+  }
+
+  return reserveBudget.lines ?? [];
 }
 
 export function buildBudgetSummary({
@@ -205,16 +266,46 @@ export function buildBudgetSummary({
   const incomeActual: Record<string, number> = {};
   for (const payment of payments) {
     if (!incomeInPeriod(payment, periodMode, fiscalYear, month, reference)) continue;
-    const category = paymentIncomeCategory(payment.charge ?? null);
+    const paymentFund = payment.charge?.fund_type ?? 'operating';
+    if (paymentFund !== fundType) continue;
+    const category =
+      fundType === 'reserve'
+        ? 'aportacion'
+        : paymentIncomeCategory(payment.charge ?? null);
     incomeActual[category] = roundMoney((incomeActual[category] ?? 0) + Number(payment.amount));
   }
   for (const income of incomeEntries) {
+    const incomeFund = income.fund_type ?? 'operating';
+    if (incomeFund !== fundType) continue;
     if (!manualIncomeInPeriod(income, periodMode, fiscalYear, month, reference)) continue;
-    incomeActual[income.category] = roundMoney((incomeActual[income.category] ?? 0) + Number(income.amount));
+    const category =
+      fundType === 'reserve' && !RESERVE_INCOME_CATEGORIES.includes(income.category as (typeof RESERVE_INCOME_CATEGORIES)[number])
+        ? 'aportacion'
+        : income.category;
+    incomeActual[category] = roundMoney((incomeActual[category] ?? 0) + Number(income.amount));
   }
 
-  const expenseRows = buildRows('expense', EXPENSE_CATEGORIES, budgetLines, expenseActual, factor, prorate);
-  const incomeRows = buildRows('income', INCOME_CATEGORIES, budgetLines, incomeActual, factor, prorate);
+  const expenseCategories = fundType === 'reserve' ? RESERVE_EXPENSE_CATEGORIES : EXPENSE_CATEGORIES;
+  const incomeCategories = fundType === 'reserve' ? RESERVE_INCOME_CATEGORIES : INCOME_CATEGORIES;
+
+  const expenseRows = buildRows(
+    'expense',
+    expenseCategories,
+    budgetLines,
+    expenseActual,
+    factor,
+    prorate,
+    fundType,
+  );
+  const incomeRows = buildRows(
+    'income',
+    incomeCategories,
+    budgetLines,
+    incomeActual,
+    factor,
+    prorate,
+    fundType,
+  );
 
   const totalExpenseBudget = roundMoney(expenseRows.reduce((sum, row) => sum + row.budget, 0));
   const totalExpenseActual = roundMoney(expenseRows.reduce((sum, row) => sum + row.actual, 0));
@@ -260,7 +351,17 @@ export function parseBudgetAmount(value: string): number | null {
   return parseAmountInput(value);
 }
 
-export function isValidBudgetCategory(kind: BudgetLineKind, category: string): boolean {
+export function isValidBudgetCategory(
+  kind: BudgetLineKind,
+  category: string,
+  fundType: FundType = 'operating',
+): boolean {
+  if (fundType === 'reserve') {
+    if (kind === 'expense') {
+      return RESERVE_EXPENSE_CATEGORIES.includes(category as (typeof RESERVE_EXPENSE_CATEGORIES)[number]);
+    }
+    return RESERVE_INCOME_CATEGORIES.includes(category as (typeof RESERVE_INCOME_CATEGORIES)[number]);
+  }
   if (kind === 'expense') {
     return EXPENSE_CATEGORIES.includes(category as ExpenseCategory);
   }

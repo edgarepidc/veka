@@ -224,6 +224,9 @@ interface AnnualBudgetRow {
   fund_type: FundType;
   cluster_id: string | null;
   notes: string | null;
+  reserve_mode?: 'percent' | 'components' | null;
+  reserve_percent?: number | null;
+  reserve_income_base?: 'total' | 'fees' | null;
   lines: BudgetLineRow[];
 }
 
@@ -486,7 +489,9 @@ export function FinanceDashboard({
         .order('income_date', { ascending: false }),
       supabase
         .from('annual_budgets')
-        .select('id, fiscal_year, fund_type, cluster_id, notes, lines:budget_lines(id, line_kind, category, annual_amount)')
+        .select(
+          'id, fiscal_year, fund_type, cluster_id, notes, reserve_mode, reserve_percent, reserve_income_base, lines:budget_lines(id, line_kind, category, annual_amount)',
+        )
         .eq('condominium_id', condoId)
         .order('fiscal_year', { ascending: false }),
       supabase

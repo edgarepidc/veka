@@ -343,6 +343,31 @@ values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc12', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'income', 'servicios', 8000.00)
 on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;
 
+-- Reserve fund budget (20% of operating income)
+insert into public.annual_budgets (
+  id, condominium_id, fiscal_year, fund_type, notes, reserve_mode, reserve_percent, reserve_income_base
+)
+values (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3',
+  '22222222-2222-2222-2222-222222222222',
+  extract(year from current_date)::int,
+  'reserve',
+  'Reserva demo — 20% de ingresos operativos',
+  'percent',
+  20.00,
+  'total'
+)
+on conflict (condominium_id, fiscal_year, fund_type, budget_scope_key) do update set
+  notes = excluded.notes,
+  reserve_mode = excluded.reserve_mode,
+  reserve_percent = excluded.reserve_percent,
+  reserve_income_base = excluded.reserve_income_base;
+
+insert into public.budget_lines (id, budget_id, line_kind, category, annual_amount)
+values
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb21', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'income', 'aportacion', 44160.00)
+on conflict (budget_id, line_kind, category) do update set annual_amount = excluded.annual_amount;
+
 -- Demo CLABE for SPEI / admin reconciliation
 insert into public.bank_accounts (
   id, condominium_id, name, bank_name, account_last4, clabe, currency, is_active

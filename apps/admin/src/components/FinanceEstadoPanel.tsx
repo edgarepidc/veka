@@ -18,6 +18,7 @@ import {
   inComparablePreviousPeriod,
   inFinancePeriod,
   incomeBreakdownSlices,
+  resolveReserveBudgetLines,
   matchesFinanceClusterFilter,
   monthLabel,
   parseYearMonth,
@@ -104,6 +105,9 @@ interface AnnualBudgetRow {
   fiscal_year: number;
   fund_type: FundType;
   cluster_id?: string | null;
+  reserve_mode?: 'percent' | 'components' | null;
+  reserve_percent?: number | null;
+  reserve_income_base?: 'total' | 'fees' | null;
   lines: BudgetLineRow[];
 }
 
@@ -354,7 +358,7 @@ export function FinanceEstadoPanel({
         periodMode,
         month,
         fundType: 'reserve',
-        budgetLines: reserveBudget?.lines ?? [],
+        budgetLines: resolveReserveBudgetLines(reserveBudget, operatingBudget?.lines ?? []),
         expenses: budgetScopeExpenses,
         incomeEntries: budgetScopeIncomeEntries,
         payments: budgetScopePayments,
@@ -364,8 +368,9 @@ export function FinanceEstadoPanel({
       budgetScopeIncomeEntries,
       budgetScopePayments,
       month,
+      operatingBudget?.lines,
       periodMode,
-      reserveBudget?.lines,
+      reserveBudget,
       year,
     ],
   );

@@ -53,6 +53,27 @@ export const INCOME_CATEGORIES = [
 ] as const;
 export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
 
+export const RESERVE_BUDGET_MODES = ['percent', 'components'] as const;
+export type ReserveBudgetMode = (typeof RESERVE_BUDGET_MODES)[number];
+
+export const RESERVE_INCOME_BASES = ['total', 'fees'] as const;
+export type ReserveIncomeBase = (typeof RESERVE_INCOME_BASES)[number];
+
+/** Capital replacement / major repair categories for reserve fund (components mode). */
+export const RESERVE_EXPENSE_CATEGORIES = [
+  'obra_civil',
+  'cubierta',
+  'elevadores',
+  'instalaciones',
+  'pavimento',
+  'amenidades',
+  'contingencia',
+] as const;
+export type ReserveExpenseCategory = (typeof RESERVE_EXPENSE_CATEGORIES)[number];
+
+export const RESERVE_INCOME_CATEGORIES = ['aportacion'] as const;
+export type ReserveIncomeCategory = (typeof RESERVE_INCOME_CATEGORIES)[number];
+
 export const MAINTENANCE_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export type MaintenanceTicketStatus = (typeof MAINTENANCE_TICKET_STATUSES)[number];
 

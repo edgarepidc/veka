@@ -10,12 +10,19 @@ import {
   INCOME_CATEGORIES,
   LATE_FEE_APPLY_MODES,
   LATE_FEE_TYPES,
+  RESERVE_BUDGET_MODES,
+  RESERVE_EXPENSE_CATEGORIES,
+  RESERVE_INCOME_BASES,
+  RESERVE_INCOME_CATEGORIES,
   applyCoefficient,
   buildInstallmentSchedule,
   chargeBalanceDue,
+  computePercentReserveContribution,
   currentPeriodMonth,
   nextPeriodMonth,
   parseBudgetAmount,
+  type ReserveBudgetMode,
+  type ReserveIncomeBase,
 } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
@@ -509,19 +516,88 @@ export async function saveAnnualBudget(formData: FormData) {
   }
 
   const lines: { line_kind: 'expense' | 'income'; category: string; annual_amount: number }[] = [];
+  let reserveMode: ReserveBudgetMode | null = null;
+  let reservePercent: number | null = null;
+  let reserveIncomeBase: ReserveIncomeBase | null = null;
 
-  for (const category of EXPENSE_CATEGORIES) {
-    const raw = String(formData.get(`expense_${category}`) ?? '');
-    const amount = parseBudgetAmount(raw);
-    if (amount === null) return { error: `Monto inválido en egreso: ${category}.` };
-    if (amount > 0) lines.push({ line_kind: 'expense', category, annual_amount: amount });
-  }
+  if (fundType === 'reserve') {
+    const modeRaw = String(formData.get('reserve_mode') ?? 'percent') as ReserveBudgetMode;
+    if (!RESERVE_BUDGET_MODES.includes(modeRaw)) {
+      return { error: 'Modo de presupuesto de reserva inválido.' };
+    }
+    reserveMode = modeRaw;
 
-  for (const category of INCOME_CATEGORIES) {
-    const raw = String(formData.get(`income_${category}`) ?? '');
-    const amount = parseBudgetAmount(raw);
-    if (amount === null) return { error: `Monto inválido en ingreso: ${category}.` };
-    if (amount > 0) lines.push({ line_kind: 'income', category, annual_amount: amount });
+    if (modeRaw === 'percent') {
+      const percent = Number(formData.get('reserve_percent'));
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        return { error: 'Porcentaje de reserva inválido (0–100).' };
+      }
+      const baseRaw = String(formData.get('reserve_income_base') ?? 'total') as ReserveIncomeBase;
+      if (!RESERVE_INCOME_BASES.includes(baseRaw)) {
+        return { error: 'Base de ingresos operativos inválida.' };
+      }
+      reservePercent = percent;
+      reserveIncomeBase = baseRaw;
+
+      let operatingQuery = supabase
+        .from('annual_budgets')
+        .select('id, budget_lines(line_kind, category, annual_amount)')
+        .eq('condominium_id', condominiumId)
+        .eq('fiscal_year', fiscalYear)
+        .eq('fund_type', 'operating');
+
+      operatingQuery = clusterId
+        ? operatingQuery.eq('cluster_id', clusterId)
+        : operatingQuery.is('cluster_id', null);
+
+      const { data: operatingBudget, error: operatingError } = await operatingQuery.maybeSingle();
+      if (operatingError) return { error: operatingError.message };
+
+      const operatingLines =
+        (operatingBudget?.budget_lines as { line_kind: 'expense' | 'income'; category: string; annual_amount: number }[] | null) ??
+        [];
+
+      if (operatingLines.filter((line) => line.line_kind === 'income').length === 0) {
+        return {
+          error:
+            'Define primero el presupuesto de operación del mismo año y alcance para calcular el fondo de reserva.',
+        };
+      }
+
+      const contribution = computePercentReserveContribution(operatingLines, percent, baseRaw);
+      if (contribution <= 0) {
+        return { error: 'El aporte calculado es cero. Revisa el presupuesto de operación o el porcentaje.' };
+      }
+      lines.push({ line_kind: 'income', category: 'aportacion', annual_amount: contribution });
+    } else {
+      for (const category of RESERVE_EXPENSE_CATEGORIES) {
+        const raw = String(formData.get(`expense_${category}`) ?? '');
+        const amount = parseBudgetAmount(raw);
+        if (amount === null) return { error: `Monto inválido en componente: ${category}.` };
+        if (amount > 0) lines.push({ line_kind: 'expense', category, annual_amount: amount });
+      }
+
+      const rawIncome = String(formData.get('income_aportacion') ?? '');
+      const incomeAmount = parseBudgetAmount(rawIncome);
+      if (incomeAmount === null) return { error: 'Monto inválido en aportación anual.' };
+      if (incomeAmount > 0) {
+        lines.push({ line_kind: 'income', category: 'aportacion', annual_amount: incomeAmount });
+      }
+    }
+  } else {
+    for (const category of EXPENSE_CATEGORIES) {
+      const raw = String(formData.get(`expense_${category}`) ?? '');
+      const amount = parseBudgetAmount(raw);
+      if (amount === null) return { error: `Monto inválido en egreso: ${category}.` };
+      if (amount > 0) lines.push({ line_kind: 'expense', category, annual_amount: amount });
+    }
+
+    for (const category of INCOME_CATEGORIES) {
+      const raw = String(formData.get(`income_${category}`) ?? '');
+      const amount = parseBudgetAmount(raw);
+      if (amount === null) return { error: `Monto inválido en ingreso: ${category}.` };
+      if (amount > 0) lines.push({ line_kind: 'income', category, annual_amount: amount });
+    }
   }
 
   let budgetQuery = supabase
@@ -543,6 +619,10 @@ export async function saveAnnualBudget(formData: FormData) {
       .from('annual_budgets')
       .update({
         notes: notes || null,
+        reserve_mode: fundType === 'reserve' ? reserveMode : null,
+        reserve_percent: fundType === 'reserve' && reserveMode === 'percent' ? reservePercent : null,
+        reserve_income_base:
+          fundType === 'reserve' && reserveMode === 'percent' ? reserveIncomeBase : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', budgetId);
@@ -557,6 +637,10 @@ export async function saveAnnualBudget(formData: FormData) {
         fund_type: fundType,
         cluster_id: clusterId,
         notes: notes || null,
+        reserve_mode: fundType === 'reserve' ? reserveMode : null,
+        reserve_percent: fundType === 'reserve' && reserveMode === 'percent' ? reservePercent : null,
+        reserve_income_base:
+          fundType === 'reserve' && reserveMode === 'percent' ? reserveIncomeBase : null,
         created_by: user.id,
       })
       .select('id')
