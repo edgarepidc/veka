@@ -1143,21 +1143,6 @@ export function FinanceDashboard({
 
       {tab === 'movimientos' ? (
         <div className="space-y-6">
-          <GlassCard className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--text)]">Libro de movimientos</h2>
-              <p className="mt-1 text-sm text-muted">
-                Exporta ingresos y egresos del alcance actual ({scopeLabel}).
-              </p>
-            </div>
-            <ExportMenu
-              disabled={movementExportRows.length === 0}
-              onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
-              onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
-              onPolizaCsv={() => downloadPolizaCsv(polizaExportMeta, polizaExportRows)}
-            />
-          </GlassCard>
-
           <ResidentPaymentsReview
             payments={scopedPayments}
             onReview={reviewPayment}
@@ -1687,6 +1672,21 @@ export function FinanceDashboard({
             </div>
           </GlassCard>
           </div>
+
+          <GlassCard className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--text)]">Libro de movimientos</h2>
+              <p className="mt-1 text-sm text-muted">
+                Exporta ingresos y egresos del alcance actual ({scopeLabel}).
+              </p>
+            </div>
+            <ExportMenu
+              disabled={movementExportRows.length === 0}
+              onCsv={() => downloadMovementsCsv(movementsExportMeta, movementExportRows)}
+              onPdf={() => exportMovementsPdf(movementsExportMeta, movementExportRows)}
+              onPolizaCsv={() => downloadPolizaCsv(polizaExportMeta, polizaExportRows)}
+            />
+          </GlassCard>
 
           <BankReconciliationPanel
             condominiumId={selectedCondoId}
