@@ -158,7 +158,8 @@ export function UnitStatementPanel({
           <div>
             <h2 className="text-lg font-semibold text-[var(--text)]">Estado de cuenta por unidad</h2>
             <p className="mt-1 text-sm text-muted">
-              Historial de cargos y pagos con saldo acumulado por unidad.
+              Historial de cargos y pagos con saldo acumulado por unidad. Incluye mantenimiento fijo,
+              consumos variables (gas, etc.) y cuotas extraordinarias.
             </p>
           </div>
           <select

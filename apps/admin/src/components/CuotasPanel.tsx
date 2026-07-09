@@ -10,6 +10,7 @@ import type {
 } from '@veka/shared';
 import {
   RECURRING_FEE_AMOUNT_MODES,
+  buildVariableFeeCaptureCsv,
   cardTagClass,
   currentPeriodMonth,
   defaultFeeConcept,
@@ -21,10 +22,12 @@ import {
   matchesFeeClusterFilter,
   matchesFinanceClusterFilter,
   nextPeriodMonth,
+  parseVariableFeeCaptureCsv,
   periodLabel,
   recurringFeeAmountModeLabel,
   recurringFeeStatusLabel,
   resolveBaseAmount,
+  sanitizeExportFilename,
 } from '@veka/shared';
 
 import {
@@ -38,6 +41,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { SectionHeading } from '@/components/ui/SectionHeading';
+import { downloadCsv } from '@/lib/finance-export-client';
 import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 
@@ -134,6 +138,7 @@ export function CuotasPanel({
   const [capturePeriod, setCapturePeriod] = useState(currentPeriodMonth());
   const [captureAmounts, setCaptureAmounts] = useState<Record<string, string>>({});
   const [captureLoading, setCaptureLoading] = useState(false);
+  const [csvImportMessage, setCsvImportMessage] = useState<string | null>(null);
 
   const currentPeriod = currentPeriodMonth();
   const capturePeriodOptions = useMemo(() => {
@@ -304,6 +309,52 @@ export function CuotasPanel({
     setCapturingFeeId(fee.id);
     setCapturePeriod(currentPeriod);
     setCaptureAmounts({});
+    setCsvImportMessage(null);
+  }
+
+  function downloadCaptureTemplate(fee: RecurringFeeRow, feeUnits: UnitOption[]) {
+    const csv = buildVariableFeeCaptureCsv(
+      feeUnits.map((unit) => ({ id: unit.id, identifier: unit.identifier })),
+      captureAmounts,
+    );
+    const slug = sanitizeExportFilename(
+      `${fee.concept}-${periodLabel(capturePeriod)}-${scopeLabel}`,
+    );
+    downloadCsv(`consumo-${slug}.csv`, csv);
+  }
+
+  async function handleCaptureCsvUpload(
+    file: File | null,
+    feeUnits: UnitOption[],
+  ) {
+    if (!file) return;
+    setCsvImportMessage(null);
+    try {
+      const text = await file.text();
+      const parsed = parseVariableFeeCaptureCsv(
+        text,
+        feeUnits.map((unit) => ({ id: unit.id, identifier: unit.identifier })),
+      );
+
+      setCaptureAmounts((prev) => ({ ...prev, ...parsed.amountsByUnitId }));
+
+      const parts = [`${parsed.matched} unidad${parsed.matched === 1 ? '' : 'es'} cargada${parsed.matched === 1 ? '' : 's'}`];
+      if (parsed.skippedEmpty > 0) parts.push(`${parsed.skippedEmpty} vacías/omitidas`);
+      if (parsed.unknownUnits.length > 0) {
+        parts.push(`${parsed.unknownUnits.length} unidad(es) no encontradas`);
+      }
+      if (parsed.invalidRows.length > 0) {
+        parts.push(`${parsed.invalidRows.length} fila(s) inválida(s)`);
+      }
+
+      setCsvImportMessage(
+        parsed.matched > 0 || parsed.unknownUnits.length > 0 || parsed.invalidRows.length > 0
+          ? `CSV: ${parts.join(' · ')}.`
+          : 'CSV sin montos válidos. Revisa la plantilla (columnas unidad,monto).',
+      );
+    } catch {
+      setCsvImportMessage('No se pudo leer el archivo CSV.');
+    }
   }
 
   function runCreatePeriodic(formData: FormData) {
@@ -639,14 +690,18 @@ export function CuotasPanel({
                           <div>
                             <p className="font-semibold text-[var(--text)]">{fee.concept}</p>
                             <p className="mt-1 text-xs text-subtle">
-                              Captura de consumo · {periodLabel(capturePeriod)}
+                              Captura de consumo · {periodLabel(capturePeriod)}. Los cargos emitidos
+                              aparecen en Estado de cuenta de cada unidad.
                             </p>
                           </div>
                           <label className="block text-xs">
                             <span className="mb-1 block text-subtle">Periodo</span>
                             <select
                               value={capturePeriod}
-                              onChange={(e) => setCapturePeriod(e.target.value)}
+                              onChange={(e) => {
+                                setCapturePeriod(e.target.value);
+                                setCsvImportMessage(null);
+                              }}
                               className="glass-input min-w-[10rem] text-sm"
                             >
                               {capturePeriodOptions.map((period) => (
@@ -657,6 +712,42 @@ export function CuotasPanel({
                             </select>
                           </label>
                         </div>
+
+                        <div className="rounded-xl border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                            Carga masiva CSV
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            Descarga la plantilla, llena la columna <code>monto</code> y súbela. Columnas:{' '}
+                            <code>unidad,monto,notas</code>.
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => downloadCaptureTemplate(fee, feeUnits)}
+                              className="text-xs font-semibold text-accent hover:underline"
+                            >
+                              Descargar plantilla
+                            </button>
+                            <label className="cursor-pointer text-xs font-semibold text-accent hover:underline">
+                              Cargar CSV
+                              <input
+                                type="file"
+                                accept=".csv,text/csv"
+                                className="hidden"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0] ?? null;
+                                  void handleCaptureCsvUpload(file, feeUnits);
+                                  event.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                          {csvImportMessage ? (
+                            <p className="mt-2 text-xs text-muted">{csvImportMessage}</p>
+                          ) : null}
+                        </div>
+
                         {captureLoading ? (
                           <p className="text-sm text-subtle">Cargando montos…</p>
                         ) : (

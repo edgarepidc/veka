@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/spaces.test.ts src/payments.test.ts src/visit-qr.test.ts"
+    "test": "tsx --test src/spaces.test.ts src/payments.test.ts src/visit-qr.test.ts src/recurring-fees.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.20.3",
