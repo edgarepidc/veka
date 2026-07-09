@@ -964,42 +964,43 @@ export function FinanceDashboard({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="glass-tab-strip">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
-          >
-            {item.label}
-            {item.id === 'movimientos' && pendingReviewCount > 0 ? (
-              <span className="glass-tag-amber ml-2 min-w-[1.25rem] px-1.5 text-[10px] font-bold">
-                {pendingReviewCount}
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-3">
+      <GlassCard className="!p-3">
+        <div className="flex items-start gap-2">
+          <div className="glass-tab-strip min-w-0 flex-1">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
+              >
+                {item.label}
+                {item.id === 'movimientos' && pendingReviewCount > 0 ? (
+                  <span className="glass-tag-amber ml-2 min-w-[1.25rem] px-1.5 text-[10px] font-bold">
+                    {pendingReviewCount}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+          <HelpHint label="Ayuda de esta pestaña" className="mt-1 shrink-0">
+            <p>{TAB_HELP[tab]}</p>
+          </HelpHint>
+        </div>
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
-        <FinanceScopeFilter
+        <div className="mt-3">
+          <FinanceScopeFilter
           condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
           clusters={clusters}
           condominiumId={selectedCondoId}
           clusterId={selectedClusterId}
           onCondominiumChange={setSelectedCondoId}
           onClusterChange={setSelectedClusterId}
-        />
-      </div>
-
-      <div className="flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-        <HelpHint label="Ayuda de esta pestaña" className="mt-0.5 shrink-0">
-          <p>{TAB_HELP[tab]}</p>
-        </HelpHint>
-      </div>
+          align="end"
+          />
+        </div>
+      </GlassCard>
 
       {tab === 'estado' ? (
         <FinanceEstadoPanel

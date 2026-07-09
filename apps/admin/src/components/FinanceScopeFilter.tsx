@@ -56,6 +56,7 @@ export function FinanceScopeFilter({
   clusterId,
   onCondominiumChange,
   onClusterChange,
+  align = 'end',
 }: {
   condominiums: CondominiumOption[];
   clusters: ClusterOption[];
@@ -63,18 +64,19 @@ export function FinanceScopeFilter({
   clusterId: string;
   onCondominiumChange: (id: string) => void;
   onClusterChange: (id: string) => void;
+  align?: 'start' | 'end';
 }) {
   const showCondominium = condominiums.length > 1;
+  const chipAlign = align === 'end' ? 'justify-end' : 'justify-start';
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {showCondominium ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-subtle">Condominio</span>
+        <div className={`flex flex-wrap items-center gap-2 ${chipAlign}`}>
           <select
             value={condominiumId}
             onChange={(e) => onCondominiumChange(e.target.value)}
-            className="glass-input min-w-[180px] py-1.5 text-sm"
+            className="glass-input glass-input-compact min-w-[180px]"
           >
             {condominiums.map((condo) => (
               <option key={condo.id} value={condo.id} className="bg-slate-900">
@@ -85,7 +87,7 @@ export function FinanceScopeFilter({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${chipAlign}`}>
         <ScopeChip
           active={clusterId === ''}
           label="Todo el condominio"
