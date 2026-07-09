@@ -23,6 +23,6 @@ export function parseCondominiumSettings(raw: unknown): CondominiumSettings {
 
 export const DEFAULT_BRANDING: Required<CondominiumBranding> = {
   logo_url: '',
-  primary_color: '#34d399',
+  primary_color: '#2f5a44',
   accent_color: '#38bdf8',
 };

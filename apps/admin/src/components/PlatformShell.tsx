@@ -3,7 +3,6 @@ import type { CSSProperties } from 'react';
 
 import { SignOutButton } from '@/components/SignOutButton';
 import { VekaLogo } from '@/components/brand/VekaLogo';
-import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { PlatformSession } from '@/lib/platform-admin';
 
@@ -63,7 +62,6 @@ export function PlatformShell({
               <p className="text-xs text-subtle lg:hidden">{session.email}</p>
             </div>
             <div className="flex items-center gap-3">
-              <AppearancePicker compact />
               <Link href="/" className="text-xs text-violet-300 hover:underline">
                 Panel condo
               </Link>
