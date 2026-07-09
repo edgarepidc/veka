@@ -157,7 +157,6 @@ export function CondoTransparencyTab({
   }, [clusterFilter, expenseGroups, myClusterId, period]);
 
   const totalFunds = funds.reduce((sum, fund) => sum + fund.balance, 0);
-  const fundsNegative = totalFunds < 0;
 
   return (
     <>
@@ -199,7 +198,7 @@ export function CondoTransparencyTab({
       <SectionLabel title="Detalle de ingresos" />
       <View style={styles.section}>
         {incomeDetails.length === 0 ? (
-          <GlassCard>
+          <GlassCard variant="muted">
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin ingresos en este filtro.</Text>
           </GlassCard>
         ) : (
@@ -207,7 +206,7 @@ export function CondoTransparencyTab({
             <GlassCard
               key={`${row.source}-${row.id ?? row.income_date}-${row.amount}-${row.concept}`}
               variant="accent"
-              accent="green"
+              accent={row.source === 'payment' ? 'green' : 'blue'}
               style={styles.cardGap}
             >
               <View style={styles.cardTop}>
@@ -226,45 +225,34 @@ export function CondoTransparencyTab({
         )}
       </View>
 
-      <SectionLabel title="Fondos del condominio" />
-      <View style={styles.section}>
-        <GlassCard variant={fundsNegative ? 'accent' : 'default'} accent={fundsNegative ? 'danger' : undefined}>
-          <Text style={{ color: theme.textMuted, fontSize: 13, marginBottom: 10 }}>
-            Saldo consolidado:{' '}
-            <Text style={{ color: fundsNegative ? theme.danger : theme.accent, fontWeight: '700' }}>
-              {formatCurrency(totalFunds)}
-            </Text>
-          </Text>
-          {fundsNegative ? (
-            <Text style={{ color: theme.danger, fontSize: 12, marginBottom: 10, lineHeight: 18 }}>
-              Saldo negativo: requiere atención de la administración.
-            </Text>
-          ) : null}
-          {funds.length === 0 ? (
-            <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin saldos registrados.</Text>
-          ) : (
-            funds.map((fund) => (
-              <View key={fund.fund_type} style={styles.fundRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontWeight: '600', fontSize: 14 }}>
-                    {fundTypeLabel(fund.fund_type as 'operating' | 'reserve')}
+      {funds.length > 0 ? (
+        <>
+          <SectionLabel title="Desglose por fondo" />
+          <View style={styles.section}>
+            <GlassCard variant="muted">
+              {funds.map((fund) => (
+                <View key={fund.fund_type} style={styles.fundRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontWeight: '600', fontSize: 14 }}>
+                      {fundTypeLabel(fund.fund_type as 'operating' | 'reserve')}
+                    </Text>
+                    <Text style={{ color: theme.textSubtle, fontSize: 11 }}>Al {fund.as_of_date}</Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: fund.balance < 0 ? theme.danger : theme.accent2,
+                      fontWeight: '700',
+                      fontSize: 16,
+                    }}
+                  >
+                    {formatCurrency(fund.balance)}
                   </Text>
-                  <Text style={{ color: theme.textSubtle, fontSize: 11 }}>Al {fund.as_of_date}</Text>
                 </View>
-                <Text
-                  style={{
-                    color: fund.balance < 0 ? theme.danger : theme.accent2,
-                    fontWeight: '700',
-                    fontSize: 16,
-                  }}
-                >
-                  {formatCurrency(fund.balance)}
-                </Text>
-              </View>
-            ))
-          )}
-        </GlassCard>
-      </View>
+              ))}
+            </GlassCard>
+          </View>
+        </>
+      ) : null}
 
       <SectionLabel title="Detalle de egresos" />
       <View style={styles.section}>

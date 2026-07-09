@@ -141,7 +141,7 @@ export function PersonalAccountTab({
 
       {activePlan ? (
         <View style={styles.section}>
-          <GlassCard>
+          <GlassCard variant="accent" accent="blue">
             <Text style={[styles.cardLabel, { color: theme.textSubtle }]}>PLAN DE PAGO ACTIVO</Text>
             <Text style={[styles.cardTitle, { color: theme.text, marginTop: 6 }]}>{activePlan.title}</Text>
             {planProgress ? (
@@ -250,7 +250,6 @@ export function PersonalAccountTab({
               maxAmount={paymentTotal}
               onUploaded={onRefresh}
             />
-            <View style={{ height: 10 }} />
             <OnlinePaymentButton
               chargeId={paymentTarget.chargeId}
               installmentId={paymentTarget.installmentId}
@@ -278,7 +277,7 @@ export function PersonalAccountTab({
 
       <SectionLabel title="Mi estado de cuenta" />
       <View style={styles.section}>
-        <GlassCard>
+        <GlassCard variant="muted">
           {filteredStatementLines.length === 0 ? (
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin movimientos en este período.</Text>
           ) : (
@@ -312,7 +311,7 @@ export function PersonalAccountTab({
       <SectionLabel title="Mis cargos" />
       <View style={styles.section}>
         {filteredCharges.length === 0 ? (
-          <GlassCard>
+          <GlassCard variant="muted">
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin cargos en este período.</Text>
           </GlassCard>
         ) : (
@@ -353,7 +352,7 @@ export function PersonalAccountTab({
       <SectionLabel title="Mis pagos" />
       <View style={styles.section}>
         {filteredPayments.length === 0 ? (
-          <GlassCard>
+          <GlassCard variant="muted">
             <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin pagos en este período.</Text>
           </GlassCard>
         ) : (

@@ -9,6 +9,8 @@ import {
   chargeKindLabel,
   chargeBalanceDue,
   chargeStatusLabel,
+  chargeAccentTone,
+  chargeTagTone,
   describeLateFeeSettings,
   formatCurrency,
   fundTypeLabel,
@@ -30,6 +32,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import { HelpHint } from '@/components/ui/HelpHint';
 import { SectionHeading } from '@/components/ui/SectionHeading';
+import { StatusTag } from '@/components/ui/StatusTag';
 import { HELP } from '@/lib/help-content';
 
 interface ChargeRow {
@@ -503,7 +506,7 @@ export function MorosidadPanel({
         </GlassCard>
       </div>
 
-      <GlassCard className="!p-4">
+      <GlassCard variant="accent" accent="orange" className="!p-4">
         <div className="flex items-start gap-2">
           <p className="flex-1 text-sm text-muted">
             Unidades con cuotas vencidas, agrupadas por torre. Los recargos por mora aparecen como cargos
@@ -511,13 +514,13 @@ export function MorosidadPanel({
           </p>
           <HelpHint label="Ayuda: cartera vencida">{HELP.morosidad.cartera}</HelpHint>
         </div>
-        <p className="mt-2 text-lg font-bold text-amber-200">
+        <p className="mt-2 text-lg font-bold text-accent-3">
           Total morosidad: {formatCurrency(totalReceivable)}
         </p>
       </GlassCard>
 
       {morosityByCluster.length === 0 ? (
-        <GlassCard>
+        <GlassCard variant="muted" className="!p-4">
           <p className="text-sm text-subtle">No hay unidades morosas registradas.</p>
         </GlassCard>
       ) : (
@@ -543,25 +546,22 @@ export function MorosidadPanel({
                 <ul className="space-y-2 border-t border-white/10 px-4 pb-4 pt-3">
                   {group.items.map((charge) => {
                     const lastReminder = lastReminderByCharge.get(charge.id);
+                    const accent = chargeAccentTone(charge.status);
                     return (
                       <li
                         key={charge.id}
-                        className="glass-card-deep flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm"
+                        className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm`}
                       >
                         <div className="min-w-0">
-                          <p className="font-medium text-[var(--text)]">
-                            {charge.unit?.identifier}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-[var(--text)]">{charge.unit?.identifier}</p>
                             {activePlanUnitIds?.has(charge.unit_id) ? (
-                              <span className="ml-2 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-100">
-                                Plan activo
-                              </span>
+                              <StatusTag label="Plan activo" tone="blue" />
                             ) : null}
                             {charge.charge_kind === 'late_fee' ? (
-                              <span className="ml-2 rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-100">
-                                {chargeKindLabel(charge.charge_kind)}
-                              </span>
+                              <StatusTag label={chargeKindLabel(charge.charge_kind)} tone="orange" />
                             ) : null}
-                          </p>
+                          </div>
                           <p className="text-xs text-subtle">
                             {charge.concept} · vence {charge.due_date}
                           </p>
@@ -579,12 +579,10 @@ export function MorosidadPanel({
                           ) : null}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-amber-200">
+                          <span className="font-semibold text-accent-3">
                             {formatCurrency(chargeBalanceDue(charge))}
                           </span>
-                          <span className="rounded-full border border-red-400/30 bg-red-400/15 px-2 py-0.5 text-xs font-bold text-red-100">
-                            {chargeStatusLabel(charge.status)}
-                          </span>
+                          <StatusTag label={chargeStatusLabel(charge.status)} tone={chargeTagTone(charge.status)} />
                           <button
                             type="button"
                             onClick={() => void handleSendReminder(charge.id)}

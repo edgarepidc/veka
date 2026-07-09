@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import type { ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
+import type { CardAccentTone, ChargeStatus, ExpenseStatus, FundType, PaymentStatus, PeriodMode } from '@veka/shared';
 import {
   EXPENSE_CHART_COLORS,
   budgetProrateRatio,
@@ -527,8 +527,8 @@ export function FinanceEstadoPanel({
       ) : null}
 
       {pendingReviewCount > 0 ? (
-        <GlassCard className="!border-amber-400/25 !bg-amber-500/5">
-          <p className="text-sm text-amber-100">
+        <GlassCard variant="accent" accent="orange" className="!p-4">
+          <p className="text-sm text-[var(--text)]">
             <span className="font-semibold">{pendingReviewCount}</span> comprobante
             {pendingReviewCount === 1 ? '' : 's'} de residentes pendiente
             {pendingReviewCount === 1 ? '' : 's'} de validación. Revísalo en{' '}
@@ -749,13 +749,21 @@ function SummaryCard({
   change?: number | null;
   invertChange?: boolean;
 }) {
+  const accentMap: Record<typeof tone, CardAccentTone | null> = {
+    green: 'green',
+    amber: 'orange',
+    red: 'danger',
+    neutral: null,
+  };
+  const accent = accentMap[tone];
+
   const toneClass =
     tone === 'green'
       ? 'text-accent'
       : tone === 'amber'
-        ? 'text-amber-200'
+        ? 'text-accent-3'
         : tone === 'red'
-          ? 'text-red-200'
+          ? 'text-danger'
           : 'text-[var(--text)]';
 
   const changeLabel = formatPercentChange(change ?? null);
@@ -767,11 +775,11 @@ function SummaryCard({
       : change === 0
         ? 'text-subtle'
         : changeGood
-          ? 'text-emerald-300'
-          : 'text-red-300';
+          ? 'text-accent'
+          : 'text-danger';
 
-  return (
-    <div className="glass-card p-4">
+  const body = (
+    <>
       <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</p>
       <p className={`mt-1 text-xl font-bold ${toneClass}`}>{value}</p>
       {change != null ? (
@@ -780,8 +788,18 @@ function SummaryCard({
         </p>
       ) : null}
       {sub ? <p className="mt-1 text-xs text-subtle">{sub}</p> : null}
-    </div>
+    </>
   );
+
+  if (accent) {
+    return (
+      <GlassCard variant="accent" accent={accent} className="!p-4">
+        {body}
+      </GlassCard>
+    );
+  }
+
+  return <GlassCard className="!p-4">{body}</GlassCard>;
 }
 
 function FundBalanceCard({
@@ -815,7 +833,7 @@ function FundBalanceCard({
   }
 
   return (
-    <div className="glass-card-deep p-4">
+    <GlassCard variant="accent" accent="green" className="!p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
         {fundTypeLabel(fund.fund_type)}
       </p>
@@ -865,6 +883,6 @@ function FundBalanceCard({
         </button>
       )}
       {message ? <p className="mt-2 text-xs text-subtle">{message}</p> : null}
-    </div>
+    </GlassCard>
   );
 }

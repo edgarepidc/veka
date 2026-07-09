@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { PaymentActionButton } from '@/components/finance/PaymentActionButton';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { formatCurrency } from '@veka/shared';
+import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/lib/supabase';
 
 const ADMIN_URL = process.env.EXPO_PUBLIC_ADMIN_URL ?? 'http://localhost:3000';
@@ -27,6 +29,7 @@ export function OnlinePaymentButton({
   disabled,
   onStarted,
 }: OnlinePaymentButtonProps) {
+  const theme = useTheme();
   const [loadingMethod, setLoadingMethod] = useState<GatewayMethod | null>(null);
 
   const startCheckout = useCallback(
@@ -92,7 +95,8 @@ export function OnlinePaymentButton({
   );
 
   return (
-    <>
+    <View style={styles.wrap}>
+      <Text style={[styles.eyebrow, { color: theme.textSubtle }]}>PAGO EN LÍNEA</Text>
       <PaymentActionButton
         label="Pagar con tarjeta"
         icon="card-outline"
@@ -101,24 +105,31 @@ export function OnlinePaymentButton({
         disabled={disabled}
         onPress={() => void startCheckout('card')}
       />
-      <View style={{ height: 8 }} />
-      <PaymentActionButton
-        label="Pagar en Oxxo"
-        icon="storefront-outline"
-        variant="orange"
-        loading={loadingMethod === 'oxxo'}
-        disabled={disabled}
-        onPress={() => void startCheckout('oxxo')}
-      />
-      <View style={{ height: 8 }} />
-      <PaymentActionButton
-        label="Pagar con SPEI"
-        icon="swap-horizontal-outline"
-        variant="green"
-        loading={loadingMethod === 'spei'}
-        disabled={disabled}
-        onPress={() => void startCheckout('spei')}
-      />
-    </>
+      <View style={styles.altRow}>
+        <PrimaryButton
+          label="Oxxo"
+          variant="secondary"
+          loading={loadingMethod === 'oxxo'}
+          disabled={disabled}
+          style={styles.altButton}
+          onPress={() => void startCheckout('oxxo')}
+        />
+        <PrimaryButton
+          label="SPEI"
+          variant="secondary"
+          loading={loadingMethod === 'spei'}
+          disabled={disabled}
+          style={styles.altButton}
+          onPress={() => void startCheckout('spei')}
+        />
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrap: { marginTop: 4 },
+  eyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8 },
+  altRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  altButton: { flex: 1 },
+});

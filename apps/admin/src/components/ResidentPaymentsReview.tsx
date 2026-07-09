@@ -84,7 +84,7 @@ export function ResidentPaymentsReview({
             </p>
           </div>
           {pending.length > 0 ? (
-            <span className="rounded-full border border-amber-400/35 bg-amber-400/15 px-3 py-1 text-xs font-bold text-amber-100">
+            <span className="glass-tag-amber px-3 py-1 text-xs font-bold">
               {pending.length} pendiente{pending.length === 1 ? '' : 's'}
             </span>
           ) : null}
@@ -135,7 +135,10 @@ export function ResidentPaymentsReview({
           <p className="mt-1 text-sm text-muted">Referencias abiertas en Stripe. Se aprobarán al recibir el abono.</p>
           <div className="mt-4 space-y-3">
             {awaiting.map((payment) => (
-              <div key={payment.id} className="glass-card-deep p-4 text-sm">
+              <div
+                key={payment.id}
+                className="glass-card glass-card-accent glass-card-accent-blue p-4 text-sm"
+              >
                 <p className="font-semibold text-[var(--text)]">
                   {payment.unit?.identifier} · {formatCurrency(Number(payment.amount))}
                 </p>
@@ -157,10 +160,12 @@ export function ResidentPaymentsReview({
           {history.length === 0 ? (
             <p className="text-sm text-subtle">Aún no hay pagos validados.</p>
           ) : (
-            history.map((payment) => (
+            history.map((payment) => {
+              const accent = paymentAccentTone(payment.status);
+              return (
               <div
                 key={payment.id}
-                className="glass-card-deep flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+                className={`glass-card glass-card-accent glass-card-accent-${accent} flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm`}
               >
                 <div>
                   <p className="font-medium text-[var(--text)]">
@@ -185,7 +190,8 @@ export function ResidentPaymentsReview({
                   ) : null}
                 </div>
               </div>
-            ))
+            );
+            })
           )}
         </div>
       </GlassCard>
@@ -245,18 +251,10 @@ function PaymentReviewCard({
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onApprove}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
+        <button type="button" onClick={onApprove} className="glass-btn-primary text-sm">
           {approveLabel}
         </button>
-        <button
-          type="button"
-          onClick={onReject}
-          className="rounded-lg border border-red-400/40 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-500/10"
-        >
+        <button type="button" onClick={onReject} className="glass-btn-danger text-sm">
           Rechazar
         </button>
       </div>

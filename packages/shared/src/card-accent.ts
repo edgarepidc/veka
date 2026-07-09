@@ -1,4 +1,4 @@
-import type { ChargeStatus, MaintenanceTicketStatus, PaymentStatus } from './constants';
+import type { ChargeStatus, ExpenseStatus, MaintenanceTicketStatus, PaymentStatus } from './constants';
 
 export type CardAccentTone = 'blue' | 'green' | 'orange' | 'purple' | 'danger';
 export type CardTagTone = 'green' | 'blue' | 'orange' | 'red' | 'purple' | 'gray';
@@ -114,6 +114,25 @@ export function chargeAccentTone(status: ChargeStatus): CardAccentTone {
   if (status === 'pending') return 'orange';
   if (status === 'paid') return 'green';
   return 'purple';
+}
+
+export function chargeTagTone(status: ChargeStatus): CardTagTone {
+  if (status === 'overdue') return 'red';
+  if (status === 'pending') return 'orange';
+  if (status === 'paid') return 'green';
+  return 'gray';
+}
+
+export function expenseAccentTone(status: ExpenseStatus): CardAccentTone {
+  if (status === 'paid') return 'green';
+  if (status === 'pending') return 'orange';
+  return 'purple';
+}
+
+export function expenseTagTone(status: ExpenseStatus): CardTagTone {
+  if (status === 'paid') return 'green';
+  if (status === 'pending') return 'orange';
+  return 'gray';
 }
 
 export function paymentAccentTone(status: PaymentStatus): CardAccentTone {

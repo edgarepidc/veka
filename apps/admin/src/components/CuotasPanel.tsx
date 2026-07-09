@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import type { ChargeStatus, FeeCampaignStatus, FundType, RecurringFeeStatus } from '@veka/shared';
 import {
+  cardTagClass,
   currentPeriodMonth,
   defaultFeeConcept,
   feeCampaignStatusLabel,
@@ -79,16 +80,10 @@ function StatChip({
   value: number;
   tone: 'neutral' | 'green' | 'amber' | 'red';
 }) {
-  const toneClass =
-    tone === 'green'
-      ? 'bg-emerald-500/15 text-emerald-300'
-      : tone === 'amber'
-        ? 'bg-amber-500/15 text-amber-300'
-        : tone === 'red'
-          ? 'bg-red-500/15 text-red-300'
-          : 'bg-white/10 text-muted';
+  const tagTone =
+    tone === 'amber' ? 'orange' : tone === 'neutral' ? 'gray' : tone;
   return (
-    <span className={`rounded-lg px-2 py-1 ${toneClass}`}>
+    <span className={`${cardTagClass(tagTone)} px-2 py-0.5 text-xs`}>
       {label}: <span className="font-semibold">{value}</span>
     </span>
   );

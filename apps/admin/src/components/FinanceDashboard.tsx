@@ -29,6 +29,8 @@ import {
   delinquentBalance,
   isDelinquentCharge,
   chargeBalanceDue,
+  expenseAccentTone,
+  expenseTagTone,
   buildPolizaRows,
   parseApprovalSettings,
   DEFAULT_APPROVAL_SETTINGS,
@@ -53,6 +55,7 @@ import { UnitStatementPanel } from '@/components/UnitStatementPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { HelpHint } from '@/components/ui/HelpHint';
+import { StatusTag } from '@/components/ui/StatusTag';
 import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import { parseCondominiumSettings } from '@/lib/condominium-settings';
@@ -951,7 +954,13 @@ export function FinanceDashboard({
   }
 
   if (loading) {
-    return <p className="p-8 text-muted">Cargando finanzas…</p>;
+    return (
+      <div className="space-y-4 p-6">
+        <div className="glass-card h-20 animate-pulse opacity-50" />
+        <div className="glass-card h-48 animate-pulse opacity-50" />
+        <div className="glass-card h-48 animate-pulse opacity-50" />
+      </div>
+    );
   }
 
   return (
@@ -987,7 +996,7 @@ export function FinanceDashboard({
           >
             {item.label}
             {item.id === 'movimientos' && pendingReviewCount > 0 ? (
-              <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-slate-900">
+              <span className="glass-tag-amber ml-2 min-w-[1.25rem] px-1.5 text-[10px] font-bold">
                 {pendingReviewCount}
               </span>
             ) : null}
@@ -999,7 +1008,6 @@ export function FinanceDashboard({
         <HelpHint label="Ayuda de esta pestaña" className="mt-0.5 shrink-0">
           <p>{TAB_HELP[tab]}</p>
         </HelpHint>
-        <p className="text-xs leading-relaxed text-subtle">{TAB_HELP[tab]}</p>
       </div>
 
       {tab === 'estado' ? (
@@ -1258,7 +1266,10 @@ export function FinanceDashboard({
                     <ul className="space-y-2">
                       {group.kind === 'payment'
                         ? group.items.map((payment) => (
-                            <li key={payment.id} className="glass-card-deep flex justify-between gap-3 px-3 py-2 text-sm">
+                            <li
+                              key={payment.id}
+                              className="glass-card glass-card-accent glass-card-accent-green flex justify-between gap-3 px-3 py-2 text-sm"
+                            >
                               <span className="text-[var(--text)]">
                                 {payment.unit?.identifier} · {payment.charge?.concept}
                               </span>
@@ -1266,7 +1277,10 @@ export function FinanceDashboard({
                             </li>
                           ))
                         : group.items.map((income) => (
-                            <li key={income.id} className="glass-card-deep flex justify-between gap-3 px-3 py-2 text-sm">
+                            <li
+                              key={income.id}
+                              className="glass-card glass-card-accent glass-card-accent-green flex justify-between gap-3 px-3 py-2 text-sm"
+                            >
                               <span className="text-[var(--text)]">{income.concept}</span>
                               <span className="shrink-0 text-muted">{formatCurrency(Number(income.amount))}</span>
                             </li>
@@ -1295,7 +1309,10 @@ export function FinanceDashboard({
                     </div>
                     <ul className="space-y-2">
                       {group.items.map((expense) => (
-                        <li key={expense.id} className="glass-card-deep px-3 py-2 text-sm">
+                        <li
+                          key={expense.id}
+                          className={`glass-card glass-card-accent glass-card-accent-${expenseAccentTone(expense.status)} px-3 py-2 text-sm`}
+                        >
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-medium text-[var(--text)]">{expense.concept}</p>
@@ -1394,11 +1411,9 @@ export function FinanceDashboard({
                       </p>
                     </div>
                     {vendor.pending > 0 ? (
-                      <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-100">
-                        Adeudo pendiente
-                      </span>
+                      <StatusTag label="Adeudo pendiente" tone="orange" />
                     ) : (
-                      <span className="glass-tag-green">Al corriente</span>
+                      <StatusTag label="Al corriente" tone="green" />
                     )}
                   </div>
                   <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
@@ -1409,7 +1424,7 @@ export function FinanceDashboard({
                         </span>
                         <span className="flex items-center gap-2">
                           <span>{formatCurrency(Number(expense.amount))}</span>
-                          <StatusBadge status={expense.status} />
+                          <ExpenseStatusTag status={expense.status} />
                         </span>
                       </li>
                     ))}
@@ -1430,7 +1445,10 @@ export function FinanceDashboard({
               <p className="text-sm text-subtle">Sin registros de nómina.</p>
             ) : (
               payrollExpenses.map((expense) => (
-                <div key={expense.id} className="glass-card-deep flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div
+                  key={expense.id}
+                  className={`glass-card glass-card-accent glass-card-accent-${expenseAccentTone(expense.status)} flex flex-wrap items-center justify-between gap-3 px-4 py-3`}
+                >
                   <div>
                     <p className="font-medium text-[var(--text)]">{expense.concept}</p>
                     <p className="text-sm text-subtle">
@@ -1440,7 +1458,7 @@ export function FinanceDashboard({
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-semibold">{formatCurrency(Number(expense.amount))}</span>
-                    <StatusBadge status={expense.status} />
+                    <ExpenseStatusTag status={expense.status} />
                     {expense.attachments.length > 0 ? <span className="glass-tag-green">Comprobado</span> : null}
                   </div>
                 </div>
@@ -1497,36 +1515,6 @@ export function FinanceDashboard({
   );
 }
 
-function StatChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'green' | 'amber' | 'neutral' | 'red';
-}) {
-  const tones = {
-    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
-    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
-    neutral: 'border-white/15 bg-white/10 text-[var(--text)]',
-    red: 'border-red-400/30 bg-red-400/15 text-red-100',
-  };
-
-  return (
-    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
-      {label}: {value}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: ExpenseStatus }) {
-  if (status === 'paid') {
-    return <span className="glass-tag-green text-xs">{expenseStatusLabel(status)}</span>;
-  }
-  return (
-    <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-0.5 text-xs font-bold text-amber-100">
-      {expenseStatusLabel(status)}
-    </span>
-  );
+function ExpenseStatusTag({ status }: { status: ExpenseStatus }) {
+  return <StatusTag label={expenseStatusLabel(status)} tone={expenseTagTone(status)} />;
 }
