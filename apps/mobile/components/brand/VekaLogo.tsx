@@ -12,15 +12,15 @@ const SOURCES = {
 type VekaLogoVariant = keyof typeof SOURCES;
 
 const SIZES: Record<VekaLogoVariant, { width: number; height: number }> = {
-  mark: { width: 52, height: 52 },
+  mark: { width: 64, height: 64 },
   wordmark: { width: 128, height: 40 },
-  horizontal: { width: 240, height: 64 },
-  stacked: { width: 160, height: 200 },
+  horizontal: { width: 155, height: 80 },
+  stacked: { width: 140, height: 200 },
 };
 
 export function VekaLogo({
   variant = 'stacked',
-  framed = true,
+  framed = false,
   style,
 }: {
   variant?: VekaLogoVariant;

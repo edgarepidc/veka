@@ -1,10 +1,10 @@
 import { VEKA_BRAND_ASSETS, type VekaLogoVariant } from '@veka/shared';
 
 const SIZES: Record<VekaLogoVariant, { width: number; height: number }> = {
-  mark: { width: 56, height: 56 },
+  mark: { width: 64, height: 64 },
   wordmark: { width: 120, height: 36 },
-  horizontal: { width: 220, height: 56 },
-  stacked: { width: 140, height: 180 },
+  horizontal: { width: 155, height: 80 },
+  stacked: { width: 140, height: 200 },
 };
 
 export function VekaLogo({
