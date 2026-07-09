@@ -14,9 +14,10 @@ export const HELP = {
       'Estado de cuenta por unidad: cargos, abonos, saldo y comprobantes. Útil para responder dudas de residentes.',
     proveedores:
       'Resumen de egresos tipo Proveedor (pagados y pendientes), agrupados por nombre. Se registran en Ingresos y egresos, no en esta pestaña.',
-    nomina: 'Empleados del condominio y egresos de nómina asociados.',
+    nomina:
+      'Resumen de egresos tipo Nómina (pagados y pendientes). Se registran en Ingresos y egresos, no en esta pestaña.',
     morosidad:
-      'Cargos vencidos por torre, recargos automáticos, recordatorios y planes de pago. Puedes condonar saldos o abrir un plan de parcialidades.',
+      'Cargos vencidos por torre (generados desde Cuotas), recargos, recordatorios y planes de pago. Aquí se gestionan; no se capturan adeudos manuales.',
     contabilidad:
       'Maker-checker para transferencias, mapeo a cuentas contables y export de póliza. La facturación CFDI está pausada hasta tener datos fiscales.',
   },
@@ -41,7 +42,7 @@ export const HELP = {
     recordatorios:
       'Envía aviso push/correo X días después del vencimiento. El cron diario ejecuta reglas activas.',
     cartera:
-      'Cargos vencidos agrupados por torre. Condona saldo o abre estado de cuenta de la unidad.',
+      'Adeudos = cuotas/cargos vencidos (y recargos si están activos). No se capturan aquí; cobra en pagos o estado de cuenta. Condona, recuerda o abre el estado de la unidad.',
   },
   planes:
     'Acuerdo de parcialidades sobre cargos morosos. Al aprobar un pago con parcialidad, se liquida la cuota del plan y luego los cargos vinculados.',

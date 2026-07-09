@@ -1803,10 +1803,22 @@ export function FinanceDashboard({
       {tab === 'nomina' ? (
         <GlassCard>
           <h2 className="text-lg font-semibold text-[var(--text)]">Pago a empleados</h2>
-          <p className="mt-1 text-sm text-muted">Nómina y compensaciones · {scopeLabel}.</p>
+          <p className="mt-1 text-sm text-muted">
+            Vista de egresos tipo <span className="font-medium text-[var(--text)]">Nómina</span> registrados
+            en Ingresos y egresos · {scopeLabel}.
+          </p>
+          <p className="mt-2 text-xs text-subtle">
+            No se capturan aquí. Para registrar un pago o adeudo: ve a{' '}
+            <span className="font-medium text-[var(--text)]">Ingresos y egresos</span>, crea un egreso con tipo{' '}
+            <span className="font-medium text-[var(--text)]">Nómina</span>, escribe el nombre del empleado y
+            marca el estado como <span className="font-medium text-[var(--text)]">Pagado</span> o{' '}
+            <span className="font-medium text-[var(--text)]">Pendiente de pago</span>.
+          </p>
           <div className="mt-4 space-y-3">
             {payrollExpenses.length === 0 ? (
-              <p className="text-sm text-subtle">Sin registros de nómina.</p>
+              <p className="text-sm text-subtle">
+                Sin registros de nómina. Registra el primero en Ingresos y egresos con tipo Nómina.
+              </p>
             ) : (
               payrollExpenses.map((expense) => (
                 <div

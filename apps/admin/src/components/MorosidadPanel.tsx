@@ -521,10 +521,17 @@ export function MorosidadPanel({
 
       <GlassCard variant="accent" accent="orange" className="!p-4">
         <div className="flex items-start gap-2">
-          <p className="flex-1 text-sm text-muted">
-            Unidades con cuotas vencidas, agrupadas por torre. Los recargos por mora aparecen como cargos
-            separados cuando están activos.
-          </p>
+          <div className="flex-1">
+            <p className="text-sm text-muted">
+              Unidades con cuotas vencidas, agrupadas por torre. Los adeudos vienen de cargos generados en{' '}
+              <span className="font-medium text-[var(--text)]">Cuotas</span> (y recargos si están activos); no
+              se capturan aquí.
+            </p>
+            <p className="mt-1 text-xs text-subtle">
+              Para cobrar o abonar usa pagos o el estado de cuenta. Aquí configuras recargos y recordatorios,
+              condonas, envías avisos o abres un plan de parcialidades.
+            </p>
+          </div>
           <HelpHint label="Ayuda: cartera vencida">{HELP.morosidad.cartera}</HelpHint>
         </div>
         <p className="mt-2 text-lg font-bold text-accent-3">
@@ -596,31 +603,37 @@ export function MorosidadPanel({
                             {formatCurrency(chargeBalanceDue(charge))}
                           </span>
                           <StatusTag label={chargeStatusLabel(charge.status)} tone={chargeTagTone(charge.status)} />
-                          <button
-                            type="button"
-                            onClick={() => void handleSendReminder(charge.id)}
-                            disabled={reminderPendingId === charge.id || forgivePendingId === charge.id}
-                            className="glass-btn px-2.5 py-1 text-xs font-semibold disabled:opacity-60"
+                          <div
+                            className="glass-tab-strip inline-flex shrink-0"
+                            role="group"
+                            aria-label={`Acciones ${charge.unit?.identifier ?? 'cargo'}`}
                           >
-                            {reminderPendingId === charge.id ? 'Enviando…' : 'Recordar'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleForgiveCharge(charge.id)}
-                            disabled={forgivePendingId === charge.id || reminderPendingId === charge.id}
-                            className="glass-btn px-2.5 py-1 text-xs font-semibold text-amber-100 disabled:opacity-60"
-                          >
-                            {forgivePendingId === charge.id ? 'Condonando…' : 'Condonar'}
-                          </button>
-                          {onOpenUnitStatement && charge.unit ? (
                             <button
                               type="button"
-                              onClick={() => onOpenUnitStatement(charge.unit_id)}
-                              className="glass-btn px-2.5 py-1 text-xs font-semibold"
+                              onClick={() => void handleSendReminder(charge.id)}
+                              disabled={reminderPendingId === charge.id || forgivePendingId === charge.id}
+                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
                             >
-                              Estado de cuenta
+                              {reminderPendingId === charge.id ? '…' : 'Recordar'}
                             </button>
-                          ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void handleForgiveCharge(charge.id)}
+                              disabled={forgivePendingId === charge.id || reminderPendingId === charge.id}
+                              className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs disabled:opacity-60"
+                            >
+                              {forgivePendingId === charge.id ? '…' : 'Condonar'}
+                            </button>
+                            {onOpenUnitStatement && charge.unit ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenUnitStatement(charge.unit_id)}
+                                className="glass-tab !min-w-0 !flex-none px-2.5 py-1.5 text-xs"
+                              >
+                                Estado de cuenta
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </li>
                     );
