@@ -965,27 +965,6 @@ export function FinanceDashboard({
 
   return (
     <div className="space-y-6">
-      <GlassCard className="!p-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
-            <p className="mt-1 text-sm text-muted">
-              Filtra todas las pestañas por condominio o torre. Vista actual:{' '}
-              <span className="font-semibold text-[var(--text)]">{scopeLabel}</span>
-            </p>
-          </div>
-          <FinanceScopeFilter
-            condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
-            clusters={clusters}
-            condominiumId={selectedCondoId}
-            clusterId={selectedClusterId}
-            onCondominiumChange={setSelectedCondoId}
-            onClusterChange={setSelectedClusterId}
-            compact
-          />
-        </div>
-      </GlassCard>
-
       <div className="glass-tab-strip">
         {TABS.map((item) => (
           <button
@@ -1004,7 +983,19 @@ export function FinanceDashboard({
         ))}
       </div>
 
-      <div className="mb-4 flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
+        <FinanceScopeFilter
+          condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
+          clusters={clusters}
+          condominiumId={selectedCondoId}
+          clusterId={selectedClusterId}
+          onCondominiumChange={setSelectedCondoId}
+          onClusterChange={setSelectedClusterId}
+        />
+      </div>
+
+      <div className="flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
         <HelpHint label="Ayuda de esta pestaña" className="mt-0.5 shrink-0">
           <p>{TAB_HELP[tab]}</p>
         </HelpHint>

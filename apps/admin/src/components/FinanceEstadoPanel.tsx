@@ -432,35 +432,34 @@ export function FinanceEstadoPanel({
 
   return (
     <div className="space-y-6">
-      <GlassCard>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Dashboard financiero</h2>
-            <p className="mt-1 text-sm text-muted">
+      <GlassCard className="!p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-[var(--text)]">Dashboard financiero</h2>
+            <p className="mt-0.5 text-xs text-muted">
               Vista del periodo:{' '}
               <span className="font-semibold text-[var(--text)]">{analytics.periodLabel}</span>
               {' · '}
               <span className="font-semibold text-[var(--text)]">{analytics.scopeLabel}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <ExportMenu
               onCsv={() => downloadFinancialReportCsv(exportReport)}
               onPdf={() => exportFinancialReportPdf(exportReport)}
             />
-            <div className="flex flex-wrap items-end gap-2">
-            <div className="glass-tab-strip !inline-flex">
+            <div className="glass-tab-strip !inline-flex shrink-0">
               <button
                 type="button"
                 onClick={() => setPeriodMode('month')}
-                className={`glass-tab !min-w-0 !flex-none px-4 ${periodMode === 'month' ? 'glass-tab-active' : ''}`}
+                className={`glass-tab !min-w-0 !flex-none px-3 py-1.5 ${periodMode === 'month' ? 'glass-tab-active' : ''}`}
               >
                 Mes
               </button>
               <button
                 type="button"
                 onClick={() => setPeriodMode('year')}
-                className={`glass-tab !min-w-0 !flex-none px-4 ${periodMode === 'year' ? 'glass-tab-active' : ''}`}
+                className={`glass-tab !min-w-0 !flex-none px-3 py-1.5 ${periodMode === 'year' ? 'glass-tab-active' : ''}`}
               >
                 Año
               </button>
@@ -470,7 +469,7 @@ export function FinanceEstadoPanel({
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="glass-input w-auto"
+                className="glass-input w-[8.75rem] shrink-0 px-2 py-1.5 text-sm"
               />
             ) : (
               <input
@@ -479,10 +478,9 @@ export function FinanceEstadoPanel({
                 max="2100"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="glass-input w-28"
+                className="glass-input w-20 shrink-0 px-2 py-1.5 text-sm"
               />
             )}
-            </div>
           </div>
         </div>
       </GlassCard>
