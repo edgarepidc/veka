@@ -40,7 +40,7 @@ import {
 } from '@veka/shared';
 import type { RecurringFeeStatus } from '@veka/shared';
 
-import { createExpense, createIncome, ensureMonthlyRecurringCharges, saveFundOpeningBalance } from '@/app/(panel)/finanzas/actions';
+import { createExpense, createIncome, ensureMonthlyRecurringCharges, saveFundOpeningBalance, updateExpense, updateIncome } from '@/app/(panel)/finanzas/actions';
 import { BankReconciliationPanel } from '@/components/BankReconciliationPanel';
 import { BudgetPanel } from '@/components/BudgetPanel';
 import { CuotasPanel } from '@/components/CuotasPanel';
@@ -49,7 +49,8 @@ import { MorosidadPanel } from '@/components/MorosidadPanel';
 import { PaymentPlansPanel, type PaymentPlanRow } from '@/components/PaymentPlansPanel';
 import { FinanceCompliancePanel } from '@/components/FinanceCompliancePanel';
 import { FinanceEstadoPanel } from '@/components/FinanceEstadoPanel';
-import { FinanceClusterField, FinanceScopeFilter } from '@/components/FinanceScopeFilter';
+import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
+import { MoneyInput } from '@/components/ui/MoneyInput';
 import { ResidentPaymentsReview } from '@/components/ResidentPaymentsReview';
 import { UnitStatementPanel } from '@/components/UnitStatementPanel';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -197,6 +198,7 @@ interface ExpenseRow {
   status: ExpenseStatus;
   fund_type: FundType;
   cluster_id: string | null;
+  notes: string | null;
   attachments: { id: string; file_url: string; file_name: string | null }[];
 }
 
@@ -302,6 +304,29 @@ export function FinanceDashboard({
   const [incomeMessage, setIncomeMessage] = useState<string | null>(null);
   const [expensePending, startExpense] = useTransition();
   const [incomePending, startIncome] = useTransition();
+  const [editIncomePending, startEditIncome] = useTransition();
+  const [editExpensePending, startEditExpense] = useTransition();
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [incomeEditForm, setIncomeEditForm] = useState({
+    concept: '',
+    amount: '',
+    income_date: '',
+    category: 'otros',
+    fund_type: 'operating' as FundType,
+    notes: '',
+  });
+  const [expenseEditForm, setExpenseEditForm] = useState({
+    concept: '',
+    amount: '',
+    expense_date: '',
+    category: 'mantenimiento',
+    fund_type: 'operating' as FundType,
+    expense_kind: 'general' as ExpenseKind,
+    status: 'paid' as ExpenseStatus,
+    vendor_name: '',
+    notes: '',
+  });
 
   const [condominiums, setCondominiums] = useState<CondominiumRow[]>([]);
   const [selectedCondoId, setSelectedCondoId] = useState(initialCondominiumId ?? '');
@@ -478,7 +503,7 @@ export function FinanceDashboard({
       supabase
         .from('expenses')
         .select(
-          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, cluster_id, attachments:expense_attachments(id, file_url, file_name)',
+          'id, concept, amount, category, expense_date, vendor_name, expense_kind, status, fund_type, cluster_id, notes, attachments:expense_attachments(id, file_url, file_name)',
         )
         .eq('condominium_id', condoId)
         .order('expense_date', { ascending: false }),
@@ -955,6 +980,61 @@ export function FinanceDashboard({
     });
   }
 
+  function openIncomeEdit(income: IncomeEntryRow) {
+    setEditingIncomeId(income.id);
+    setIncomeEditForm({
+      concept: income.concept,
+      amount: String(income.amount),
+      income_date: income.income_date,
+      category: income.category,
+      fund_type: income.fund_type,
+      notes: income.notes ?? '',
+    });
+  }
+
+  function openExpenseEdit(expense: ExpenseRow) {
+    setEditingExpenseId(expense.id);
+    setExpenseEditForm({
+      concept: expense.concept,
+      amount: String(expense.amount),
+      expense_date: expense.expense_date,
+      category: expense.category,
+      fund_type: expense.fund_type,
+      expense_kind: expense.expense_kind,
+      status: expense.status,
+      vendor_name: expense.vendor_name ?? '',
+      notes: expense.notes ?? '',
+    });
+  }
+
+  function runUpdateIncome(formData: FormData) {
+    setIncomeMessage(null);
+    startEditIncome(async () => {
+      const result = await updateIncome(formData);
+      if ('error' in result && result.error) {
+        setIncomeMessage(result.error);
+        return;
+      }
+      setIncomeMessage('Ingreso actualizado.');
+      setEditingIncomeId(null);
+      void load();
+    });
+  }
+
+  function runUpdateExpense(formData: FormData) {
+    setExpenseMessage(null);
+    startEditExpense(async () => {
+      const result = await updateExpense(formData);
+      if ('error' in result && result.error) {
+        setExpenseMessage(result.error);
+        return;
+      }
+      setExpenseMessage('Egreso actualizado.');
+      setEditingExpenseId(null);
+      void load();
+    });
+  }
+
   async function openExpenseEvidence(path: string) {
     const { data } = await supabase.storage.from(STORAGE_BUCKETS.EXPENSE_EVIDENCE).createSignedUrl(path, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
@@ -1087,21 +1167,28 @@ export function FinanceDashboard({
             }}
           />
 
+          <p className="text-sm text-muted">
+            Alcance actual: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>. Los ingresos y
+            egresos que registres aplican solo a este alcance.
+          </p>
+
           <div className="grid gap-6 lg:grid-cols-2">
             <GlassCard>
               <h2 className="text-lg font-semibold text-[var(--text)]">Registrar ingreso manual</h2>
               <p className="mt-1 text-sm text-muted">
-                Ingresos que no vienen de pagos de residentes (donaciones, servicios, etc.).
+                Ingresos que no vienen de pagos de residentes, para{' '}
+                <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
               </p>
               {incomeMessage ? (
                 <p
-                  className={`mt-3 text-sm ${incomeMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
+                  className={`mt-3 text-sm ${incomeMessage.includes('registrado') || incomeMessage.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
                 >
                   {incomeMessage}
                 </p>
               ) : null}
               <form action={runCreateIncome} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                <input type="hidden" name="cluster_id" value={selectedClusterId} />
                 <input name="concept" required placeholder="Concepto del ingreso" className="glass-input sm:col-span-2" />
                 <MoneyField name="amount" required placeholder="Monto" className="w-full" />
                 <input
@@ -1126,9 +1213,6 @@ export function FinanceDashboard({
                     {fundTypeLabel('reserve')}
                   </option>
                 </select>
-                <div className="sm:col-span-2">
-                  <FinanceClusterField clusters={clusters} />
-                </div>
                 <textarea
                   name="notes"
                   rows={2}
@@ -1144,17 +1228,19 @@ export function FinanceDashboard({
             <GlassCard>
               <h2 className="text-lg font-semibold text-[var(--text)]">Registrar egreso</h2>
               <p className="mt-1 text-sm text-muted">
-                Clasifica el gasto y adjunta el comprobante cuando esté pagado.
+                Clasifica el gasto y adjunta el comprobante cuando esté pagado, para{' '}
+                <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
               </p>
               {expenseMessage ? (
                 <p
-                  className={`mt-3 text-sm ${expenseMessage.includes('registrado') ? 'text-accent' : 'text-red-300'}`}
+                  className={`mt-3 text-sm ${expenseMessage.includes('registrado') || expenseMessage.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
                 >
                   {expenseMessage}
                 </p>
               ) : null}
               <form action={runCreateExpense} className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                <input type="hidden" name="cluster_id" value={selectedClusterId} />
                 <input name="concept" required placeholder="Concepto del gasto" className="glass-input sm:col-span-2" />
               <MoneyField name="amount" required placeholder="Monto" className="w-full" />
               <input
@@ -1203,9 +1289,6 @@ export function FinanceDashboard({
                 placeholder="Proveedor o empleado (si aplica)"
                 className="glass-input sm:col-span-2"
               />
-              <div className="sm:col-span-2">
-                <FinanceClusterField clusters={clusters} />
-              </div>
               <textarea
                 name="notes"
                 rows={2}
@@ -1260,10 +1343,124 @@ export function FinanceDashboard({
                         : group.items.map((income) => (
                             <li
                               key={income.id}
-                              className="glass-card glass-card-accent glass-card-accent-green flex justify-between gap-3 px-3 py-2 text-sm"
+                              className="glass-card glass-card-accent glass-card-accent-green px-3 py-2 text-sm"
                             >
-                              <span className="text-[var(--text)]">{income.concept}</span>
-                              <span className="shrink-0 text-muted">{formatCurrency(Number(income.amount))}</span>
+                              {editingIncomeId === income.id ? (
+                                <form action={runUpdateIncome} className="grid gap-2">
+                                  <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                                  <input type="hidden" name="income_id" value={income.id} />
+                                  <input
+                                    name="concept"
+                                    required
+                                    value={incomeEditForm.concept}
+                                    onChange={(e) =>
+                                      setIncomeEditForm((prev) => ({ ...prev, concept: e.target.value }))
+                                    }
+                                    className="glass-input"
+                                  />
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <MoneyInput
+                                      name="amount"
+                                      required
+                                      value={incomeEditForm.amount}
+                                      onChange={(value) =>
+                                        setIncomeEditForm((prev) => ({ ...prev, amount: value }))
+                                      }
+                                      className="w-full"
+                                    />
+                                    <input
+                                      name="income_date"
+                                      required
+                                      type="date"
+                                      value={incomeEditForm.income_date}
+                                      onChange={(e) =>
+                                        setIncomeEditForm((prev) => ({ ...prev, income_date: e.target.value }))
+                                      }
+                                      className="glass-input"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <select
+                                      name="category"
+                                      required
+                                      value={incomeEditForm.category}
+                                      onChange={(e) =>
+                                        setIncomeEditForm((prev) => ({ ...prev, category: e.target.value }))
+                                      }
+                                      className="glass-input"
+                                    >
+                                      {INCOME_CATEGORIES.map((cat) => (
+                                        <option key={cat} value={cat} className="bg-slate-900">
+                                          {incomeCategoryLabel(cat)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <select
+                                      name="fund_type"
+                                      value={incomeEditForm.fund_type}
+                                      onChange={(e) =>
+                                        setIncomeEditForm((prev) => ({
+                                          ...prev,
+                                          fund_type: e.target.value as FundType,
+                                        }))
+                                      }
+                                      className="glass-input"
+                                    >
+                                      <option value="operating" className="bg-slate-900">
+                                        {fundTypeLabel('operating')}
+                                      </option>
+                                      <option value="reserve" className="bg-slate-900">
+                                        {fundTypeLabel('reserve')}
+                                      </option>
+                                    </select>
+                                  </div>
+                                  <textarea
+                                    name="notes"
+                                    rows={2}
+                                    value={incomeEditForm.notes}
+                                    onChange={(e) =>
+                                      setIncomeEditForm((prev) => ({ ...prev, notes: e.target.value }))
+                                    }
+                                    className="glass-input min-h-[60px]"
+                                    placeholder="Notas (opcional)"
+                                  />
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="submit"
+                                      disabled={editIncomePending}
+                                      className="glass-btn-primary text-xs"
+                                    >
+                                      {editIncomePending ? 'Guardando…' : 'Guardar'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingIncomeId(null)}
+                                      className="text-xs text-muted hover:underline"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-[var(--text)]">{income.concept}</p>
+                                    <p className="text-xs text-subtle">
+                                      {income.income_date} · {incomeCategoryLabel(income.category)}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-muted">{formatCurrency(Number(income.amount))}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => openIncomeEdit(income)}
+                                      className="mt-1 text-xs text-accent hover:underline"
+                                    >
+                                      Editar
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </li>
                           ))}
                     </ul>
@@ -1294,29 +1491,193 @@ export function FinanceDashboard({
                           key={expense.id}
                           className={`glass-card glass-card-accent glass-card-accent-${expenseAccentTone(expense.status)} px-3 py-2 text-sm`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-[var(--text)]">{expense.concept}</p>
-                              <p className="text-xs text-subtle">
-                                {expense.expense_date}
-                                {expense.vendor_name ? ` · ${expense.vendor_name}` : ''}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold">{formatCurrency(Number(expense.amount))}</p>
-                              {expense.attachments.length > 0 ? (
+                          {editingExpenseId === expense.id ? (
+                            <form action={runUpdateExpense} className="grid gap-2">
+                              <input type="hidden" name="condominium_id" value={selectedCondoId} />
+                              <input type="hidden" name="expense_id" value={expense.id} />
+                              <input
+                                name="concept"
+                                required
+                                value={expenseEditForm.concept}
+                                onChange={(e) =>
+                                  setExpenseEditForm((prev) => ({ ...prev, concept: e.target.value }))
+                                }
+                                className="glass-input"
+                              />
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <MoneyInput
+                                  name="amount"
+                                  required
+                                  value={expenseEditForm.amount}
+                                  onChange={(value) =>
+                                    setExpenseEditForm((prev) => ({ ...prev, amount: value }))
+                                  }
+                                  className="w-full"
+                                />
+                                <input
+                                  name="expense_date"
+                                  required
+                                  type="date"
+                                  value={expenseEditForm.expense_date}
+                                  onChange={(e) =>
+                                    setExpenseEditForm((prev) => ({ ...prev, expense_date: e.target.value }))
+                                  }
+                                  className="glass-input"
+                                />
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <select
+                                  name="category"
+                                  required
+                                  value={expenseEditForm.category}
+                                  onChange={(e) =>
+                                    setExpenseEditForm((prev) => ({ ...prev, category: e.target.value }))
+                                  }
+                                  className="glass-input"
+                                >
+                                  {EXPENSE_CATEGORIES.map((cat) => (
+                                    <option key={cat} value={cat} className="bg-slate-900">
+                                      {expenseCategoryLabel(cat)}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  name="fund_type"
+                                  value={expenseEditForm.fund_type}
+                                  onChange={(e) =>
+                                    setExpenseEditForm((prev) => ({
+                                      ...prev,
+                                      fund_type: e.target.value as FundType,
+                                    }))
+                                  }
+                                  className="glass-input"
+                                >
+                                  <option value="operating" className="bg-slate-900">
+                                    {fundTypeLabel('operating')}
+                                  </option>
+                                  <option value="reserve" className="bg-slate-900">
+                                    {fundTypeLabel('reserve')}
+                                  </option>
+                                </select>
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <select
+                                  name="expense_kind"
+                                  value={expenseEditForm.expense_kind}
+                                  onChange={(e) =>
+                                    setExpenseEditForm((prev) => ({
+                                      ...prev,
+                                      expense_kind: e.target.value as ExpenseKind,
+                                    }))
+                                  }
+                                  className="glass-input"
+                                >
+                                  <option value="general" className="bg-slate-900">
+                                    {expenseKindLabel('general')}
+                                  </option>
+                                  <option value="supplier" className="bg-slate-900">
+                                    {expenseKindLabel('supplier')}
+                                  </option>
+                                  <option value="payroll" className="bg-slate-900">
+                                    {expenseKindLabel('payroll')}
+                                  </option>
+                                </select>
+                                <select
+                                  name="status"
+                                  value={expenseEditForm.status}
+                                  onChange={(e) =>
+                                    setExpenseEditForm((prev) => ({
+                                      ...prev,
+                                      status: e.target.value as ExpenseStatus,
+                                    }))
+                                  }
+                                  className="glass-input"
+                                >
+                                  <option value="paid" className="bg-slate-900">
+                                    {expenseStatusLabel('paid')}
+                                  </option>
+                                  <option value="pending" className="bg-slate-900">
+                                    {expenseStatusLabel('pending')}
+                                  </option>
+                                </select>
+                              </div>
+                              <input
+                                name="vendor_name"
+                                value={expenseEditForm.vendor_name}
+                                onChange={(e) =>
+                                  setExpenseEditForm((prev) => ({ ...prev, vendor_name: e.target.value }))
+                                }
+                                placeholder="Proveedor o empleado (si aplica)"
+                                className="glass-input"
+                              />
+                              <textarea
+                                name="notes"
+                                rows={2}
+                                value={expenseEditForm.notes}
+                                onChange={(e) =>
+                                  setExpenseEditForm((prev) => ({ ...prev, notes: e.target.value }))
+                                }
+                                className="glass-input min-h-[60px]"
+                                placeholder="Notas (opcional)"
+                              />
+                              <FileUpload
+                                bucket={STORAGE_BUCKETS.EXPENSE_EVIDENCE}
+                                inputName="evidence_path"
+                                label="Nuevo comprobante (opcional)"
+                                hint="Deja vacío para conservar el comprobante actual."
+                                buildPath={(ext) => expenseEvidencePath(selectedCondoId, expenseFileId, ext)}
+                              />
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="submit"
+                                  disabled={editExpensePending}
+                                  className="glass-btn-primary text-xs"
+                                >
+                                  {editExpensePending ? 'Guardando…' : 'Guardar'}
+                                </button>
                                 <button
                                   type="button"
-                                  onClick={() => void openExpenseEvidence(expense.attachments[0]!.file_url)}
-                                  className="glass-tag-green mt-1 hover:opacity-80"
+                                  onClick={() => setEditingExpenseId(null)}
+                                  className="text-xs text-muted hover:underline"
                                 >
-                                  Ver comprobante
+                                  Cancelar
                                 </button>
-                              ) : (
-                                <span className="mt-1 inline-block text-xs text-subtle">Sin comprobante</span>
-                              )}
+                              </div>
+                            </form>
+                          ) : (
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-medium text-[var(--text)]">{expense.concept}</p>
+                                <p className="text-xs text-subtle">
+                                  {expense.expense_date}
+                                  {expense.vendor_name ? ` · ${expense.vendor_name}` : ''}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold">{formatCurrency(Number(expense.amount))}</p>
+                                <div className="mt-1 flex flex-wrap justify-end gap-2">
+                                  {expense.attachments.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void openExpenseEvidence(expense.attachments[0]!.file_url)}
+                                      className="glass-tag-green hover:opacity-80"
+                                    >
+                                      Ver comprobante
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-subtle">Sin comprobante</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => openExpenseEdit(expense)}
+                                    className="text-xs text-accent hover:underline"
+                                  >
+                                    Editar
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </li>
                       ))}
                     </ul>

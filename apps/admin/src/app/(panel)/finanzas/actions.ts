@@ -479,6 +479,152 @@ export async function createExpense(formData: FormData) {
   return { success: true };
 }
 
+export async function updateIncome(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const incomeId = String(formData.get('income_id') ?? '').trim();
+  if (!incomeId) return { error: 'Ingreso inválido.' };
+
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('income_entries')
+    .select('id, condominium_id, cluster_id')
+    .eq('id', incomeId)
+    .maybeSingle();
+
+  if (existingError) return { error: existingError.message };
+  if (!existing || existing.condominium_id !== condominiumId) {
+    return { error: 'Ingreso no encontrado.' };
+  }
+
+  const concept = String(formData.get('concept') ?? '').trim();
+  const amountResult = readMoneyAmount(formData, 'amount', 'Monto');
+  if (typeof amountResult !== 'number') return amountResult;
+  const amount = amountResult;
+  const category = String(formData.get('category') ?? 'otros');
+  const incomeDate = String(formData.get('income_date') ?? '');
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const notes = String(formData.get('notes') ?? '').trim();
+
+  if (!concept) return { error: 'Concepto obligatorio.' };
+  if (!amount || amount <= 0) return { error: 'Monto inválido.' };
+  if (!INCOME_CATEGORIES.includes(category as IncomeCategory)) return { error: 'Categoría inválida.' };
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (!incomeDate) return { error: 'Fecha obligatoria.' };
+
+  const { error } = await supabase
+    .from('income_entries')
+    .update({
+      concept,
+      amount,
+      category,
+      income_date: incomeDate,
+      fund_type: fundType,
+      notes: notes || null,
+    })
+    .eq('id', incomeId);
+
+  if (error) return { error: error.message };
+
+  await reconcileCondominiumFundBalances(supabase, condominiumId);
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
+export async function updateExpense(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No autorizado' };
+
+  const expenseId = String(formData.get('expense_id') ?? '').trim();
+  if (!expenseId) return { error: 'Egreso inválido.' };
+
+  const condoResult = await resolveCondoId(String(formData.get('condominium_id') ?? ''));
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('expenses')
+    .select('id, condominium_id')
+    .eq('id', expenseId)
+    .maybeSingle();
+
+  if (existingError) return { error: existingError.message };
+  if (!existing || existing.condominium_id !== condominiumId) {
+    return { error: 'Egreso no encontrado.' };
+  }
+
+  const concept = String(formData.get('concept') ?? '').trim();
+  const amountResult = readMoneyAmount(formData, 'amount', 'Monto');
+  if (typeof amountResult !== 'number') return amountResult;
+  const amount = amountResult;
+  const category = String(formData.get('category') ?? '');
+  const expenseDate = String(formData.get('expense_date') ?? '');
+  const fundType = String(formData.get('fund_type') ?? 'operating') as FundType;
+  const expenseKind = String(formData.get('expense_kind') ?? 'general') as ExpenseKind;
+  const status = String(formData.get('status') ?? 'paid') as ExpenseStatus;
+  const vendorName = String(formData.get('vendor_name') ?? '').trim();
+  const notes = String(formData.get('notes') ?? '').trim();
+  const evidencePath = String(formData.get('evidence_path') ?? '').trim();
+
+  if (!concept) return { error: 'Concepto obligatorio.' };
+  if (!amount || amount <= 0) return { error: 'Monto inválido.' };
+  if (!EXPENSE_CATEGORIES.includes(category as (typeof EXPENSE_CATEGORIES)[number])) {
+    return { error: 'Categoría inválida.' };
+  }
+  if (!FUND_TYPES.includes(fundType)) return { error: 'Fondo inválido.' };
+  if (!EXPENSE_KINDS.includes(expenseKind)) return { error: 'Tipo de egreso inválido.' };
+  if (!EXPENSE_STATUSES.includes(status)) return { error: 'Estado inválido.' };
+  if (!expenseDate) return { error: 'Fecha obligatoria.' };
+  if ((expenseKind === 'supplier' || expenseKind === 'payroll') && !vendorName) {
+    return { error: 'Nombre de proveedor o empleado obligatorio.' };
+  }
+
+  const { error } = await supabase
+    .from('expenses')
+    .update({
+      concept,
+      amount,
+      category,
+      expense_date: expenseDate,
+      fund_type: fundType,
+      expense_kind: expenseKind,
+      status,
+      vendor_name: vendorName || null,
+      notes: notes || null,
+    })
+    .eq('id', expenseId);
+
+  if (error) return { error: error.message };
+
+  if (evidencePath) {
+    const fileName = evidencePath.split('/').pop() ?? 'comprobante';
+    const { error: attachError } = await supabase.from('expense_attachments').insert({
+      expense_id: expenseId,
+      file_url: evidencePath,
+      file_name: fileName,
+    });
+    if (attachError) return { error: attachError.message };
+  }
+
+  await reconcileCondominiumFundBalances(supabase, condominiumId);
+
+  revalidatePath('/finanzas');
+  return { success: true };
+}
+
 export async function saveAnnualBudget(formData: FormData) {
   const supabase = await createClient();
   const {
