@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { avatarStoragePath, resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { ImageUpload } from '@/components/ui/ImageUpload';
+import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { AdminSession } from '@/lib/load-admin-session';
 
@@ -94,6 +95,16 @@ export function ProfileForm({ session }: { session: AdminSession }) {
             {profilePending ? 'Guardando…' : 'Guardar perfil'}
           </button>
         </form>
+      </GlassCard>
+
+      <GlassCard>
+        <h2 className="text-lg font-semibold text-[var(--text)]">Apariencia</h2>
+        <p className="mt-1 text-sm text-muted">
+          Elige tema claro u oscuro para el panel. La preferencia se guarda en este navegador.
+        </p>
+        <div className="mt-4 max-w-md">
+          <AppearancePicker />
+        </div>
       </GlassCard>
 
       <GlassCard>

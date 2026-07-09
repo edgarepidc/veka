@@ -14,6 +14,8 @@ import {
   MIN_BOOKING_HORIZON_DAYS,
   resolveStorageImageUrl,
   STORAGE_BUCKETS,
+  reservationAccentTone,
+  reservationTagTone,
 } from '@veka/shared';
 
 import {
@@ -26,6 +28,7 @@ import {
 } from '@/app/(panel)/espacios/actions';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusTag } from '@/components/ui/StatusTag';
 import type { AmenityRow, ClusterOption, ReservationRow } from '@/lib/load-espacios';
 import type { SpacesSettings } from '@veka/shared';
 
@@ -689,7 +692,7 @@ export function SpacesManager({
             ))}
           </div>
           {filteredReservations.length === 0 ? (
-            <GlassCard>
+            <GlassCard variant="muted">
               <p className="text-sm text-subtle">No hay reservas próximas en esta vista.</p>
             </GlassCard>
           ) : (
@@ -702,18 +705,29 @@ export function SpacesManager({
               const amenityLabel = reservation.amenity?.name ?? 'Amenidad';
 
               return (
-                <GlassCard key={reservation.id} className="flex flex-wrap items-start justify-between gap-4">
+                <GlassCard
+                  key={reservation.id}
+                  variant="accent"
+                  accent={reservationAccentTone(reservation.status)}
+                  className="flex flex-wrap items-start justify-between gap-4"
+                >
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
                     {imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={imageUrl} alt="" className="h-24 w-36 shrink-0 rounded-xl object-cover" />
                     ) : (
-                      <div className="flex h-24 w-36 shrink-0 items-center justify-center rounded-xl bg-white/5 text-3xl">
+                      <div className="flex h-24 w-36 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-3xl">
                         🏢
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="font-semibold text-[var(--text)]">{amenityLabel}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-[var(--text)]">{amenityLabel}</p>
+                        <StatusTag
+                          label={reservationStatusLabel(reservation.status)}
+                          tone={reservationTagTone(reservation.status)}
+                        />
+                      </div>
                       <p className="mt-1 text-sm text-muted">
                         Unidad {reservation.unit?.identifier ?? '—'} · {formatDateTime(reservation.starts_at)}
                       </p>
@@ -722,8 +736,7 @@ export function SpacesManager({
                           reservation.amenity?.cluster_id,
                           reservation.amenity?.cluster?.name,
                         )}{' '}
-                        · Hasta {formatDateTime(reservation.ends_at)} ·{' '}
-                        {reservationStatusLabel(reservation.status)}
+                        · Hasta {formatDateTime(reservation.ends_at)}
                       </p>
                     </div>
                   </div>

@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import type { PaymentStatus } from '@veka/shared';
-import { formatCurrency, paymentStatusLabel } from '@veka/shared';
+import { formatCurrency, paymentAccentTone, paymentStatusLabel, paymentTagTone } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusTag } from '@/components/ui/StatusTag';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 
@@ -205,8 +206,9 @@ function PaymentReviewCard({
   onReject: () => void;
   onViewProof: (path: string) => void;
 }) {
+  const accent = paymentAccentTone(payment.status);
   return (
-    <div className="glass-card-deep p-4">
+    <div className={`glass-card glass-card-accent glass-card-accent-${accent} p-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-semibold text-[var(--text)]">
@@ -222,9 +224,7 @@ function PaymentReviewCard({
               : ''}
           </p>
         </div>
-        <span className="rounded-full border border-amber-400/35 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-100">
-          {paymentStatusLabel(payment.status)}
-        </span>
+        <StatusTag label={paymentStatusLabel(payment.status)} tone={paymentTagTone(payment.status)} />
       </div>
 
       {payment.proof_url ? (
@@ -265,19 +265,5 @@ function PaymentReviewCard({
 }
 
 function StatusPill({ status }: { status: PaymentStatus }) {
-  if (status === 'approved') {
-    return <span className="glass-tag-green text-xs">{paymentStatusLabel(status)}</span>;
-  }
-  if (status === 'rejected') {
-    return (
-      <span className="rounded-full border border-red-400/30 bg-red-400/15 px-2 py-0.5 text-xs font-bold text-red-100">
-        {paymentStatusLabel(status)}
-      </span>
-    );
-  }
-  return (
-    <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-0.5 text-xs font-bold text-amber-100">
-      {paymentStatusLabel(status)}
-    </span>
-  );
+  return <StatusTag label={paymentStatusLabel(status)} tone={paymentTagTone(status)} />;
 }

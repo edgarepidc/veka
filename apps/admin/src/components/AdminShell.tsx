@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 import { AdminNav } from '@/components/AdminNav';
+import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { CondominiumSwitcher } from '@/components/CondominiumSwitcher';
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { CondominiumBranding } from '@/lib/condominium-settings';
@@ -91,7 +92,10 @@ export function AdminShell({
               <div className="lg:hidden">
                 <p className="serif-title text-lg text-[var(--text)]">Veka</p>
               </div>
-              <div className="flex items-center gap-3 sm:ml-auto">
+              <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
+                <div className="hidden lg:block">
+                  <AppearancePicker compact />
+                </div>
                 {isPlatformAdmin ? (
                   <Link
                     href="/platform"

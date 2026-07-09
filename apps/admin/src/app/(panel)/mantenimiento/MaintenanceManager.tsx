@@ -17,6 +17,9 @@ import {
   resolveStorageImageUrl,
   ticketCategoryLabel,
   ticketStatusLabel,
+  ticketAccentTone,
+  ticketTagTone,
+  routineCardVariant,
   type MaintenancePeriodFilter,
   type MaintenanceRecurrence,
   type MaintenanceTicketFilter,
@@ -24,6 +27,7 @@ import {
 
 import { MultiImageUpload } from '@/components/MultiImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusTag } from '@/components/ui/StatusTag';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
@@ -186,12 +190,17 @@ export function MaintenanceManager({
             ))}
           </div>
           {filteredTickets.length === 0 ? (
-            <GlassCard>
+            <GlassCard variant="muted">
               <p className="text-sm text-subtle">No hay tickets en este filtro.</p>
             </GlassCard>
           ) : (
             filteredTickets.map((ticket) => (
-              <GlassCard key={ticket.id} className="space-y-3">
+              <GlassCard
+                key={ticket.id}
+                variant="accent"
+                accent={ticketAccentTone(ticket.status)}
+                className="space-y-3"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-[var(--text)]">{ticket.title}</p>
@@ -205,9 +214,7 @@ export function MaintenanceManager({
                     </p>
                     {ticket.description ? <p className="mt-2 text-sm text-muted">{ticket.description}</p> : null}
                   </div>
-                  <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-0.5 text-xs font-bold">
-                    {ticketStatusLabel(ticket.status)}
-                  </span>
+                  <StatusTag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
                 </div>
 
                 {ticket.photo_url ? (
@@ -381,8 +388,15 @@ export function MaintenanceManager({
                     <div key={group.label}>
                       <p className="text-xs font-bold uppercase tracking-wide text-subtle">{group.label}</p>
                       <ul className="mt-2 space-y-2">
-                        {group.items.map((routine) => (
-                          <li key={routine.id} className="glass-card-deep p-3 text-sm">
+                        {group.items.map((routine) => {
+                          const hasEvidence =
+                            groupEvidenceByDate(routine.evidence, periodFilter).length > 0;
+                          const cardClass =
+                            routineCardVariant(hasEvidence) === 'accent'
+                              ? 'glass-card glass-card-accent glass-card-accent-green p-3 text-sm'
+                              : 'glass-card-muted p-3 text-sm';
+                          return (
+                          <li key={routine.id} className={cardClass}>
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div>
                                 <p className="font-medium text-[var(--text)]">{routine.title}</p>
@@ -413,7 +427,8 @@ export function MaintenanceManager({
                               onOpen={(path) => void openFile(path)}
                             />
                           </li>
-                        ))}
+                          );
+                        })}
                       </ul>
                     </div>
                   ),

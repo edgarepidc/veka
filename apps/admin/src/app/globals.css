@@ -1,13 +1,19 @@
 @import "tailwindcss";
 
-:root {
+/* Default + dark theme (glass) */
+:root,
+[data-theme='dark'] {
   --bg-gradient: linear-gradient(160deg, #0d1b3e 0%, #0a1628 30%, #0d0d1a 60%, #1a0d2e 100%);
   --glass: rgba(255, 255, 255, 0.13);
   --glass-deep: rgba(255, 255, 255, 0.07);
   --glass-border: rgba(255, 255, 255, 0.22);
+  --surface: rgba(255, 255, 255, 0.1);
+  --surface-muted: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.14);
   --accent: #34d399;
   --accent-2: #38bdf8;
   --accent-3: #fb923c;
+  --success: #34d399;
   --danger: #f87171;
   --purple: #a78bfa;
   --text: rgba(255, 255, 255, 0.95);
@@ -15,6 +21,68 @@
   --text-subtle: rgba(255, 255, 255, 0.35);
   --on-accent: #0a1a12;
   --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --body-bg: #0d0d1a;
+}
+
+[data-theme='light'] {
+  --bg-gradient: linear-gradient(160deg, #ffffff 0%, #f8fafc 45%, #f1f5f9 100%);
+  --glass: #ffffff;
+  --glass-deep: #f7f7f7;
+  --glass-border: #ebebeb;
+  --surface: #ffffff;
+  --surface-muted: #f7f7f7;
+  --border: #ebebeb;
+  --accent: #059669;
+  --accent-2: #2563eb;
+  --accent-3: #d97706;
+  --success: #059669;
+  --danger: #dc2626;
+  --purple: #7c3aed;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+  --on-accent: #ffffff;
+  --shadow-glass: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --body-bg: #ffffff;
+}
+
+[data-theme='light'] .glass-card,
+[data-theme='light'] .glass-card-deep,
+[data-theme='light'] .glass-card-muted {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='light'] .glass-sidebar {
+  background: #ffffff;
+  backdrop-filter: none;
+  border-right-color: var(--border);
+}
+
+[data-theme='light'] .glass-header {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom-color: var(--border);
+}
+
+[data-theme='light'] .glass-input {
+  background: #ffffff;
+  border-color: var(--border);
+}
+
+[data-theme='light'] .glass-input:focus {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+[data-theme='light'] .glass-orb {
+  opacity: 0.2;
+}
+
+[data-theme='light'] .glass-btn-danger {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.25);
 }
 
 @theme inline {
@@ -26,7 +94,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family: var(--font-sans);
-  background: #0d0d1a;
+  background: var(--body-bg);
 }
 
 .glass-bg {
@@ -81,8 +149,45 @@ body {
   background: var(--glass-deep);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
+}
+
+.glass-card-muted {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-glass);
+}
+
+.glass-card-accent {
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+.glass-card-accent-blue {
+  border-left-color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 12%, var(--glass));
+}
+
+.glass-card-accent-green {
+  border-left-color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, var(--glass));
+}
+
+.glass-card-accent-orange {
+  border-left-color: var(--accent-3);
+  background: color-mix(in srgb, var(--accent-3) 12%, var(--glass));
+}
+
+.glass-card-accent-purple {
+  border-left-color: var(--purple);
+  background: color-mix(in srgb, var(--purple) 12%, var(--glass));
+}
+
+.glass-card-accent-danger {
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--glass));
 }
 
 .glass-sidebar {
@@ -241,6 +346,30 @@ body {
   font-size: 0.625rem;
   font-weight: 700;
   color: #f87171;
+}
+
+.glass-tag-purple {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--purple) 30%, transparent);
+  background: color-mix(in srgb, var(--purple) 16%, transparent);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--purple);
+}
+
+.glass-tag-gray {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 .serif-title {

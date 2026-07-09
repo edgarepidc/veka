@@ -1,10 +1,19 @@
 'use client';
 
-import { formatVisitVehicle } from '@veka/shared';
+import {
+  formatVisitVehicle,
+  packageAccentTone,
+  packageStatusLabel,
+  packageTagTone,
+  visitAccentTone,
+  visitStatusLabel,
+  visitTagTone,
+} from '@veka/shared';
 import { useState, useTransition } from 'react';
 
 import { checkOutVisit, deliverPackage } from '@/app/(panel)/seguridad/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusTag } from '@/components/ui/StatusTag';
 import type { PackageRow, VisitRow } from '@/lib/load-seguridad';
 
 function formatTime(iso: string): string {
@@ -20,12 +29,6 @@ function visitTypeLabel(type: VisitRow['visit_type']): string {
   if (type === 'service') return 'Servicio';
   if (type === 'rental') return 'Renta';
   return 'Visita';
-}
-
-function visitStatus(visit: VisitRow): string {
-  if (visit.checked_out_at) return 'Salida registrada';
-  if (visit.checked_in_at) return 'Dentro del condominio';
-  return 'Pendiente de ingreso';
 }
 
 export function SecurityOpsPanels({
@@ -58,22 +61,32 @@ export function SecurityOpsPanels({
         </p>
       ) : null}
 
-      <GlassCard>
+      <div>
         <h2 className="text-lg font-semibold text-[var(--text)]">Visitas de hoy</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Pases vigentes para el día. Registra salida cuando el visitante se retire.
         </p>
         <div className="mt-4 space-y-3">
           {visits.length === 0 ? (
-            <p className="text-sm text-subtle">No hay visitas programadas para hoy.</p>
+            <GlassCard variant="muted">
+              <p className="text-sm text-subtle">No hay visitas programadas para hoy.</p>
+            </GlassCard>
           ) : (
             visits.map((visit) => (
-              <div
+              <GlassCard
                 key={visit.id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3"
+                variant="accent"
+                accent={visitAccentTone(visit)}
+                className="flex flex-wrap items-start justify-between gap-3 !p-4"
               >
                 <div>
-                  <p className="font-medium text-[var(--text)]">{visit.visitor_name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-[var(--text)]">{visit.visitor_name}</p>
+                    <StatusTag
+                      label={visitStatusLabel(visit, { activeLabel: 'Pendiente' })}
+                      tone={visitTagTone(visit)}
+                    />
+                  </div>
                   <p className="mt-1 text-sm text-muted">
                     Unidad {visit.unit?.identifier ?? '—'} · {visitTypeLabel(visit.visit_type)}
                   </p>
@@ -91,7 +104,6 @@ export function SecurityOpsPanels({
                   {visit.notes ? (
                     <p className="mt-1 text-xs text-muted">{visit.notes}</p>
                   ) : null}
-                  <p className="mt-1 text-xs font-semibold text-accent">{visitStatus(visit)}</p>
                 </div>
                 {visit.checked_in_at && !visit.checked_out_at ? (
                   <form action={(formData) => run(checkOutVisit, formData, 'Salida registrada.')}>
@@ -99,65 +111,62 @@ export function SecurityOpsPanels({
                     <button
                       type="submit"
                       disabled={pending}
-                      className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm"
+                      className="glass-btn-secondary px-3 py-1.5 text-sm"
                     >
                       Registrar salida
                     </button>
                   </form>
                 ) : null}
-              </div>
+              </GlassCard>
             ))
           )}
         </div>
-      </GlassCard>
+      </div>
 
-      <GlassCard>
+      <div>
         <h2 className="text-lg font-semibold text-[var(--text)]">Paquetes en caseta</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Pendientes de entrega al residente.
         </p>
         <div className="mt-4 space-y-3">
           {packages.length === 0 ? (
-            <p className="text-sm text-subtle">No hay paquetes pendientes.</p>
+            <GlassCard variant="muted">
+              <p className="text-sm text-subtle">Sin paquetes pendientes.</p>
+            </GlassCard>
           ) : (
             packages.map((pkg) => (
-              <div
+              <GlassCard
                 key={pkg.id}
-                className="rounded-xl border border-[var(--border)] bg-[var(--surface)]/40 p-3"
+                variant="accent"
+                accent={packageAccentTone(pkg.status)}
+                className="!p-4"
               >
-                <p className="font-medium text-[var(--text)]">
-                  {pkg.carrier ?? 'Paquete'} · Unidad {pkg.unit?.identifier ?? '—'}
-                </p>
-                {pkg.tracking_number ? (
-                  <p className="mt-1 text-sm text-muted">Guía {pkg.tracking_number}</p>
-                ) : null}
-                <p className="mt-1 text-xs text-subtle">Recibido {formatTime(pkg.received_at)}</p>
-                <form
-                  className="mt-3 flex flex-wrap items-end gap-2"
-                  action={(formData) => run(deliverPackage, formData, 'Entrega registrada.')}
-                >
-                  <input type="hidden" name="package_id" value={pkg.id} />
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-subtle">Entregado a (opcional)</span>
-                    <input
-                      name="delivered_to"
-                      placeholder="Nombre de quien recoge"
-                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5"
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={pending}
-                    className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
-                  >
-                    Marcar entregado
-                  </button>
-                </form>
-              </div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-[var(--text)]">
+                        {pkg.carrier ?? 'Paquete'} · Unidad {pkg.unit?.identifier ?? '—'}
+                      </p>
+                      <StatusTag label={packageStatusLabel(pkg.status)} tone={packageTagTone(pkg.status)} />
+                    </div>
+                    {pkg.tracking_number ? (
+                      <p className="mt-1 text-xs text-subtle">Guía {pkg.tracking_number}</p>
+                    ) : null}
+                  </div>
+                  {pkg.status === 'received' ? (
+                    <form action={(formData) => run(deliverPackage, formData, 'Paquete entregado.')}>
+                      <input type="hidden" name="package_id" value={pkg.id} />
+                      <button type="submit" disabled={pending} className="glass-btn-primary px-3 py-1.5 text-sm">
+                        Marcar entregado
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </GlassCard>
             ))
           )}
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 }
