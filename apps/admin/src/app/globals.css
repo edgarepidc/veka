@@ -14,8 +14,9 @@
   --accent-strong: #4a9468;
   --accent-2: #2563eb;
   --accent-3: #b45309;
+  --warning: #b45309;
   --success: #2f5a44;
-  --danger: #dc2626;
+  --danger: #b91c1c;
   --purple: #7c3aed;
   --text: #1e293b;
   --text-muted: #64748b;
@@ -37,6 +38,7 @@
   --accent-strong: #82c49a;
   --accent-2: #38bdf8;
   --accent-3: #c4783a;
+  --warning: #fbbf24;
   --success: #5a8f6a;
   --danger: #f87171;
   --purple: #a78bfa;
@@ -415,10 +417,56 @@ body {
   color: var(--accent-2);
 }
 
+.text-warning {
+  color: var(--warning);
+}
+
+.text-danger {
+  color: var(--danger);
+}
+
 .text-muted {
   color: var(--text-muted);
 }
 
 .text-subtle {
   color: var(--text-subtle);
+}
+
+/* Action links with stronger contrast in light mode */
+.action-link {
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.action-link:hover {
+  color: var(--accent-strong);
+  text-decoration-color: var(--accent-strong);
+}
+
+.action-link-warning {
+  font-weight: 600;
+  color: var(--warning);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.action-link-warning:hover {
+  filter: brightness(0.92);
+}
+
+.action-link-danger {
+  font-weight: 600;
+  color: var(--danger);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.action-link-danger:hover {
+  filter: brightness(0.92);
 }

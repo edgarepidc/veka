@@ -98,6 +98,11 @@ export interface UnitStatementExport {
   clusterName: string;
   balanceDue: number;
   generatedAt: string;
+  branding?: {
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    accentColor?: string | null;
+  };
   lines: {
     date: string;
     concept: string;

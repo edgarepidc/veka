@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ChargeStatus, PaymentStatus } from '@veka/shared';
 import {
+  STORAGE_BUCKETS,
   buildUnitStatementWithBalance,
   chargeStatusLabel,
   delinquentBalance,
   formatCurrency,
   formatExportDate,
   paymentStatusLabel,
+  resolveStorageImageUrl,
   type UnitStatementExport,
 } from '@veka/shared';
 
@@ -18,6 +20,9 @@ import {
   downloadUnitStatementCsv,
   exportUnitStatementPdf,
 } from '@/lib/finance-export-client';
+import type { CondominiumBranding } from '@/lib/condominium-settings';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 
 interface UnitOption {
   id: string;
@@ -59,6 +64,7 @@ export function UnitStatementPanel({
   payments,
   clusterFilterId,
   initialUnitId = '',
+  branding,
 }: {
   condominiumName: string;
   units: UnitOption[];
@@ -67,6 +73,7 @@ export function UnitStatementPanel({
   payments: PaymentRow[];
   clusterFilterId: string;
   initialUnitId?: string;
+  branding?: CondominiumBranding;
 }) {
   const visibleUnits = useMemo(() => {
     if (!clusterFilterId) return units;
@@ -137,6 +144,15 @@ export function UnitStatementPanel({
         : 'General',
       balanceDue: statement.balanceDue,
       generatedAt: formatExportDate(),
+      branding: {
+        logoUrl: resolveStorageImageUrl(
+          SUPABASE_URL,
+          branding?.logo_url,
+          STORAGE_BUCKETS.BRANDING,
+        ),
+        primaryColor: branding?.primary_color,
+        accentColor: branding?.accent_color,
+      },
       lines: statement.lines.map((line) => ({
         date: line.date,
         concept: line.concept,
@@ -149,7 +165,7 @@ export function UnitStatementPanel({
             : paymentStatusLabel(line.status as PaymentStatus),
       })),
     };
-  }, [activeUnit, clusterMap, condominiumName, statement]);
+  }, [activeUnit, branding, clusterMap, condominiumName, statement]);
 
   return (
     <div className="space-y-6">
@@ -234,10 +250,10 @@ export function UnitStatementPanel({
                 <tr key={line.id} className="border-b border-white/5">
                   <td className="px-3 py-3 text-muted">{line.date}</td>
                   <td className="px-3 py-3 text-[var(--text)]">{line.concept}</td>
-                  <td className="px-3 py-3 text-right text-amber-200">
+                  <td className="px-3 py-3 text-right font-semibold text-warning">
                     {line.debit > 0 ? formatCurrency(line.debit) : '—'}
                   </td>
-                  <td className="px-3 py-3 text-right text-accent">
+                  <td className="px-3 py-3 text-right font-semibold text-accent">
                     {line.credit > 0 ? formatCurrency(line.credit) : '—'}
                   </td>
                   <td className="px-3 py-3 text-right font-semibold text-[var(--text)]">
@@ -268,7 +284,7 @@ function StatBox({
   return (
     <div className="glass-card-deep p-3">
       <p className="text-xs uppercase tracking-wide text-subtle">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${highlight ? 'text-amber-200' : 'text-[var(--text)]'}`}>
+      <p className={`mt-1 text-lg font-bold ${highlight ? 'text-warning' : 'text-[var(--text)]'}`}>
         {value}
       </p>
     </div>
@@ -279,18 +295,28 @@ function StatusTag({ kind, status }: { kind: 'charge' | 'payment'; status: strin
   if (kind === 'charge') {
     const tone =
       status === 'paid'
-        ? 'text-emerald-300'
+        ? 'text-accent'
         : status === 'overdue'
-          ? 'text-red-300'
-          : 'text-amber-200';
+          ? 'text-danger'
+          : status === 'cancelled' || status === 'forgiven'
+            ? 'text-muted'
+            : 'text-warning';
     return (
       <span className={`text-xs font-semibold ${tone}`}>
         {chargeStatusLabel(status as ChargeStatus)}
       </span>
     );
   }
+
+  const paymentTone =
+    status === 'approved'
+      ? 'text-accent'
+      : status === 'rejected'
+        ? 'text-danger'
+        : 'text-warning';
+
   return (
-    <span className="text-xs font-semibold text-muted">
+    <span className={`text-xs font-semibold ${paymentTone}`}>
       {paymentStatusLabel(status as PaymentStatus)}
     </span>
   );

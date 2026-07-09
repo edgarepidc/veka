@@ -332,6 +332,11 @@ export function FinanceDashboard({
   const [condominiums, setCondominiums] = useState<CondominiumRow[]>([]);
   const [selectedCondoId, setSelectedCondoId] = useState(initialCondominiumId ?? '');
   const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [condoBranding, setCondoBranding] = useState<{
+    logo_url?: string;
+    primary_color?: string;
+    accent_color?: string;
+  }>({});
 
   const [units, setUnits] = useState<UnitOption[]>([]);
   const [clusters, setClusters] = useState<ClusterRow[]>([]);
@@ -634,6 +639,7 @@ export function FinanceDashboard({
     setBankTransactions((bankTransactionsRes.data as BankTransactionRow[]) ?? []);
     setPaymentPlans((paymentPlansRes.data as unknown as PaymentPlanRow[]) ?? []);
     const condoSettings = parseCondominiumSettings(condoSettingsRes.data?.settings);
+    setCondoBranding(condoSettings.branding ?? {});
     setApprovalSettings(parseApprovalSettings(condoSettings.approvals));
     setFiscalProfile((fiscalProfileRes.data as typeof fiscalProfile) ?? null);
     setUnitTaxProfiles((unitTaxRes.data as typeof unitTaxProfiles) ?? []);
@@ -1734,6 +1740,7 @@ export function FinanceDashboard({
           payments={scopedPayments}
           clusterFilterId={selectedClusterId}
           initialUnitId={statementUnitId}
+          branding={condoBranding}
         />
       ) : null}
 

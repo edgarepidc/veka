@@ -725,11 +725,11 @@ export function CuotasPanel({
                             <button
                               type="button"
                               onClick={() => downloadCaptureTemplate(fee, feeUnits)}
-                              className="text-xs font-semibold text-accent hover:underline"
+                              className="action-link text-xs"
                             >
                               Descargar plantilla
                             </button>
-                            <label className="cursor-pointer text-xs font-semibold text-accent hover:underline">
+                            <label className="action-link cursor-pointer text-xs">
                               Cargar CSV
                               <input
                                 type="file"
@@ -825,7 +825,7 @@ export function CuotasPanel({
                             <button
                               type="button"
                               onClick={() => openCapture(fee)}
-                              className="text-accent hover:underline"
+                              className="action-link text-xs"
                             >
                               Capturar mes
                             </button>
@@ -833,7 +833,7 @@ export function CuotasPanel({
                           <button
                             type="button"
                             onClick={() => openEdit(fee)}
-                            className="text-accent hover:underline"
+                            className="action-link text-xs"
                           >
                             Editar
                           </button>
@@ -841,7 +841,7 @@ export function CuotasPanel({
                             type="button"
                             disabled={pending}
                             onClick={() => handleRecurringStatus(fee.id, 'paused')}
-                            className="text-amber-300 hover:underline"
+                            className="action-link-warning text-xs disabled:opacity-60"
                           >
                             Pausar
                           </button>
@@ -849,7 +849,7 @@ export function CuotasPanel({
                             type="button"
                             disabled={pending}
                             onClick={() => handleRecurringStatus(fee.id, 'cancelled')}
-                            className="text-red-300 hover:underline"
+                            className="action-link-danger text-xs disabled:opacity-60"
                           >
                             Cancelar
                           </button>
@@ -878,7 +878,7 @@ export function CuotasPanel({
                           type="button"
                           disabled={pending}
                           onClick={() => handleRecurringStatus(fee.id, 'active')}
-                          className="text-xs text-accent hover:underline"
+                          className="action-link text-xs"
                         >
                           Reactivar
                         </button>
@@ -994,7 +994,7 @@ export function CuotasPanel({
                       type="button"
                       disabled={pending}
                       onClick={() => handleCancelExtraordinary(campaign.id)}
-                      className="mt-3 text-xs text-red-300 hover:underline"
+                      className="action-link-danger mt-3 text-xs"
                     >
                       Cancelar cuota
                     </button>
