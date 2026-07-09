@@ -99,6 +99,107 @@ function imageFormatFromDataUrl(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' {
   return 'PNG';
 }
 
+async function loadHtmlImage(dataUrl: string): Promise<HTMLImageElement | null> {
+  if (typeof Image === 'undefined') return null;
+  return await new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
+}
+
+async function getImageNaturalSize(dataUrl: string): Promise<{ width: number; height: number } | null> {
+  const image = await loadHtmlImage(dataUrl);
+  if (!image) return null;
+  return { width: image.naturalWidth || image.width, height: image.naturalHeight || image.height };
+}
+
+/** Knock out near-white logo backgrounds so they sit cleanly on the brand header. */
+async function knockOutNearWhiteBackground(dataUrl: string, threshold = 245): Promise<string> {
+  if (typeof document === 'undefined') return dataUrl;
+  const image = await loadHtmlImage(dataUrl);
+  if (!image) return dataUrl;
+
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!width || !height) return dataUrl;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+
+  ctx.drawImage(image, 0, 0);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const { data } = imageData;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    if (r >= threshold && g >= threshold && b >= threshold) {
+      data[i + 3] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+/** Fit image into a box preserving aspect ratio; returns centered draw rect. */
+function fitImageInBox(
+  naturalWidth: number,
+  naturalHeight: number,
+  boxX: number,
+  boxY: number,
+  boxW: number,
+  boxH: number,
+): { x: number; y: number; w: number; h: number } {
+  const ratio = naturalWidth / Math.max(naturalHeight, 1);
+  let w = boxW;
+  let h = w / ratio;
+  if (h > boxH) {
+    h = boxH;
+    w = h * ratio;
+  }
+  return {
+    x: boxX + (boxW - w) / 2,
+    y: boxY + (boxH - h) / 2,
+    w,
+    h,
+  };
+}
+
+async function addFittedImage(
+  doc: import('jspdf').jsPDF,
+  dataUrl: string,
+  boxX: number,
+  boxY: number,
+  boxW: number,
+  boxH: number,
+): Promise<boolean> {
+  const size = await getImageNaturalSize(dataUrl);
+  if (!size || size.width <= 0 || size.height <= 0) return false;
+  const fitted = fitImageInBox(size.width, size.height, boxX, boxY, boxW, boxH);
+  try {
+    doc.addImage(
+      dataUrl,
+      imageFormatFromDataUrl(dataUrl),
+      fitted.x,
+      fitted.y,
+      fitted.w,
+      fitted.h,
+      undefined,
+      'FAST',
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function drawRoundedRect(
   doc: import('jspdf').jsPDF,
   x: number,
@@ -206,55 +307,64 @@ export async function exportUnitStatementPdf(statement: UnitStatementExport): Pr
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
+  const headerH = 36;
   const primary = hexToRgb(statement.branding?.primaryColor, [47, 90, 68]);
   const accent = hexToRgb(statement.branding?.accentColor, [180, 83, 9]);
 
-  const [condoLogo, vekaLogo] = await Promise.all([
+  // Prefer wordmark (true horizontal) over near-square lockup assets.
+  const [condoLogoRaw, vekaLogo] = await Promise.all([
     statement.branding?.logoUrl ? loadImageAsDataUrl(statement.branding.logoUrl) : Promise.resolve(null),
-    loadImageAsDataUrl('/brand/veka-lockup-horizontal.png'),
+    loadImageAsDataUrl('/brand/veka-wordmark.png'),
   ]);
+  const condoLogo = condoLogoRaw ? await knockOutNearWhiteBackground(condoLogoRaw) : null;
 
-  // Header band
+  // Header band (no white logo plates — logos sit directly on brand color)
   doc.setFillColor(...primary);
-  doc.rect(0, 0, pageWidth, 34, 'F');
+  doc.rect(0, 0, pageWidth, headerH, 'F');
   doc.setFillColor(accent[0], accent[1], accent[2]);
-  doc.rect(0, 34, pageWidth, 2.2, 'F');
+  doc.rect(0, headerH, pageWidth, 2.2, 'F');
+
+  const logoPadY = 7;
+  const logoBoxH = headerH - logoPadY * 2;
+  const condoBoxW = 30;
+  const vekaBoxW = 36;
+  let titleX = margin;
 
   if (condoLogo) {
-    try {
-      doc.addImage(condoLogo, imageFormatFromDataUrl(condoLogo), margin, 7, 28, 18, undefined, 'FAST');
-    } catch {
-      // Ignore broken condo logo and continue with text header.
-    }
+    const drawn = await addFittedImage(doc, condoLogo, margin, logoPadY, condoBoxW, logoBoxH);
+    if (drawn) titleX = margin + condoBoxW + 6;
   }
 
+  let vekaDrawn = false;
   if (vekaLogo) {
-    try {
-      doc.addImage(vekaLogo, imageFormatFromDataUrl(vekaLogo), pageWidth - margin - 34, 9, 34, 12, undefined, 'FAST');
-    } catch {
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Veka', pageWidth - margin, 18, { align: 'right' });
-    }
-  } else {
+    vekaDrawn = await addFittedImage(
+      doc,
+      vekaLogo,
+      pageWidth - margin - vekaBoxW,
+      logoPadY,
+      vekaBoxW,
+      logoBoxH,
+    );
+  }
+  if (!vekaDrawn) {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Veka', pageWidth - margin, 18, { align: 'right' });
+    doc.text('Veka', pageWidth - margin, headerH / 2 + 1.5, { align: 'right' });
   }
 
-  const titleX = condoLogo ? margin + 34 : margin;
+  const titleMaxWidth = pageWidth - titleX - margin - (vekaDrawn ? vekaBoxW + 4 : 18);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('Estado de cuenta', titleX, 15);
+  doc.setFontSize(15);
+  doc.text('Estado de cuenta', titleX, 13, { maxWidth: titleMaxWidth });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text(statement.condominiumName, titleX, 22);
-  doc.text(`Generado: ${statement.generatedAt}`, titleX, 28);
+  doc.text(statement.condominiumName, titleX, 20, { maxWidth: titleMaxWidth });
+  doc.setFontSize(8);
+  doc.text(`Generado: ${statement.generatedAt}`, titleX, 27, { maxWidth: titleMaxWidth });
 
-  let y = 46;
+  let y = headerH + 12;
 
   // Summary cards
   const cardW = (pageWidth - margin * 2 - 8) / 3;
