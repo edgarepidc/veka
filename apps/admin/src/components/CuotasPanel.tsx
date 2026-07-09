@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import type { ChargeStatus, FeeCampaignStatus, FundType, RecurringFeeStatus } from '@veka/shared';
 import {
   cardTagClass,
@@ -70,7 +70,10 @@ interface ExtraordinaryCampaignRow {
   cluster: { name: string } | null;
 }
 
-const PERIODIC_SCOPES = ['general', 'cluster'] as const;
+
+function feeScopeFromClusterFilter(clusterFilterId: string): 'general' | 'cluster' {
+  return clusterFilterId ? 'cluster' : 'general';
+}
 
 function StatChip({
   label,
@@ -146,9 +149,10 @@ export function CuotasPanel({
     [clusterFilterId, extraordinaryCampaigns],
   );
 
+  const feeScope = feeScopeFromClusterFilter(clusterFilterId);
+  const activeClusterName = clusters.find((cluster) => cluster.id === clusterFilterId)?.name;
+
   const [periodicForm, setPeriodicForm] = useState({
-    scope: 'general' as 'general' | 'cluster',
-    clusterId: '',
     concept: defaultFeeConcept('general'),
     baseAmount: '3500',
     dueDay: '5',
@@ -156,12 +160,24 @@ export function CuotasPanel({
   });
 
   const [extraForm, setExtraForm] = useState({
-    clusterId: '',
     concept: defaultFeeConcept('extraordinary'),
     amount: '5000',
     dueDate: '',
     fundType: 'operating' as FundType,
   });
+
+  useEffect(() => {
+    setPeriodicForm((prev) => ({
+      ...prev,
+      concept: clusterFilterId
+        ? defaultFeeConcept('cluster', activeClusterName)
+        : defaultFeeConcept('general'),
+    }));
+    setExtraForm((prev) => ({
+      ...prev,
+      concept: defaultFeeConcept('extraordinary'),
+    }));
+  }, [activeClusterName, clusterFilterId]);
 
   const [editForm, setEditForm] = useState({
     concept: '',
@@ -198,18 +214,9 @@ export function CuotasPanel({
     return map;
   }, [scopedCharges]);
 
-  const periodicUnitsCount = useMemo(() => {
-    if (periodicForm.scope === 'cluster') {
-      if (!periodicForm.clusterId) return 0;
-      return scopedUnits.filter((unit) => unit.cluster_id === periodicForm.clusterId).length;
-    }
-    return scopedUnits.length;
-  }, [periodicForm.clusterId, periodicForm.scope, scopedUnits]);
+  const periodicUnitsCount = scopedUnits.length;
 
-  const extraordinaryUnitsCount = useMemo(() => {
-    if (!extraForm.clusterId) return scopedUnits.length;
-    return scopedUnits.filter((unit) => unit.cluster_id === extraForm.clusterId).length;
-  }, [extraForm.clusterId, scopedUnits]);
+  const extraordinaryUnitsCount = scopedUnits.length;
 
   const activeRecurring = scopedRecurringFees.filter((fee) => fee.status === 'active');
   const activeExtraordinary = scopedExtraordinary.filter((campaign) => campaign.status === 'active');
@@ -236,7 +243,9 @@ export function CuotasPanel({
       setMessage('Cuota periódica registrada. Los cargos del mes se generan automáticamente.');
       setPeriodicForm((prev) => ({
         ...prev,
-        concept: defaultFeeConcept(prev.scope, clusters.find((c) => c.id === prev.clusterId)?.name),
+        concept: clusterFilterId
+          ? defaultFeeConcept('cluster', activeClusterName)
+          : defaultFeeConcept('general'),
       }));
       onReload();
     });
@@ -300,11 +309,10 @@ export function CuotasPanel({
 
   return (
     <div className="space-y-8">
-      {clusterFilterId ? (
-        <p className="text-sm text-muted">
-          Mostrando cuotas del alcance: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>
-        </p>
-      ) : null}
+      <p className="text-sm text-muted">
+        Alcance actual: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>. Las cuotas que
+        registres o emitas aplican solo a este alcance.
+      </p>
       {message ? (
         <p
           className={`text-sm ${message.includes('registrada') || message.includes('actualizada') || message.includes('emitida') || message.includes('cancelada') || message.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}
@@ -318,65 +326,12 @@ export function CuotasPanel({
           <SectionHeading help={HELP.cuotas.periodica}>Cuota periódica</SectionHeading>
           <p className="mt-1 text-sm text-muted">
             Regístrala una vez: se repite cada mes en el día que elijas. El monto base se multiplica por el
-            coeficiente de cada unidad.
+            coeficiente de cada unidad en <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
           </p>
           <form action={runCreatePeriodic} className="mt-4 space-y-3">
             <input type="hidden" name="condominium_id" value={condominiumId} />
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Alcance</p>
-              <div className="flex flex-wrap gap-2">
-                {PERIODIC_SCOPES.map((scope) => (
-                  <button
-                    key={scope}
-                    type="button"
-                    onClick={() =>
-                      setPeriodicForm((prev) => ({
-                        ...prev,
-                        scope,
-                        clusterId: scope === 'general' ? '' : prev.clusterId,
-                        concept: defaultFeeConcept(
-                          scope,
-                          clusters.find((c) => c.id === prev.clusterId)?.name,
-                        ),
-                      }))
-                    }
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                      periodicForm.scope === scope
-                        ? 'bg-emerald-500/20 text-accent ring-1 ring-emerald-400/40'
-                        : 'bg-white/5 text-muted hover:bg-white/10'
-                    }`}
-                  >
-                    {feeScopeLabel(scope)}
-                  </button>
-                ))}
-              </div>
-              <input type="hidden" name="scope" value={periodicForm.scope} />
-            </div>
-
-            {periodicForm.scope === 'cluster' ? (
-              <select
-                name="cluster_id"
-                required
-                value={periodicForm.clusterId}
-                onChange={(e) =>
-                  setPeriodicForm((prev) => ({
-                    ...prev,
-                    clusterId: e.target.value,
-                    concept: defaultFeeConcept('cluster', clusters.find((c) => c.id === e.target.value)?.name),
-                  }))
-                }
-                className="glass-input"
-              >
-                <option value="">Selecciona torre / cluster</option>
-                {clusters.map((cluster) => (
-                  <option key={cluster.id} value={cluster.id} className="bg-slate-900">
-                    {cluster.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input type="hidden" name="cluster_id" value="" />
-            )}
+            <input type="hidden" name="scope" value={feeScope} />
+            <input type="hidden" name="cluster_id" value={clusterFilterId} />
 
             <input
               name="concept"
@@ -609,25 +564,12 @@ export function CuotasPanel({
         <GlassCard>
           <SectionHeading help={HELP.cuotas.extraordinaria}>Cuota extraordinaria</SectionHeading>
           <p className="mt-1 text-sm text-muted">
-            Emisión única para todo el condominio o una torre, con fecha de vencimiento específica.
+            Emisión única con fecha de vencimiento específica para{' '}
+            <span className="font-medium text-[var(--text)]">{scopeLabel}</span>.
           </p>
           <form action={runCreateExtraordinary} className="mt-4 space-y-3">
             <input type="hidden" name="condominium_id" value={condominiumId} />
-            <select
-              name="cluster_id"
-              value={extraForm.clusterId}
-              onChange={(e) => setExtraForm((prev) => ({ ...prev, clusterId: e.target.value }))}
-              className="glass-input"
-            >
-              <option value="" className="bg-slate-900">
-                Todo el condominio
-              </option>
-              {clusters.map((cluster) => (
-                <option key={cluster.id} value={cluster.id} className="bg-slate-900">
-                  Solo {cluster.name}
-                </option>
-              ))}
-            </select>
+            <input type="hidden" name="cluster_id" value={clusterFilterId} />
             <input
               name="concept"
               required
