@@ -1,20 +1,20 @@
 import { VEKA_BRAND_ASSETS, type VekaLogoVariant } from '@veka/shared';
 
 const SIZES: Record<VekaLogoVariant, { width: number; height: number }> = {
-  mark: { width: 48, height: 48 },
+  mark: { width: 56, height: 56 },
   wordmark: { width: 120, height: 36 },
   horizontal: { width: 220, height: 56 },
-  stacked: { width: 160, height: 120 },
+  stacked: { width: 140, height: 180 },
 };
 
 export function VekaLogo({
   variant = 'horizontal',
   className = '',
-  framed = true,
+  framed = false,
 }: {
   variant?: VekaLogoVariant;
   className?: string;
-  /** Dark frame so the asset reads on light theme surfaces. */
+  /** Optional dark frame for assets without their own background. */
   framed?: boolean;
 }) {
   const size = SIZES[variant];

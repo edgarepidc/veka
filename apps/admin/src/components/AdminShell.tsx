@@ -8,6 +8,7 @@ import { CondominiumSwitcher } from '@/components/CondominiumSwitcher';
 import { GlassBackground } from '@/components/ui/GlassBackground';
 import type { CondominiumBranding } from '@/lib/condominium-settings';
 import { DEFAULT_BRANDING } from '@/lib/condominium-settings';
+import { splitCondominiumName } from '@/lib/condominium-display';
 import type { AdminSession } from '@/lib/load-admin-session';
 import { SignOutButton } from '@/components/SignOutButton';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
@@ -55,6 +56,8 @@ export function AdminShell({
     STORAGE_BUCKETS.AVATARS,
   );
   const accent = branding?.primary_color ?? DEFAULT_BRANDING.primary_color;
+  const condoName = session.membership?.condominium_name ?? 'Veka';
+  const { line1, line2 } = splitCondominiumName(condoName);
 
   return (
     <GlassBackground
@@ -67,26 +70,29 @@ export function AdminShell({
     >
       <div className="flex min-h-screen">
         <aside className="glass-sidebar hidden w-64 shrink-0 lg:flex lg:flex-col">
-          <div className="border-b border-white/10 px-5 py-6">
+          <div className="border-b border-white/10 px-4 py-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-widest text-accent">
               {session.isAdmin ? 'Panel admin' : session.canAccessSecurity ? 'Caseta' : 'Portal residente'}
             </p>
-            <div className="mt-2 flex items-center gap-3">
+            <div className="mt-3 flex flex-col items-center gap-2.5">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="" className="h-10 w-10 rounded-lg object-contain" />
+                <img src={logoUrl} alt="" className="h-14 w-14 rounded-xl object-contain" />
               ) : (
-                <VekaLogo variant="mark" framed className="!px-2 !py-1.5" />
+                <VekaLogo variant="mark" className="w-14" />
               )}
-              <div className="min-w-0">
-                <h1 className="serif-title truncate text-2xl text-[var(--text)]">
-                  {session.membership?.condominium_name ?? 'Veka'}
-                </h1>
-                <p className="mt-0.5 text-xs text-subtle">Powered by Veka</p>
+              <div className="max-w-[11rem]">
+                <p className="serif-title text-base leading-snug text-[var(--text)]">{line1}</p>
+                {line2 ? (
+                  <p className="serif-title text-sm leading-snug text-subtle">&ldquo;{line2}&rdquo;</p>
+                ) : null}
               </div>
             </div>
           </div>
           <AdminNav />
+          <div className="mt-auto border-t border-white/10 px-4 py-4">
+            <VekaLogo variant="stacked" className="mx-auto w-full max-w-[9.5rem]" />
+          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">

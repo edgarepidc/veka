@@ -15,7 +15,7 @@ const SIZES: Record<VekaLogoVariant, { width: number; height: number }> = {
   mark: { width: 52, height: 52 },
   wordmark: { width: 128, height: 40 },
   horizontal: { width: 240, height: 64 },
-  stacked: { width: 180, height: 132 },
+  stacked: { width: 160, height: 200 },
 };
 
 export function VekaLogo({

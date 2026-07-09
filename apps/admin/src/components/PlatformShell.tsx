@@ -32,7 +32,7 @@ export function PlatformShell({
       <div className="flex min-h-screen">
         <aside className="glass-sidebar hidden w-60 shrink-0 border-r border-violet-400/20 lg:flex lg:flex-col">
           <div className="border-b border-white/10 px-5 py-6">
-            <VekaLogo variant="mark" framed className="mb-3 !px-2 !py-1.5" />
+            <VekaLogo variant="mark" className="mb-3 w-14" />
             <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">Veka Platform</p>
             <h1 className="serif-title mt-2 text-xl text-[var(--text)]">Administración</h1>
             <p className="mt-1 text-xs text-subtle">Dueños de la app</p>
