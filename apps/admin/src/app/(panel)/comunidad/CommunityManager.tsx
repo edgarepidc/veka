@@ -13,6 +13,7 @@ import {
 } from '@veka/shared';
 
 import { setActiveCondominium } from '@/app/(panel)/configuracion/condominio/actions/set-active-condo';
+import { AssembliesPanel } from '@/components/AssembliesPanel';
 import { CommunityTeamRoster } from '@/components/CommunityTeamRoster';
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { VigilanceCommitteePanel } from '@/components/VigilanceCommitteePanel';
@@ -23,6 +24,7 @@ import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import type { ClusterOption } from '@/lib/community-clusters';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
+import type { AssemblyRow, AssemblyTicketOption } from '@/lib/load-assemblies';
 import type { CommunityDirectoryMember } from '@/lib/load-community-directory';
 import type { CommitteeMemberRow, ResidentDirectoryRow } from '@/lib/load-committee';
 
@@ -86,28 +88,35 @@ function PostAttachmentPreview({ path }: { path: string }) {
   );
 }
 
-type ContentTab = 'announcement' | 'poll' | 'document' | 'personal';
+type ContentTab = 'announcement' | 'poll' | 'document' | 'mi-comunidad' | 'asambleas';
 type PeriodFilter = 'month' | 'quarter' | 'all';
+type PublishTab = 'announcement' | 'poll' | 'document';
 
 const TABS: { id: ContentTab; label: string }[] = [
   { id: 'announcement', label: 'Avisos' },
   { id: 'poll', label: 'Encuestas' },
   { id: 'document', label: 'Documentos' },
-  { id: 'personal', label: 'Personal' },
+  { id: 'mi-comunidad', label: 'Mi comunidad' },
+  { id: 'asambleas', label: 'Asambleas' },
 ];
 
 const TAB_HELP: Record<ContentTab, string> = {
   announcement: HELP.comunidad.avisos,
   poll: HELP.comunidad.encuestas,
   document: HELP.comunidad.documentos,
-  personal: HELP.comunidad.personal,
+  'mi-comunidad': HELP.comunidad.miComunidad,
+  asambleas: HELP.comunidad.asambleas,
 };
 
-const PUBLISH_LABEL: Record<Exclude<ContentTab, 'personal'>, string> = {
+const PUBLISH_LABEL: Record<PublishTab, string> = {
   announcement: 'Publicar aviso',
   poll: 'Publicar encuesta',
   document: 'Publicar documento',
 };
+
+function isPublishTab(tab: ContentTab): tab is PublishTab {
+  return tab === 'announcement' || tab === 'poll' || tab === 'document';
+}
 
 const PERIOD_FILTER_LABELS: Record<PeriodFilter, string> = {
   month: 'Mes actual',
@@ -161,6 +170,8 @@ export function CommunityManager({
   directoryMembers,
   residents,
   vigilanceMembers,
+  assemblies: initialAssemblies,
+  assemblyTickets,
 }: {
   posts: CommunityPostRow[];
   documents: CommunityDocumentRow[];
@@ -170,6 +181,8 @@ export function CommunityManager({
   directoryMembers: CommunityDirectoryMember[];
   residents: ResidentDirectoryRow[];
   vigilanceMembers: CommitteeMemberRow[];
+  assemblies: AssemblyRow[];
+  assemblyTickets: AssemblyTicketOption[];
 }) {
   const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
@@ -184,6 +197,8 @@ export function CommunityManager({
   const [directoryRows, setDirectoryRows] = useState(directoryMembers);
   const [residentRows, setResidentRows] = useState(residents);
   const [vigilanceRows, setVigilanceRows] = useState(vigilanceMembers);
+  const [assemblies, setAssemblies] = useState(initialAssemblies);
+  const [ticketOptions, setTicketOptions] = useState(assemblyTickets);
   const [publishOpen, setPublishOpen] = useState(false);
 
   useEffect(() => {
@@ -193,6 +208,8 @@ export function CommunityManager({
     setDirectoryRows(directoryMembers);
     setResidentRows(residents);
     setVigilanceRows(vigilanceMembers);
+    setAssemblies(initialAssemblies);
+    setTicketOptions(assemblyTickets);
     setSelectedCondoId(initialCondominiumId);
     setSelectedClusterId('');
     setPublishOpen(false);
@@ -203,6 +220,8 @@ export function CommunityManager({
     directoryMembers,
     residents,
     vigilanceMembers,
+    initialAssemblies,
+    assemblyTickets,
     initialCondominiumId,
   ]);
 
@@ -306,7 +325,7 @@ export function CommunityManager({
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   }
 
-  const publishTab = tab === 'personal' ? null : tab;
+  const publishTab = isPublishTab(tab) ? tab : null;
 
   return (
     <div className="space-y-3">
@@ -345,7 +364,7 @@ export function CommunityManager({
         </div>
       </GlassCard>
 
-      {tab !== 'personal' ? (
+      {isPublishTab(tab) ? (
         <GlassCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -609,10 +628,10 @@ export function CommunityManager({
             </p>
           ) : null}
         </GlassCard>
-      ) : (
+      ) : tab === 'mi-comunidad' ? (
         <div className="space-y-3">
           <GlassCard>
-            <h2 className="text-lg font-semibold text-[var(--text)]">Personal / equipo de trabajo</h2>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Equipo y comité</h2>
             <p className="mt-1 text-sm text-muted">
               Listado para que residentes vean quién forma la administración. El comité de vigilancia se
               agrega desde el directorio de residentes.
@@ -635,6 +654,16 @@ export function CommunityManager({
             />
           </GlassCard>
         </div>
+      ) : (
+        <AssembliesPanel
+          condominiumId={selectedCondoId}
+          clusterId={selectedClusterId}
+          scopeLabel={scopeLabel}
+          assemblies={assemblies}
+          posts={posts}
+          documents={documents}
+          tickets={ticketOptions}
+        />
       )}
 
       {publishOpen && publishTab ? (

@@ -54,6 +54,45 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
   return { success: true };
 }
 
+export async function setStaffPhoneVisibility(membershipId: string, showPhone: boolean) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const id = membershipId.trim();
+  if (!id) return { error: 'Miembro no válido.' };
+
+  const { data: target } = await supabase
+    .from('memberships')
+    .select('id, role, condominium_id')
+    .eq('id', id)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!target) return { error: 'Miembro no encontrado.' };
+  if (!CONFIG_TEAM_ROLES.includes(target.role as MembershipRole)) {
+    return { error: 'Solo se controla el teléfono de roles de app.' };
+  }
+
+  const { error } = await supabase
+    .from('memberships')
+    .update({ show_phone_in_directory: showPhone })
+    .eq('id', id)
+    .eq('condominium_id', condominiumId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/configuracion/equipo');
+  revalidatePath('/comunidad');
+  return { success: true };
+}
+
 export async function inviteStaffMember(formData: FormData) {
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };

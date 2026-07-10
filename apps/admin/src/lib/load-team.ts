@@ -10,6 +10,8 @@ export interface TeamMember {
   role: MembershipRole;
   status: string;
   full_name: string | null;
+  phone: string | null;
+  show_phone_in_directory: boolean;
 }
 
 export interface StaffInvitation {
@@ -30,7 +32,7 @@ export async function loadStaffTeam(condominiumId?: string): Promise<{
   const [membersRes, invitationsRes] = await Promise.all([
     supabase
       .from('memberships')
-      .select('id, user_id, role, status, profile:profiles(full_name)')
+      .select('id, user_id, role, status, show_phone_in_directory, profile:profiles(full_name, phone)')
       .eq('condominium_id', condoId)
       .eq('status', 'active')
       .in('role', CONFIG_TEAM_ROLES)
@@ -55,6 +57,8 @@ export async function loadStaffTeam(condominiumId?: string): Promise<{
         role: row.role as MembershipRole,
         status: row.status,
         full_name: profile?.full_name ?? null,
+        phone: profile?.phone?.trim() || null,
+        show_phone_in_directory: Boolean(row.show_phone_in_directory),
       };
     });
 

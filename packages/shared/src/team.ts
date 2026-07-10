@@ -33,7 +33,7 @@ export const STAFF_SECTIONS: StaffSection[] = [
   },
 ];
 
-/** Roles shown in Comunidad → Personal (read-only roster). Same as config app roles. */
+/** Roles shown in Comunidad → Mi comunidad (read-only roster). Same as config app roles. */
 export const COMMUNITY_DIRECTORY_ROLES: MembershipRole[] = [
   'super_admin',
   'admin',

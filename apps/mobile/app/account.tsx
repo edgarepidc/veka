@@ -140,7 +140,7 @@ export default function AccountScreen() {
                 Mostrar mi teléfono en el directorio
               </Text>
               <Text style={[styles.visibilityHint, { color: theme.textMuted }]}>
-                Si lo activas, tu número puede verse en Comunidad → Personal (comité y equipo).
+                Si lo activas, tu número puede verse en Comunidad → Mi comunidad (comité).
               </Text>
             </View>
           </Pressable>

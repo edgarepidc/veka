@@ -10,7 +10,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { StaffInvitation, TeamMember } from '@/lib/load-team';
 
-import { inviteStaffMember, updateMemberRole } from './actions';
+import { inviteStaffMember, setStaffPhoneVisibility, updateMemberRole } from './actions';
 
 const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
   administrative: ['admin'],
@@ -65,15 +65,31 @@ export function TeamManager({
     });
   }
 
+  function handlePhoneVisibility(membershipId: string, showPhone: boolean) {
+    setMessage(null);
+    start(async () => {
+      const result = await setStaffPhoneVisibility(membershipId, showPhone);
+      setMessage(result.error ?? (showPhone ? 'Teléfono visible en Mi comunidad.' : 'Teléfono oculto en Mi comunidad.'));
+    });
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
         Usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se invitan desde
-        Unidades; el comité de vigilancia se arma en Comunidad → Personal.
+        Unidades; el comité de vigilancia se arma en Comunidad → Mi comunidad.
       </p>
 
       {message ? (
-        <p className={`text-sm ${message.includes('Invitación') || message.includes('actualizado') ? 'text-accent' : 'text-red-300'}`}>
+        <p
+          className={`text-sm ${
+            message.includes('Invitación') ||
+            message.includes('actualizado') ||
+            message.includes('Teléfono')
+              ? 'text-accent'
+              : 'text-red-300'
+          }`}
+        >
           {message}
         </p>
       ) : null}
@@ -154,32 +170,57 @@ export function TeamManager({
                       return (
                         <li
                           key={member.id}
-                          className="glass-card-deep flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          className="glass-card-deep flex flex-col gap-3 px-4 py-3"
                         >
-                          <div>
-                            <p className="text-sm font-medium text-[var(--text)]">
-                              {member.full_name ?? 'Sin nombre'}
-                              {isSelf ? <span className="ml-2 text-xs text-subtle">(tú)</span> : null}
-                            </p>
-                            <p className="text-xs text-subtle">{STAFF_ROLE_LABELS[member.role]}</p>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-[var(--text)]">
+                                {member.full_name ?? 'Sin nombre'}
+                                {isSelf ? <span className="ml-2 text-xs text-subtle">(tú)</span> : null}
+                              </p>
+                              <p className="text-xs text-subtle">
+                                {STAFF_ROLE_LABELS[member.role]}
+                                {member.phone ? ` · ${member.phone}` : ' · Sin teléfono en perfil'}
+                              </p>
+                            </div>
+
+                            {canEdit && assignable.length > 0 ? (
+                              <select
+                                value={member.role}
+                                disabled={pending}
+                                onChange={(e) => handleRoleChange(member.id, e.target.value as MembershipRole)}
+                                className="glass-input w-full sm:w-52"
+                              >
+                                {assignable.map((role) => (
+                                  <option key={role} value={role} className="bg-slate-900">
+                                    {STAFF_ROLE_LABELS[role]}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="glass-tag-green text-xs">{STAFF_ROLE_LABELS[member.role]}</span>
+                            )}
                           </div>
 
-                          {canEdit && assignable.length > 0 ? (
-                            <select
-                              value={member.role}
-                              disabled={pending}
-                              onChange={(e) => handleRoleChange(member.id, e.target.value as MembershipRole)}
-                              className="glass-input w-full sm:w-52"
-                            >
-                              {assignable.map((role) => (
-                                <option key={role} value={role} className="bg-slate-900">
-                                  {STAFF_ROLE_LABELS[role]}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="glass-tag-green text-xs">{STAFF_ROLE_LABELS[member.role]}</span>
-                          )}
+                          <label className="flex items-start gap-2 text-xs text-muted">
+                            <input
+                              type="checkbox"
+                              checked={member.show_phone_in_directory}
+                              disabled={pending || !member.phone}
+                              onChange={(event) =>
+                                handlePhoneVisibility(member.id, event.target.checked)
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-white/20"
+                            />
+                            <span>
+                              Mostrar teléfono en Comunidad → Mi comunidad
+                              {!member.phone ? (
+                                <span className="mt-0.5 block text-subtle">
+                                  La persona debe guardar un teléfono en su perfil primero.
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
                         </li>
                       );
                     })

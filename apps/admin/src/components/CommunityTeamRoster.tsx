@@ -28,8 +28,8 @@ export function CommunityTeamRoster({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Directorio del equipo para residentes · {scopeLabel}. Solo lectura; las invitaciones de roles de
-        app se gestionan en Configuración → Equipo.
+        Directorio del equipo para residentes · {scopeLabel}. Solo lectura; invitaciones y visibilidad de
+        teléfono del staff se gestionan en Configuración → Equipo.
       </p>
 
       {sections.map(({ section, members: sectionMembers }) => (

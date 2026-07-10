@@ -69,15 +69,17 @@ export const HELP = {
     avisos: 'Publica comunicados visibles para residentes en la app. Puedes fijar prioridad o vigencia.',
     encuestas: 'Crea votaciones formales o consultas informales. Las formales pueden requerir quórum según configuración.',
     documentos: 'Reglamento, minutas y archivos del condominio visibles en la app (pestaña Documentos).',
-    personal:
+    miComunidad:
       'Directorio público del equipo (solo lectura): staff admin, mantenimiento y seguridad. El comité de vigilancia se agrega desde residentes del directorio. Las invitaciones de roles de app viven en Configuración → Equipo.',
+    asambleas:
+      'Expediente de cada asamblea: vincula avisos, encuestas y documentos ya publicados, y da seguimiento a acuerdos con checklist (opcionalmente ligados a tickets de mantenimiento).',
   },
   mantenimiento:
     'Programa actividades por día (semanal, quincenal, mensual o a demanda) y registra evidencia fotográfica por fecha. Los residentes consultan el programa y filtran evidencia por mes.',
   unidades:
     'Torres (clusters) y unidades con coeficiente de participación. Desde aquí envías invitaciones a residentes.',
   equipo:
-    'Invita y gestiona usuarios con rol en la app: staff admin, mantenimiento y seguridad. El directorio que ven residentes está en Comunidad → Personal.',
+    'Invita y gestiona usuarios con rol en la app: staff admin, mantenimiento y seguridad. Desde aquí decides si el teléfono del staff se muestra en Comunidad → Mi comunidad.',
   condominio:
     'Datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos.',
   residente:

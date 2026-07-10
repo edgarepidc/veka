@@ -2,6 +2,7 @@ import { CommunityManager } from '@/app/(panel)/comunidad/CommunityManager';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { HELP } from '@/lib/help-content';
 import { requireAdminSession } from '@/lib/require-admin';
+import { loadAssemblies, loadAssemblyTicketOptions } from '@/lib/load-assemblies';
 import { loadCommunityDocuments, loadCommunityPosts } from '@/lib/load-community';
 import { loadCommunityDirectory } from '@/lib/load-community-directory';
 import { loadCondominiumClusters } from '@/lib/community-clusters';
@@ -12,13 +13,24 @@ export default async function ComunidadPage() {
   const condominiumId = session.activeCondominiumId;
   if (!condominiumId) return null;
 
-  const [posts, documents, clusters, directoryMembers, residents, vigilanceMembers] = await Promise.all([
+  const [
+    posts,
+    documents,
+    clusters,
+    directoryMembers,
+    residents,
+    vigilanceMembers,
+    assemblies,
+    assemblyTickets,
+  ] = await Promise.all([
     loadCommunityPosts(condominiumId),
     loadCommunityDocuments(condominiumId),
     loadCondominiumClusters(condominiumId),
     loadCommunityDirectory(condominiumId),
     loadResidentDirectory(condominiumId),
     loadCommitteeMembers(condominiumId, 'vigilance'),
+    loadAssemblies(condominiumId),
+    loadAssemblyTicketOptions(condominiumId),
   ]);
 
   return (
@@ -26,12 +38,13 @@ export default async function ComunidadPage() {
       <PageHeader
         title="Comunidad"
         highlight="del condominio"
-        subtitle="Avisos, encuestas, documentos y el equipo de trabajo por torre."
+        subtitle="Avisos, encuestas, documentos, mi comunidad y asambleas por torre."
         help={
           <>
             <p>{HELP.comunidad.avisos}</p>
             <p className="mt-2">{HELP.comunidad.encuestas}</p>
-            <p className="mt-2">{HELP.comunidad.personal}</p>
+            <p className="mt-2">{HELP.comunidad.miComunidad}</p>
+            <p className="mt-2">{HELP.comunidad.asambleas}</p>
           </>
         }
       />
@@ -44,6 +57,8 @@ export default async function ComunidadPage() {
         directoryMembers={directoryMembers}
         residents={residents}
         vigilanceMembers={vigilanceMembers}
+        assemblies={assemblies}
+        assemblyTickets={assemblyTickets}
       />
     </div>
   );

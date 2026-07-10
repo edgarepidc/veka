@@ -89,7 +89,7 @@ export function ProfileForm({ session }: { session: AdminSession }) {
             <span>
               <span className="font-medium text-[var(--text)]">Mostrar mi teléfono en el directorio</span>
               <span className="mt-0.5 block text-xs text-subtle">
-                Si lo activas, el número aparece en Comunidad → Personal (y en el directorio del equipo).
+                Si lo activas, el número aparece en Comunidad → Mi comunidad (comité y perfiles de residente).
               </span>
             </span>
           </label>

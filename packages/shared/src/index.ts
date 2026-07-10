@@ -21,6 +21,7 @@ export * from './roles';
 export * from './spaces';
 export * from './storage';
 export * from './team';
+export * from './assemblies';
 export * from './types';
 export * from './units';
 export * from './community';

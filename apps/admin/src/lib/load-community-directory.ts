@@ -23,7 +23,7 @@ export async function loadCommunityDirectory(
   const { data } = await supabase
     .from('memberships')
     .select(
-      'id, user_id, role, unit:units(identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name, phone, show_phone_in_directory)',
+      'id, user_id, role, show_phone_in_directory, unit:units(identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name, phone)',
     )
     .eq('condominium_id', condoId)
     .eq('status', 'active')
@@ -34,6 +34,7 @@ export async function loadCommunityDirectory(
     id: string;
     user_id: string;
     role: MembershipRole;
+    show_phone_in_directory: boolean | null;
     unit:
       | {
           identifier: string;
@@ -50,12 +51,10 @@ export async function loadCommunityDirectory(
       | {
           full_name: string | null;
           phone: string | null;
-          show_phone_in_directory: boolean | null;
         }
       | {
           full_name: string | null;
           phone: string | null;
-          show_phone_in_directory: boolean | null;
         }[]
       | null;
   }[];
@@ -68,7 +67,8 @@ export async function loadCommunityDirectory(
         : unitRaw.cluster
       : null;
     const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
-    const showPhone = Boolean(profile?.show_phone_in_directory);
+    // Staff phone visibility is admin-controlled on the membership.
+    const showPhone = Boolean(row.show_phone_in_directory);
 
     return {
       membershipId: row.id,
