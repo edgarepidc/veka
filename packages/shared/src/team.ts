@@ -31,9 +31,9 @@ export const STAFF_SECTIONS: StaffSection[] = [
     defaultInviteRole: 'staff',
   },
   {
-    id: 'vigilance',
-    title: 'Comité de vigilancia',
-    description: 'Comité de vigilancia y control de acceso / seguridad.',
+    id: 'security',
+    title: 'Seguridad (acceso)',
+    description: 'Guardias y control de acceso. No es el comité de vigilancia.',
     roles: ['guard'],
     defaultInviteRole: 'guard',
   },
@@ -52,9 +52,24 @@ export const STAFF_ROLE_LABELS: Record<MembershipRole, string> = {
   admin: 'Staff admin',
   board_member: 'Mesa directiva',
   resident: 'Residente',
-  guard: 'Comité de vigilancia',
+  guard: 'Guardia de seguridad',
   staff: 'Staff mantenimiento',
 };
+
+export const COMMITTEE_KINDS = ['vigilance'] as const;
+export type CommitteeKind = (typeof COMMITTEE_KINDS)[number];
+
+export const COMMITTEE_KIND_LABELS: Record<CommitteeKind, string> = {
+  vigilance: 'Comité de vigilancia',
+};
+
+export const VIGILANCE_TITLE_OPTIONS = [
+  'Presidente',
+  'Secretario',
+  'Tesorero',
+  'Vocal',
+  'Integrante',
+] as const;
 
 export function isStaffRole(role: MembershipRole): boolean {
   return TEAM_STAFF_ROLES.includes(role);

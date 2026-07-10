@@ -16,7 +16,7 @@ const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
   administrative: ['admin'],
   board: ['board_member'],
   maintenance: ['staff'],
-  vigilance: ['guard'],
+  security: ['guard'],
 };
 
 export function TeamManager({

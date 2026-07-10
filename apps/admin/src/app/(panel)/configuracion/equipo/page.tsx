@@ -16,7 +16,7 @@ export default async function EquipoConfigPage() {
       <PageHeader
         title="Configuración"
         highlight="del equipo"
-        subtitle="Staff admin, mesa directiva, mantenimiento y comité de vigilancia."
+        subtitle="Staff admin, mesa directiva, mantenimiento y seguridad de acceso. El comité de vigilancia se gestiona en Comunidad → Personal."
         help={<p>{HELP.equipo}</p>}
       />
       <ConfigNav />

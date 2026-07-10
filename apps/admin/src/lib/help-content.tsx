@@ -70,7 +70,7 @@ export const HELP = {
     encuestas: 'Crea votaciones formales o consultas informales. Las formales pueden requerir quórum según configuración.',
     documentos: 'Reglamento, minutas y archivos del condominio visibles en la app (pestaña Documentos).',
     personal:
-      'Directorio del equipo: staff admin, mesa directiva, mantenimiento y comité de vigilancia. Las invitaciones también viven en Configuración → Equipo.',
+      'Staff admin, mesa directiva y mantenimiento se invitan como equipo. El comité de vigilancia se arma con residentes ya registrados (sin invitación nueva). Seguridad/acceso es aparte.',
   },
   mantenimiento:
     'Programa actividades por día (semanal, quincenal, mensual o a demanda) y registra evidencia fotográfica por fecha. Los residentes consultan el programa y filtran evidencia por mes.',

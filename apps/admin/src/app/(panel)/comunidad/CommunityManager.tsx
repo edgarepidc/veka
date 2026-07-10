@@ -14,8 +14,8 @@ import {
 
 import { setActiveCondominium } from '@/app/(panel)/configuracion/condominio/actions/set-active-condo';
 import { TeamManager } from '@/app/(panel)/configuracion/equipo/TeamManager';
-import { ClusterTargetPicker } from '@/components/ClusterTargetPicker';
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
+import { VigilanceCommitteePanel } from '@/components/VigilanceCommitteePanel';
 import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { HelpHint } from '@/components/ui/HelpHint';
@@ -23,6 +23,7 @@ import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import type { ClusterOption } from '@/lib/community-clusters';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
+import type { CommitteeMemberRow, ResidentDirectoryRow } from '@/lib/load-committee';
 import type { StaffInvitation, TeamMember } from '@/lib/load-team';
 
 import {
@@ -139,6 +140,18 @@ function matchesClusterScope(
   return clusters.some((cluster) => cluster.id === selectedClusterId);
 }
 
+function PublishScopeFields({ selectedClusterId }: { selectedClusterId: string }) {
+  if (!selectedClusterId) {
+    return <input type="hidden" name="scope_mode" value="all" />;
+  }
+  return (
+    <>
+      <input type="hidden" name="scope_mode" value="clusters" />
+      <input type="hidden" name="cluster_ids" value={selectedClusterId} />
+    </>
+  );
+}
+
 export function CommunityManager({
   posts: initialPosts,
   documents: initialDocuments,
@@ -147,6 +160,8 @@ export function CommunityManager({
   clusters: initialClusters,
   teamMembers,
   teamInvitations,
+  residents,
+  vigilanceMembers,
   currentUserId,
 }: {
   posts: CommunityPostRow[];
@@ -156,6 +171,8 @@ export function CommunityManager({
   clusters: ClusterOption[];
   teamMembers: TeamMember[];
   teamInvitations: StaffInvitation[];
+  residents: ResidentDirectoryRow[];
+  vigilanceMembers: CommitteeMemberRow[];
   currentUserId: string;
 }) {
   const supabase = createClient();
@@ -170,6 +187,8 @@ export function CommunityManager({
   const [documents, setDocuments] = useState(initialDocuments);
   const [members, setMembers] = useState(teamMembers);
   const [invitations, setInvitations] = useState(teamInvitations);
+  const [residentRows, setResidentRows] = useState(residents);
+  const [vigilanceRows, setVigilanceRows] = useState(vigilanceMembers);
   const [publishOpen, setPublishOpen] = useState(false);
 
   useEffect(() => {
@@ -178,6 +197,8 @@ export function CommunityManager({
     setClusters(initialClusters);
     setMembers(teamMembers);
     setInvitations(teamInvitations);
+    setResidentRows(residents);
+    setVigilanceRows(vigilanceMembers);
     setSelectedCondoId(initialCondominiumId);
     setSelectedClusterId('');
     setPublishOpen(false);
@@ -187,6 +208,8 @@ export function CommunityManager({
     initialClusters,
     teamMembers,
     teamInvitations,
+    residents,
+    vigilanceMembers,
     initialCondominiumId,
   ]);
 
@@ -219,6 +242,18 @@ export function CommunityManager({
         .filter((doc) => matchesClusterScope(doc.clusters, selectedClusterId)),
     [documents, periodFilter, selectedClusterId],
   );
+
+  const scopedResidents = useMemo(
+    () =>
+      selectedClusterId
+        ? residentRows.filter((row) => row.clusterId === selectedClusterId)
+        : residentRows,
+    [residentRows, selectedClusterId],
+  );
+
+  const scopeLabel = selectedClusterId
+    ? (clusters.find((cluster) => cluster.id === selectedClusterId)?.name ?? 'Torre')
+    : 'Todo el condominio';
 
   async function handleCondoChange(nextId: string) {
     if (nextId === selectedCondoId) return;
@@ -582,15 +617,26 @@ export function CommunityManager({
           ) : null}
         </GlassCard>
       ) : (
-        <GlassCard>
-          <h2 className="text-lg font-semibold text-[var(--text)]">Personal / equipo de trabajo</h2>
-          <p className="mt-1 text-sm text-muted">
-            Staff admin, mesa directiva, mantenimiento y comité de vigilancia del condominio.
-          </p>
-          <div className="mt-4">
-            <TeamManager members={members} invitations={invitations} currentUserId={currentUserId} />
-          </div>
-        </GlassCard>
+        <div className="space-y-3">
+          <GlassCard>
+            <h2 className="text-lg font-semibold text-[var(--text)]">Personal / equipo de trabajo</h2>
+            <p className="mt-1 text-sm text-muted">
+              Staff operativo (invitaciones) y comité de vigilancia (residentes del directorio).
+            </p>
+            <div className="mt-4">
+              <TeamManager members={members} invitations={invitations} currentUserId={currentUserId} />
+            </div>
+          </GlassCard>
+          <GlassCard>
+            <VigilanceCommitteePanel
+              condominiumId={selectedCondoId}
+              clusterId={selectedClusterId}
+              clusterLabel={scopeLabel}
+              residents={scopedResidents}
+              members={vigilanceRows}
+            />
+          </GlassCard>
+        </div>
       )}
 
       {publishOpen && publishTab ? (
@@ -606,7 +652,8 @@ export function CommunityManager({
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text)]">{PUBLISH_LABEL[publishTab]}</h3>
                 <p className="mt-1 text-xs text-subtle">
-                  El alcance del aviso (torre) se elige abajo; el filtro de arriba solo filtra la lista.
+                  Se publicará para <span className="font-medium text-[var(--text)]">{scopeLabel}</span>{' '}
+                  (según el filtro de la pantalla).
                 </p>
               </div>
               <button
@@ -623,6 +670,7 @@ export function CommunityManager({
                 action={(fd) => run(createAnnouncement, fd, 'Aviso publicado.')}
                 className="space-y-3"
               >
+                <PublishScopeFields selectedClusterId={selectedClusterId} />
                 <input name="title" required placeholder="Título del aviso" className="glass-input" />
                 <textarea
                   name="body"
@@ -638,7 +686,6 @@ export function CommunityManager({
                   hint="Imagen o PDF. Máximo 2 MB (imagen) o 5 MB (PDF)."
                   uploadButtonLabel="Subir adjunto"
                 />
-                <ClusterTargetPicker clusters={clusters} />
                 <label className="flex items-center gap-2 text-sm text-muted">
                   <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
                   Fijar en la parte superior
@@ -649,6 +696,7 @@ export function CommunityManager({
               </form>
             ) : publishTab === 'poll' ? (
               <form action={(fd) => run(createPoll, fd, 'Encuesta publicada.')} className="space-y-3">
+                <PublishScopeFields selectedClusterId={selectedClusterId} />
                 <input name="title" required placeholder="Pregunta de la encuesta" className="glass-input" />
                 <textarea
                   name="body"
@@ -735,8 +783,6 @@ export function CommunityManager({
                   Fijar en la parte superior
                 </label>
 
-                <ClusterTargetPicker clusters={clusters} />
-
                 <button type="submit" disabled={pending} className="glass-btn-primary">
                   {pending ? 'Publicando…' : 'Publicar encuesta'}
                 </button>
@@ -746,6 +792,7 @@ export function CommunityManager({
                 action={(fd) => run(uploadDocument, fd, 'Documento publicado.')}
                 className="space-y-3"
               >
+                <PublishScopeFields selectedClusterId={selectedClusterId} />
                 <input name="title" required placeholder="Título del documento" className="glass-input" />
                 <input
                   name="category"
@@ -760,7 +807,6 @@ export function CommunityManager({
                   label="Archivo"
                   hint="PDF o imagen. Los residentes lo verán en la pestaña Documentos de la app."
                 />
-                <ClusterTargetPicker clusters={clusters} />
                 <button type="submit" disabled={pending} className="glass-btn-primary">
                   {pending ? 'Publicando…' : 'Publicar documento'}
                 </button>

@@ -4,6 +4,7 @@ import { HELP } from '@/lib/help-content';
 import { requireAdminSession } from '@/lib/require-admin';
 import { loadCommunityDocuments, loadCommunityPosts } from '@/lib/load-community';
 import { loadCondominiumClusters } from '@/lib/community-clusters';
+import { loadCommitteeMembers, loadResidentDirectory } from '@/lib/load-committee';
 import { loadStaffTeam } from '@/lib/load-team';
 
 export default async function ComunidadPage() {
@@ -11,11 +12,13 @@ export default async function ComunidadPage() {
   const condominiumId = session.activeCondominiumId;
   if (!condominiumId) return null;
 
-  const [posts, documents, clusters, team] = await Promise.all([
+  const [posts, documents, clusters, team, residents, vigilanceMembers] = await Promise.all([
     loadCommunityPosts(condominiumId),
     loadCommunityDocuments(condominiumId),
     loadCondominiumClusters(condominiumId),
     loadStaffTeam(condominiumId),
+    loadResidentDirectory(condominiumId),
+    loadCommitteeMembers(condominiumId, 'vigilance'),
   ]);
 
   return (
@@ -40,6 +43,8 @@ export default async function ComunidadPage() {
         clusters={clusters}
         teamMembers={team.members}
         teamInvitations={team.invitations}
+        residents={residents}
+        vigilanceMembers={vigilanceMembers}
         currentUserId={session.userId}
       />
     </div>

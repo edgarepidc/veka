@@ -40,7 +40,7 @@ export function formatCommunityAuthorName(
   if (role === 'admin' || role === 'super_admin') return `${name} - Staff admin`;
   if (role === 'board_member') return `${name} - Mesa directiva`;
   if (role === 'staff') return `${name} - Staff mantenimiento`;
-  if (role === 'guard') return `${name} - Comité de vigilancia`;
+  if (role === 'guard') return `${name} - Seguridad`;
   return name;
 }
 
