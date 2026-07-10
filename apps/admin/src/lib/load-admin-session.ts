@@ -19,6 +19,7 @@ export interface AdminSession {
     full_name: string | null;
     phone: string | null;
     avatar_url: string | null;
+    show_phone_in_directory: boolean;
   };
   condominiums: UserCondominium[];
   activeCondominiumId: string | null;
@@ -44,7 +45,11 @@ export async function loadAdminSession(): Promise<AdminSession | null> {
   if (!user) return null;
 
   const [profileRes, condominiums, cookieId, impersonateId, isPlatform] = await Promise.all([
-    supabase.from('profiles').select('full_name, phone, avatar_url').eq('id', user.id).maybeSingle(),
+    supabase
+      .from('profiles')
+      .select('full_name, phone, avatar_url, show_phone_in_directory')
+      .eq('id', user.id)
+      .maybeSingle(),
     loadUserCondominiums(user.id),
     readActiveCondominiumCookie(),
     readImpersonationCookie(),
@@ -103,6 +108,7 @@ export async function loadAdminSession(): Promise<AdminSession | null> {
       full_name: profileRes.data?.full_name ?? null,
       phone: profileRes.data?.phone ?? null,
       avatar_url: profileRes.data?.avatar_url ?? null,
+      show_phone_in_directory: Boolean(profileRes.data?.show_phone_in_directory),
     },
     condominiums: effectiveCondominiums,
     activeCondominiumId,

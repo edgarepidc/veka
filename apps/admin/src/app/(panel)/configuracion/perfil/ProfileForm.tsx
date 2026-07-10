@@ -78,6 +78,21 @@ export function ProfileForm({ session }: { session: AdminSession }) {
 
           <Field label="Nombre completo" name="full_name" defaultValue={session.profile.full_name ?? ''} />
           <Field label="Teléfono" name="phone" defaultValue={session.profile.phone ?? ''} />
+          <label className="flex items-start gap-3 text-sm text-muted">
+            <input
+              type="checkbox"
+              name="show_phone_in_directory"
+              value="true"
+              defaultChecked={session.profile.show_phone_in_directory}
+              className="mt-1 h-4 w-4 rounded border-white/20"
+            />
+            <span>
+              <span className="font-medium text-[var(--text)]">Mostrar mi teléfono en el directorio</span>
+              <span className="mt-0.5 block text-xs text-subtle">
+                Si lo activas, el número aparece en Comunidad → Personal (y en el directorio del equipo).
+              </span>
+            </span>
+          </label>
           <ReadOnly label="Correo electrónico" value={session.email} />
           <ReadOnly
             label="Rol en el condominio"

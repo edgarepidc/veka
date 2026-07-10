@@ -7,6 +7,7 @@ export interface UserProfile {
   full_name: string | null;
   phone: string | null;
   avatar_url: string | null;
+  show_phone_in_directory: boolean;
 }
 
 export function useProfile() {
@@ -24,11 +25,20 @@ export function useProfile() {
     setLoading(true);
     const { data } = await supabase
       .from('profiles')
-      .select('full_name, phone, avatar_url')
+      .select('full_name, phone, avatar_url, show_phone_in_directory')
       .eq('id', user.id)
       .maybeSingle();
 
-    setProfile(data);
+    setProfile(
+      data
+        ? {
+            full_name: data.full_name,
+            phone: data.phone,
+            avatar_url: data.avatar_url,
+            show_phone_in_directory: Boolean(data.show_phone_in_directory),
+          }
+        : null,
+    );
     setLoading(false);
   }, [user]);
 
@@ -37,14 +47,43 @@ export function useProfile() {
   }, [refresh]);
 
   const updatePhone = useCallback(
-    async (phone: string) => {
+    async (phone: string, showPhoneInDirectory?: boolean) => {
       if (!user) return { error: 'No autenticado.' };
 
       const trimmed = phone.trim();
+      const payload: {
+        id: string;
+        phone: string | null;
+        updated_at: string;
+        show_phone_in_directory?: boolean;
+      } = {
+        id: user.id,
+        phone: trimmed || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (typeof showPhoneInDirectory === 'boolean') {
+        payload.show_phone_in_directory = showPhoneInDirectory;
+      }
+
+      const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+
+      if (error) return { error: error.message };
+
+      await refresh();
+      return { error: null };
+    },
+    [refresh, user],
+  );
+
+  const updateShowPhoneInDirectory = useCallback(
+    async (showPhoneInDirectory: boolean) => {
+      if (!user) return { error: 'No autenticado.' };
+
       const { error } = await supabase.from('profiles').upsert(
         {
           id: user.id,
-          phone: trimmed || null,
+          show_phone_in_directory: showPhoneInDirectory,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' },
@@ -58,5 +97,5 @@ export function useProfile() {
     [refresh, user],
   );
 
-  return { profile, loading, refresh, updatePhone };
+  return { profile, loading, refresh, updatePhone, updateShowPhoneInDirectory };
 }

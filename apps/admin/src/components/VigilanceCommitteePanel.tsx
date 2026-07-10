@@ -26,13 +26,27 @@ export function VigilanceCommitteePanel({
   const [pending, start] = useTransition();
   const [membershipId, setMembershipId] = useState('');
   const [title, setTitle] = useState<string>(VIGILANCE_TITLE_OPTIONS[0]);
+  const [query, setQuery] = useState('');
 
   const memberIds = useMemo(() => new Set(members.map((row) => row.membershipId)), [members]);
 
-  const availableResidents = useMemo(
-    () => residents.filter((row) => !memberIds.has(row.membershipId)),
-    [memberIds, residents],
-  );
+  const availableResidents = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return residents
+      .filter((row) => !memberIds.has(row.membershipId))
+      .filter((row) => {
+        if (!needle) return true;
+        const haystack = [
+          row.fullName,
+          row.unitIdentifier ?? '',
+          row.clusterName ?? '',
+          row.roleLabel,
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(needle);
+      });
+  }, [memberIds, query, residents]);
 
   const visibleMembers = useMemo(
     () => (clusterId ? members.filter((row) => row.clusterId === clusterId) : members),
@@ -47,6 +61,7 @@ export function VigilanceCommitteePanel({
       if (!result.error) {
         setMembershipId('');
         setTitle(VIGILANCE_TITLE_OPTIONS[0]);
+        setQuery('');
       }
     });
   }
@@ -65,10 +80,18 @@ export function VigilanceCommitteePanel({
       <div>
         <h3 className="text-base font-semibold text-[var(--text)]">Comité de vigilancia</h3>
         <p className="mt-1 text-sm text-muted">
-          Vecinos que vigilan el actuar de la administración. Se eligen del directorio de residentes
-          (sin invitación nueva) · {clusterLabel}.
+          Vecinos del directorio (sin invitación nueva). Busca por nombre, departamento o cluster ·{' '}
+          {clusterLabel}.
         </p>
       </div>
+
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Buscar residente, depto o cluster…"
+        className="glass-input w-full"
+      />
 
       <form action={runAdd} className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
         <input type="hidden" name="condominium_id" value={condominiumId} />
@@ -81,14 +104,15 @@ export function VigilanceCommitteePanel({
           className="glass-input"
         >
           <option value="" className="bg-slate-900">
-            Selecciona residente…
+            {availableResidents.length === 0
+              ? 'Sin coincidencias…'
+              : 'Selecciona residente…'}
           </option>
           {availableResidents.map((resident) => (
             <option key={resident.membershipId} value={resident.membershipId} className="bg-slate-900">
               {resident.fullName}
               {resident.unitIdentifier ? ` · ${resident.unitIdentifier}` : ''}
-              {resident.clusterName ? ` · ${resident.clusterName}` : ''}
-              {` · ${resident.roleLabel}`}
+              {resident.clusterName ? ` · ${resident.clusterName}` : ' · Condominio general'}
             </option>
           ))}
         </select>
@@ -113,7 +137,9 @@ export function VigilanceCommitteePanel({
         <p className="text-xs text-subtle">
           {residents.length === 0
             ? 'No hay residentes registrados en este alcance. Invita residentes desde Unidades.'
-            : 'Todos los residentes visibles ya están en el comité (o no hay más candidatos).'}
+            : query.trim()
+              ? 'Ningún residente coincide con la búsqueda.'
+              : 'Todos los residentes visibles ya están en el comité (o no hay más candidatos).'}
         </p>
       ) : null}
 
@@ -129,9 +155,10 @@ export function VigilanceCommitteePanel({
               <div>
                 <p className="text-sm font-medium text-[var(--text)]">{member.fullName}</p>
                 <p className="text-xs text-subtle">
-                  Cargo: {member.title} · Perfil: {member.roleLabel}
-                  {member.unitIdentifier ? ` · Vivienda ${member.unitIdentifier}` : ''}
-                  {member.clusterName ? ` · ${member.clusterName}` : ''}
+                  {member.title}
+                  {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
+                  {member.clusterName ? ` · ${member.clusterName}` : ' · Condominio general'}
+                  {member.phone ? ` · Tel. ${member.phone}` : ''}
                 </p>
               </div>
               <button

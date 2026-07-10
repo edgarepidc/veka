@@ -13,7 +13,7 @@ import {
 } from '@veka/shared';
 
 import { setActiveCondominium } from '@/app/(panel)/configuracion/condominio/actions/set-active-condo';
-import { TeamManager } from '@/app/(panel)/configuracion/equipo/TeamManager';
+import { CommunityTeamRoster } from '@/components/CommunityTeamRoster';
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { VigilanceCommitteePanel } from '@/components/VigilanceCommitteePanel';
 import { FileUpload } from '@/components/ui/FileUpload';
@@ -23,8 +23,8 @@ import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import type { ClusterOption } from '@/lib/community-clusters';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
+import type { CommunityDirectoryMember } from '@/lib/load-community-directory';
 import type { CommitteeMemberRow, ResidentDirectoryRow } from '@/lib/load-committee';
-import type { StaffInvitation, TeamMember } from '@/lib/load-team';
 
 import {
   archivePost,
@@ -158,22 +158,18 @@ export function CommunityManager({
   condominiums,
   initialCondominiumId,
   clusters: initialClusters,
-  teamMembers,
-  teamInvitations,
+  directoryMembers,
   residents,
   vigilanceMembers,
-  currentUserId,
 }: {
   posts: CommunityPostRow[];
   documents: CommunityDocumentRow[];
   condominiums: { id: string; name: string }[];
   initialCondominiumId: string;
   clusters: ClusterOption[];
-  teamMembers: TeamMember[];
-  teamInvitations: StaffInvitation[];
+  directoryMembers: CommunityDirectoryMember[];
   residents: ResidentDirectoryRow[];
   vigilanceMembers: CommitteeMemberRow[];
-  currentUserId: string;
 }) {
   const supabase = createClient();
   const [message, setMessage] = useState<string | null>(null);
@@ -185,8 +181,7 @@ export function CommunityManager({
   const [clusters, setClusters] = useState(initialClusters);
   const [posts, setPosts] = useState(initialPosts);
   const [documents, setDocuments] = useState(initialDocuments);
-  const [members, setMembers] = useState(teamMembers);
-  const [invitations, setInvitations] = useState(teamInvitations);
+  const [directoryRows, setDirectoryRows] = useState(directoryMembers);
   const [residentRows, setResidentRows] = useState(residents);
   const [vigilanceRows, setVigilanceRows] = useState(vigilanceMembers);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -195,8 +190,7 @@ export function CommunityManager({
     setPosts(initialPosts);
     setDocuments(initialDocuments);
     setClusters(initialClusters);
-    setMembers(teamMembers);
-    setInvitations(teamInvitations);
+    setDirectoryRows(directoryMembers);
     setResidentRows(residents);
     setVigilanceRows(vigilanceMembers);
     setSelectedCondoId(initialCondominiumId);
@@ -206,8 +200,7 @@ export function CommunityManager({
     initialPosts,
     initialDocuments,
     initialClusters,
-    teamMembers,
-    teamInvitations,
+    directoryMembers,
     residents,
     vigilanceMembers,
     initialCondominiumId,
@@ -621,10 +614,15 @@ export function CommunityManager({
           <GlassCard>
             <h2 className="text-lg font-semibold text-[var(--text)]">Personal / equipo de trabajo</h2>
             <p className="mt-1 text-sm text-muted">
-              Staff operativo (invitaciones) y comité de vigilancia (residentes del directorio).
+              Listado para que residentes vean quién forma la administración. El comité de vigilancia se
+              agrega desde el directorio de residentes.
             </p>
             <div className="mt-4">
-              <TeamManager members={members} invitations={invitations} currentUserId={currentUserId} />
+              <CommunityTeamRoster
+                members={directoryRows}
+                clusterId={selectedClusterId}
+                scopeLabel={scopeLabel}
+              />
             </div>
           </GlassCard>
           <GlassCard>

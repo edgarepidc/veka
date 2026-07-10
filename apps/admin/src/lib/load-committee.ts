@@ -7,6 +7,7 @@ export interface ResidentDirectoryRow {
   membershipId: string;
   userId: string;
   fullName: string;
+  phone: string | null;
   role: MembershipRole;
   roleLabel: string;
   unitIdentifier: string | null;
@@ -21,6 +22,7 @@ export interface CommitteeMemberRow {
   committeeKind: CommitteeKind;
   title: string;
   fullName: string;
+  phone: string | null;
   role: MembershipRole;
   roleLabel: string;
   unitIdentifier: string | null;
@@ -44,10 +46,11 @@ export async function loadResidentDirectory(
   const { data } = await supabase
     .from('memberships')
     .select(
-      'id, user_id, role, unit_relationship, unit:units(id, identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name)',
+      'id, user_id, role, unit_relationship, unit:units(id, identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name, phone, show_phone_in_directory)',
     )
     .eq('condominium_id', condoId)
     .eq('status', 'active')
+    .eq('role', 'resident')
     .not('unit_id', 'is', null)
     .order('role');
 
@@ -70,7 +73,18 @@ export async function loadResidentDirectory(
           cluster: { id: string; name: string } | { id: string; name: string }[] | null;
         }[]
       | null;
-    profile: { full_name: string | null } | { full_name: string | null }[] | null;
+    profile:
+      | {
+          full_name: string | null;
+          phone: string | null;
+          show_phone_in_directory: boolean | null;
+        }
+      | {
+          full_name: string | null;
+          phone: string | null;
+          show_phone_in_directory: boolean | null;
+        }[]
+      | null;
   }[];
 
   return rows
@@ -86,11 +100,13 @@ export async function loadResidentDirectory(
       const rel = relationshipLabel(row.unit_relationship);
       const roleLabel =
         role === 'resident' && rel ? rel : STAFF_ROLE_LABELS[role] ?? role;
+      const showPhone = Boolean(profile?.show_phone_in_directory);
 
       return {
         membershipId: row.id,
         userId: row.user_id,
         fullName: profile?.full_name?.trim() || 'Sin nombre',
+        phone: showPhone ? profile?.phone?.trim() || null : null,
         role,
         roleLabel,
         unitIdentifier: unitRaw?.identifier ?? null,
@@ -113,7 +129,7 @@ export async function loadCommitteeMembers(
   const { data } = await supabase
     .from('condo_committee_members')
     .select(
-      'id, membership_id, committee_kind, title, membership:memberships(id, role, unit_relationship, unit:units(identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name))',
+      'id, membership_id, committee_kind, title, membership:memberships(id, role, unit_relationship, unit:units(identifier, cluster_id, cluster:clusters(id, name)), profile:profiles(full_name, phone, show_phone_in_directory))',
     )
     .eq('condominium_id', condoId)
     .eq('committee_kind', committeeKind)
@@ -141,7 +157,18 @@ export async function loadCommitteeMembers(
                 cluster: { id: string; name: string } | { id: string; name: string }[] | null;
               }[]
             | null;
-          profile: { full_name: string | null } | { full_name: string | null }[] | null;
+          profile:
+            | {
+                full_name: string | null;
+                phone: string | null;
+                show_phone_in_directory: boolean | null;
+              }
+            | {
+                full_name: string | null;
+                phone: string | null;
+                show_phone_in_directory: boolean | null;
+              }[]
+            | null;
         }
       | {
           id: string;
@@ -159,7 +186,18 @@ export async function loadCommitteeMembers(
                 cluster: { id: string; name: string } | { id: string; name: string }[] | null;
               }[]
             | null;
-          profile: { full_name: string | null } | { full_name: string | null }[] | null;
+          profile:
+            | {
+                full_name: string | null;
+                phone: string | null;
+                show_phone_in_directory: boolean | null;
+              }
+            | {
+                full_name: string | null;
+                phone: string | null;
+                show_phone_in_directory: boolean | null;
+              }[]
+            | null;
         }[]
       | null;
   }[];
@@ -184,6 +222,7 @@ export async function loadCommitteeMembers(
     const role = (membership?.role ?? 'resident') as MembershipRole;
     const rel = relationshipLabel(membership?.unit_relationship ?? null);
     const roleLabel = role === 'resident' && rel ? rel : STAFF_ROLE_LABELS[role] ?? role;
+    const showPhone = Boolean(profile?.show_phone_in_directory);
 
     return {
       id: row.id,
@@ -191,6 +230,7 @@ export async function loadCommitteeMembers(
       committeeKind: row.committee_kind,
       title: row.title,
       fullName: profile?.full_name?.trim() || 'Sin nombre',
+      phone: showPhone ? profile?.phone?.trim() || null : null,
       role,
       roleLabel,
       unitIdentifier: unitRaw?.identifier ?? null,

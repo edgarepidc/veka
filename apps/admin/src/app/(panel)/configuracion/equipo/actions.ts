@@ -2,22 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { isStaffRole, TEAM_STAFF_ROLES, type MembershipRole } from '@veka/shared';
+import { isStaffRole, STAFF_ROLE_LABELS, STAFF_SECTIONS, type MembershipRole } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { sendInvitationEmail } from '@/lib/invitation-email';
 import { createClient } from '@/lib/supabase/server';
 
-const STAFF_ASSIGNABLE: MembershipRole[] = ['admin', 'board_member', 'guard', 'staff'];
-
-const ROLE_LABELS: Record<MembershipRole, string> = {
-  super_admin: 'Super admin',
-  admin: 'Administrador',
-  board_member: 'Mesa directiva',
-  resident: 'Residente',
-  guard: 'Guardia',
-  staff: 'Personal',
-};
+const STAFF_ASSIGNABLE: MembershipRole[] = ['admin', 'guard', 'staff'];
+const CONFIG_TEAM_ROLES = STAFF_SECTIONS.flatMap((section) => section.roles);
 
 export async function updateMemberRole(membershipId: string, role: MembershipRole) {
   if (!STAFF_ASSIGNABLE.includes(role)) {
@@ -78,7 +70,7 @@ export async function inviteStaffMember(formData: FormData) {
   const role = String(formData.get('role') ?? '') as MembershipRole;
 
   if (!email) return { error: 'Correo obligatorio.' };
-  if (!TEAM_STAFF_ROLES.includes(role) || role === 'super_admin') {
+  if (!CONFIG_TEAM_ROLES.includes(role) || role === 'super_admin') {
     return { error: 'Rol de staff inválido.' };
   }
 
@@ -114,7 +106,7 @@ export async function inviteStaffMember(formData: FormData) {
   await sendInvitationEmail({
     to: email,
     condominiumName: condo?.name ?? 'tu condominio',
-    roleLabel: ROLE_LABELS[role] ?? role,
+    roleLabel: STAFF_ROLE_LABELS[role] ?? role,
   });
 
   revalidatePath('/configuracion/equipo');

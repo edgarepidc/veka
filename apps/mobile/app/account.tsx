@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Keyboard, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { formatResidentProfileLabel, isGuardFieldRole, isMaintenanceFieldRole, STAFF_ROLE_LABELS } from '@veka/shared';
@@ -23,9 +23,11 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const { primary } = useMembership();
-  const { profile, refresh, updatePhone } = useProfile();
+  const { profile, refresh, updatePhone, updateShowPhoneInDirectory } = useProfile();
   const [phoneInput, setPhoneInput] = useState('');
+  const [showPhoneInDirectory, setShowPhoneInDirectory] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
 
   const displayName =
     profile?.full_name ??
@@ -43,12 +45,13 @@ export default function AccountScreen() {
 
   useEffect(() => {
     setPhoneInput(profile?.phone ?? '');
-  }, [profile?.phone]);
+    setShowPhoneInDirectory(Boolean(profile?.show_phone_in_directory));
+  }, [profile?.phone, profile?.show_phone_in_directory]);
 
   async function handleSavePhone() {
     Keyboard.dismiss();
     setSavingPhone(true);
-    const result = await updatePhone(phoneInput);
+    const result = await updatePhone(phoneInput, showPhoneInDirectory);
     setSavingPhone(false);
 
     if (result.error) {
@@ -57,6 +60,19 @@ export default function AccountScreen() {
     }
 
     Alert.alert('Teléfono actualizado', 'Tu número quedó guardado en tu perfil.');
+  }
+
+  async function handleTogglePhoneVisibility() {
+    const next = !showPhoneInDirectory;
+    setShowPhoneInDirectory(next);
+    setSavingVisibility(true);
+    const result = await updateShowPhoneInDirectory(next);
+    setSavingVisibility(false);
+
+    if (result.error) {
+      setShowPhoneInDirectory(!next);
+      Alert.alert('Error', result.error);
+    }
   }
 
   return (
@@ -101,6 +117,33 @@ export default function AccountScreen() {
             keyboardType="phone-pad"
             style={styles.phoneInput}
           />
+          <Pressable
+            onPress={() => void handleTogglePhoneVisibility()}
+            disabled={savingVisibility}
+            style={styles.visibilityRow}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showPhoneInDirectory }}
+          >
+            <View
+              style={[
+                styles.checkbox,
+                {
+                  borderColor: theme.border,
+                  backgroundColor: showPhoneInDirectory ? theme.accent : 'transparent',
+                },
+              ]}
+            >
+              {showPhoneInDirectory ? <Text style={styles.checkboxMark}>✓</Text> : null}
+            </View>
+            <View style={styles.visibilityCopy}>
+              <Text style={[styles.visibilityTitle, { color: theme.text }]}>
+                Mostrar mi teléfono en el directorio
+              </Text>
+              <Text style={[styles.visibilityHint, { color: theme.textMuted }]}>
+                Si lo activas, tu número puede verse en Comunidad → Personal (comité y equipo).
+              </Text>
+            </View>
+          </Pressable>
           <PrimaryButton
             label="Guardar teléfono"
             variant="success"
@@ -165,6 +208,20 @@ const styles = StyleSheet.create({
   phoneCard: { marginTop: 0 },
   fieldLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 },
   phoneInput: { marginBottom: 12 },
+  visibilityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxMark: { color: '#fff', fontSize: 13, fontWeight: '700', lineHeight: 16 },
+  visibilityCopy: { flex: 1 },
+  visibilityTitle: { fontSize: 14, fontWeight: '600' },
+  visibilityHint: { fontSize: 12, lineHeight: 17, marginTop: 2 },
   row: { paddingVertical: 14 },
   rowLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
   rowValue: { fontSize: 16, fontWeight: '600', marginTop: 4 },

@@ -16,7 +16,7 @@ export default async function EquipoConfigPage() {
       <PageHeader
         title="Configuración"
         highlight="del equipo"
-        subtitle="Staff admin, mesa directiva, mantenimiento y seguridad de acceso. El comité de vigilancia se gestiona en Comunidad → Personal."
+        subtitle="Usuarios con rol en la app: staff admin, mantenimiento y seguridad. El directorio público y el comité de vigilancia están en Comunidad → Personal."
         help={<p>{HELP.equipo}</p>}
       />
       <ConfigNav />

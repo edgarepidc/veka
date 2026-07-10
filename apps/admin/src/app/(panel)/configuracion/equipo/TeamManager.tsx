@@ -14,7 +14,6 @@ import { inviteStaffMember, updateMemberRole } from './actions';
 
 const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
   administrative: ['admin'],
-  board: ['board_member'],
   maintenance: ['staff'],
   security: ['guard'],
 };
@@ -69,8 +68,8 @@ export function TeamManager({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Personal operativo del condominio. Los residentes se invitan desde cada unidad en la pestaña
-        Unidades.
+        Usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se invitan desde
+        Unidades; el comité de vigilancia se arma en Comunidad → Personal.
       </p>
 
       {message ? (

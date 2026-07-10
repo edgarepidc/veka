@@ -17,6 +17,7 @@ export async function updateAdminProfile(formData: FormData) {
   const fullName = String(formData.get('full_name') ?? '').trim();
   const phone = String(formData.get('phone') ?? '').trim();
   const avatarUrl = String(formData.get('avatar_url') ?? '').trim();
+  const showPhoneInDirectory = formData.get('show_phone_in_directory') === 'true';
 
   const { data, error } = await supabase
     .from('profiles')
@@ -26,6 +27,7 @@ export async function updateAdminProfile(formData: FormData) {
         full_name: fullName || null,
         phone: phone || null,
         avatar_url: avatarUrl || null,
+        show_phone_in_directory: showPhoneInDirectory,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
@@ -42,6 +44,7 @@ export async function updateAdminProfile(formData: FormData) {
   }
 
   revalidatePath('/configuracion/perfil');
+  revalidatePath('/comunidad');
   revalidatePath('/');
   return { success: true };
 }

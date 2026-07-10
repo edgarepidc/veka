@@ -8,6 +8,7 @@ export interface StaffSection {
   defaultInviteRole: MembershipRole;
 }
 
+/** App roles managed in Configuración → Equipo (invites). */
 export const STAFF_SECTIONS: StaffSection[] = [
   {
     id: 'administrative',
@@ -15,13 +16,6 @@ export const STAFF_SECTIONS: StaffSection[] = [
     description: 'Administradores con acceso al panel y operación diaria.',
     roles: ['super_admin', 'admin'],
     defaultInviteRole: 'admin',
-  },
-  {
-    id: 'board',
-    title: 'Mesa directiva',
-    description: 'Integrantes de la mesa directiva del condominio.',
-    roles: ['board_member'],
-    defaultInviteRole: 'board_member',
   },
   {
     id: 'maintenance',
@@ -32,11 +26,19 @@ export const STAFF_SECTIONS: StaffSection[] = [
   },
   {
     id: 'security',
-    title: 'Seguridad (acceso)',
-    description: 'Guardias y control de acceso. No es el comité de vigilancia.',
+    title: 'Personal de seguridad',
+    description: 'Guardias y control de acceso.',
     roles: ['guard'],
     defaultInviteRole: 'guard',
   },
+];
+
+/** Roles shown in Comunidad → Personal (read-only roster). Same as config app roles. */
+export const COMMUNITY_DIRECTORY_ROLES: MembershipRole[] = [
+  'super_admin',
+  'admin',
+  'staff',
+  'guard',
 ];
 
 export const TEAM_STAFF_ROLES: MembershipRole[] = [
@@ -52,7 +54,7 @@ export const STAFF_ROLE_LABELS: Record<MembershipRole, string> = {
   admin: 'Staff admin',
   board_member: 'Mesa directiva',
   resident: 'Residente',
-  guard: 'Guardia de seguridad',
+  guard: 'Personal de seguridad',
   staff: 'Staff mantenimiento',
 };
 
@@ -73,6 +75,10 @@ export const VIGILANCE_TITLE_OPTIONS = [
 
 export function isStaffRole(role: MembershipRole): boolean {
   return TEAM_STAFF_ROLES.includes(role);
+}
+
+export function isCommunityDirectoryRole(role: MembershipRole): boolean {
+  return COMMUNITY_DIRECTORY_ROLES.includes(role);
 }
 
 export function staffSectionForRole(role: MembershipRole): StaffSection | undefined {
