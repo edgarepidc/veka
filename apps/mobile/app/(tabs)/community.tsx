@@ -21,7 +21,10 @@ import {
   isPollClosed,
   POLL_DEBT_MESSAGE,
   pollCloseLabel,
+  STORAGE_BUCKETS,
+  ticketStatusLabel,
   type ClusterRef,
+  type MaintenanceTicketStatus,
 } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
@@ -30,10 +33,13 @@ import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import type { SurfaceAccentTone } from '@/constants/surface';
+import { useAssemblies } from '@/hooks/useAssemblies';
 import { useCommunity } from '@/hooks/useCommunity';
+import { useCommunityDirectory } from '@/hooks/useCommunityDirectory';
 import { useMembership } from '@/hooks/useMembership';
 import { useCommunityNotifications } from '@/providers/CommunityNotificationsProvider';
 import { useTheme } from '@/hooks/useTheme';
+import { supabase } from '@/lib/supabase';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉'];
 
@@ -80,6 +86,19 @@ export default function CommunityScreen() {
   const { primary, loading: membershipLoading } = useMembership();
   const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
+  const {
+    sections: directorySections,
+    committee,
+    loading: directoryLoading,
+    refreshing: directoryRefreshing,
+    refresh: refreshDirectory,
+  } = useCommunityDirectory(primary);
+  const {
+    assemblies,
+    loading: assembliesLoading,
+    refreshing: assembliesRefreshing,
+    refresh: refreshAssemblies,
+  } = useAssemblies(primary);
   const { notifications, unreadCount, markRead, markAllRead } = useCommunityNotifications();
   const params = useLocalSearchParams<{ postId?: string | string[] }>();
   const postIdParam = Array.isArray(params.postId) ? params.postId[0] : params.postId;
@@ -171,7 +190,21 @@ export default function CommunityScreen() {
     return posts.filter((p) => p.post_type === filter);
   }, [filter, posts]);
 
-  if (membershipLoading || loading) {
+  async function openStoredDocument(pathOrUrl: string) {
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      await Linking.openURL(pathOrUrl);
+      return;
+    }
+    const { data } = await supabase.storage.from(STORAGE_BUCKETS.DOCUMENTS).createSignedUrl(pathOrUrl, 3600);
+    if (data?.signedUrl) await Linking.openURL(data.signedUrl);
+  }
+
+  function formatAssemblyDate(iso: string | null): string {
+    if (!iso) return 'Sin fecha';
+    return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  if (membershipLoading || loading || directoryLoading || assembliesLoading) {
     return (
       <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -179,12 +212,24 @@ export default function CommunityScreen() {
     );
   }
 
+  const screenRefreshing = refreshing || directoryRefreshing || assembliesRefreshing;
+
   return (
     <ScreenBackground>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 100 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.accent} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={screenRefreshing}
+            onRefresh={() => {
+              void refresh();
+              void refreshDirectory();
+              void refreshAssemblies();
+            }}
+            tintColor={theme.accent}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         <View ref={contentRef} collapsable={false}>
@@ -246,7 +291,9 @@ export default function CommunityScreen() {
           <TabStrip
             tabs={[
               { key: 'feed', label: 'Feed' },
-              { key: 'docs', label: 'Documentos' },
+              { key: 'docs', label: 'Docs' },
+              { key: 'directory', label: 'Mi comunidad' },
+              { key: 'assemblies', label: 'Asambleas' },
             ]}
             active={tab}
             onChange={setTab}
@@ -539,7 +586,7 @@ export default function CommunityScreen() {
                 })
               )}
             </>
-          ) : (
+          ) : tab === 'docs' ? (
             <GlassCard noPadding>
               {documents.length === 0 ? (
                 <View style={{ padding: 16 }}>
@@ -573,6 +620,167 @@ export default function CommunityScreen() {
                 ))
               )}
             </GlassCard>
+          ) : tab === 'directory' ? (
+            <View style={{ gap: 12 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 4 }}>
+                Equipo de administración y comité de vigilancia de tu condominio.
+              </Text>
+              {directorySections.map((section) => (
+                <GlassCard key={section.id}>
+                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{section.title}</Text>
+                  <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4, marginBottom: 10 }}>
+                    {section.description}
+                  </Text>
+                  {section.members.length === 0 ? (
+                    <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin personas registradas.</Text>
+                  ) : (
+                    section.members.map((member) => (
+                      <View
+                        key={member.membershipId}
+                        style={[styles.directoryRow, { borderColor: theme.glassBorder }]}
+                      >
+                        <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>{member.fullName}</Text>
+                        <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 2 }}>
+                          {member.roleLabel}
+                          {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
+                          {member.clusterName
+                            ? ` · ${member.clusterName}`
+                            : member.unitIdentifier
+                              ? ''
+                              : ' · Condominio general'}
+                          {member.phone ? ` · Tel. ${member.phone}` : ''}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </GlassCard>
+              ))}
+              <GlassCard>
+                <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>Comité de vigilancia</Text>
+                <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4, marginBottom: 10 }}>
+                  Vecinos que vigilan el actuar de la administración.
+                </Text>
+                {committee.length === 0 ? (
+                  <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin integrantes publicados.</Text>
+                ) : (
+                  committee.map((member) => (
+                    <View
+                      key={member.membershipId}
+                      style={[styles.directoryRow, { borderColor: theme.glassBorder }]}
+                    >
+                      <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>{member.fullName}</Text>
+                      <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 2 }}>
+                        {member.title ?? 'Integrante'}
+                        {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
+                        {member.clusterName ? ` · ${member.clusterName}` : ' · Condominio general'}
+                        {member.phone ? ` · Tel. ${member.phone}` : ''}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </GlassCard>
+            </View>
+          ) : (
+            <View style={{ gap: 12 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 4 }}>
+                Expedientes de asamblea: convocatoria, votaciones, documentos y acuerdos.
+              </Text>
+              {assemblies.length === 0 ? (
+                <GlassCard>
+                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin asambleas</Text>
+                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                    Cuando la administración publique una asamblea, aparecerá aquí.
+                  </Text>
+                </GlassCard>
+              ) : (
+                assemblies.map((assembly) => (
+                  <GlassCard key={assembly.id}>
+                    <View style={styles.assemblyHeader}>
+                      <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', flex: 1 }}>
+                        {assembly.title}
+                      </Text>
+                      <Tag label={assembly.statusLabel} tone="blue" />
+                    </View>
+                    <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4 }}>
+                      {formatAssemblyDate(assembly.scheduledAt)}
+                      {' · '}
+                      {formatClusterScopeLabel(assembly.clusters)}
+                    </Text>
+                    {assembly.notes ? (
+                      <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 8, lineHeight: 19 }}>
+                        {assembly.notes}
+                      </Text>
+                    ) : null}
+
+                    {assembly.posts.length > 0 ? (
+                      <View style={styles.assemblyBlock}>
+                        <Text style={[styles.assemblyBlockTitle, { color: theme.textSubtle }]}>
+                          Avisos y encuestas
+                        </Text>
+                        {assembly.posts.map((post) => (
+                          <Pressable
+                            key={post.id}
+                            onPress={() => openPost(post.id)}
+                            style={[styles.assemblyLink, { borderColor: theme.glassBorder }]}
+                          >
+                            <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '600' }}>
+                              {post.postType === 'poll' ? 'Encuesta' : 'Aviso'} · {post.title}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    {assembly.documents.length > 0 ? (
+                      <View style={styles.assemblyBlock}>
+                        <Text style={[styles.assemblyBlockTitle, { color: theme.textSubtle }]}>Documentos</Text>
+                        {assembly.documents.map((doc) => (
+                          <Pressable
+                            key={doc.id}
+                            onPress={() => void openStoredDocument(doc.fileUrl)}
+                            style={[styles.assemblyLink, { borderColor: theme.glassBorder }]}
+                          >
+                            <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '600' }}>{doc.title}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    {assembly.agreements.length > 0 ? (
+                      <View style={styles.assemblyBlock}>
+                        <Text style={[styles.assemblyBlockTitle, { color: theme.textSubtle }]}>Acuerdos</Text>
+                        {assembly.agreements.map((agreement) => (
+                          <View key={agreement.id} style={styles.agreementRow}>
+                            <Text style={{ color: theme.text, fontSize: 16, width: 22 }}>
+                              {agreement.isDone ? '✓' : '○'}
+                            </Text>
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={{
+                                  color: agreement.isDone ? theme.textSubtle : theme.text,
+                                  fontSize: 13,
+                                  textDecorationLine: agreement.isDone ? 'line-through' : 'none',
+                                }}
+                              >
+                                {agreement.title}
+                              </Text>
+                              {agreement.ticketTitle ? (
+                                <Text style={{ color: theme.textSubtle, fontSize: 11, marginTop: 2 }}>
+                                  Ticket: {agreement.ticketTitle}
+                                  {agreement.ticketStatus
+                                    ? ` · ${ticketStatusLabel(agreement.ticketStatus as MaintenanceTicketStatus)}`
+                                    : ''}
+                                </Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </GlassCard>
+                ))
+              )}
+            </View>
           )}
         </View>
         </View>
@@ -677,6 +885,28 @@ const styles = StyleSheet.create({
   docCard: { marginBottom: 10 },
   docRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   docIcon: { width: 42, height: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  directoryRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  assemblyHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  assemblyBlock: { marginTop: 14 },
+  assemblyBlockTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  assemblyLink: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  agreementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
   docTitle: { fontSize: 13, fontWeight: '600' },
   docMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 },
 });
