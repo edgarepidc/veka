@@ -13,9 +13,10 @@ import type { StaffInvitation, TeamMember } from '@/lib/load-team';
 import { inviteStaffMember, updateMemberRole } from './actions';
 
 const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
-  administrative: ['admin', 'board_member'],
-  security: ['guard'],
+  administrative: ['admin'],
+  board: ['board_member'],
   maintenance: ['staff'],
+  vigilance: ['guard'],
 };
 
 export function TeamManager({

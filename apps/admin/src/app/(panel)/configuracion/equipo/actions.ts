@@ -58,6 +58,7 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
   if (error) return { error: error.message };
 
   revalidatePath('/configuracion/equipo');
+  revalidatePath('/comunidad');
   return { success: true };
 }
 
@@ -117,5 +118,6 @@ export async function inviteStaffMember(formData: FormData) {
   });
 
   revalidatePath('/configuracion/equipo');
+  revalidatePath('/comunidad');
   return { success: true };
 }

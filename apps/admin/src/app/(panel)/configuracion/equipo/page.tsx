@@ -16,7 +16,7 @@ export default async function EquipoConfigPage() {
       <PageHeader
         title="Configuración"
         highlight="del equipo"
-        subtitle="Staff administrativo, seguridad y mantenimiento."
+        subtitle="Staff admin, mesa directiva, mantenimiento y comité de vigilancia."
         help={<p>{HELP.equipo}</p>}
       />
       <ConfigNav />

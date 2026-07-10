@@ -37,9 +37,10 @@ export function formatCommunityAuthorName(
   role: string | null | undefined,
 ): string {
   const name = fullName?.trim() || 'Residente';
-  if (role === 'admin' || role === 'super_admin') return `${name} - Administrador`;
+  if (role === 'admin' || role === 'super_admin') return `${name} - Staff admin`;
   if (role === 'board_member') return `${name} - Mesa directiva`;
-  if (role === 'staff') return `${name} - Staff`;
+  if (role === 'staff') return `${name} - Staff mantenimiento`;
+  if (role === 'guard') return `${name} - Comité de vigilancia`;
   return name;
 }
 

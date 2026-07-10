@@ -11,24 +11,31 @@ export interface StaffSection {
 export const STAFF_SECTIONS: StaffSection[] = [
   {
     id: 'administrative',
-    title: 'Staff administrativo',
-    description: 'Administradores y mesa directiva con acceso al panel.',
-    roles: ['super_admin', 'admin', 'board_member'],
+    title: 'Staff admin',
+    description: 'Administradores con acceso al panel y operación diaria.',
+    roles: ['super_admin', 'admin'],
     defaultInviteRole: 'admin',
   },
   {
-    id: 'security',
-    title: 'Seguridad',
-    description: 'Guardias y control de acceso.',
-    roles: ['guard'],
-    defaultInviteRole: 'guard',
+    id: 'board',
+    title: 'Mesa directiva',
+    description: 'Integrantes de la mesa directiva del condominio.',
+    roles: ['board_member'],
+    defaultInviteRole: 'board_member',
   },
   {
     id: 'maintenance',
-    title: 'Mantenimiento',
+    title: 'Staff mantenimiento',
     description: 'Personal operativo de áreas comunes y servicios.',
     roles: ['staff'],
     defaultInviteRole: 'staff',
+  },
+  {
+    id: 'vigilance',
+    title: 'Comité de vigilancia',
+    description: 'Comité de vigilancia y control de acceso / seguridad.',
+    roles: ['guard'],
+    defaultInviteRole: 'guard',
   },
 ];
 
@@ -42,11 +49,11 @@ export const TEAM_STAFF_ROLES: MembershipRole[] = [
 
 export const STAFF_ROLE_LABELS: Record<MembershipRole, string> = {
   super_admin: 'Super administrador',
-  admin: 'Administrador',
+  admin: 'Staff admin',
   board_member: 'Mesa directiva',
   resident: 'Residente',
-  guard: 'Guardia de seguridad',
-  staff: 'Personal de mantenimiento',
+  guard: 'Comité de vigilancia',
+  staff: 'Staff mantenimiento',
 };
 
 export function isStaffRole(role: MembershipRole): boolean {

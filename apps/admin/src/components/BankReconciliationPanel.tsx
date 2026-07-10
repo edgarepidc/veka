@@ -222,8 +222,12 @@ export function BankReconciliationPanel({
     if (type === 'expense') formData.set('expense_id', targetId);
     startTransition(async () => {
       const result = await matchBankTransaction(formData);
-      setMessage(result.error ?? 'Movimiento conciliado.');
-      if (result.success) onReload();
+      if ('error' in result && result.error) {
+        setMessage(result.error);
+        return;
+      }
+      setMessage('Movimiento conciliado.');
+      onReload();
     });
   }
 
