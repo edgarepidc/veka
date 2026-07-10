@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { isAssemblyStatus, type AssemblyStatus } from '@veka/shared';
 
+import { linkPostToAssembly } from '@/lib/assembly-link';
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
 import { createClient } from '@/lib/supabase/server';
 
@@ -160,11 +161,8 @@ export async function linkAssemblyPost(formData: FormData) {
     .maybeSingle();
   if (!post) return { error: 'Publicación no encontrada.' };
 
-  const { error } = await supabase.from('assembly_posts').upsert(
-    { assembly_id: assemblyId, post_id: postId },
-    { onConflict: 'assembly_id,post_id' },
-  );
-  if (error) return { error: error.message };
+  const linkResult = await linkPostToAssembly(supabase, condominiumId, assemblyId, postId);
+  if (linkResult.error) return { error: linkResult.error };
   revalidateCommunity();
   return { success: true };
 }

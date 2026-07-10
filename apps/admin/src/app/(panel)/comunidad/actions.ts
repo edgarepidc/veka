@@ -12,6 +12,7 @@ import {
 } from '@/lib/community-clusters';
 import { notifyCondoMembersInApp } from '@/lib/community-notifications';
 import { deliverCommunityPollClosed, deliverCommunityPost } from '@/lib/notifications';
+import { linkPostToAssemblyFromForm } from '@/lib/assembly-link';
 import { createClient } from '@/lib/supabase/server';
 import { formatPollMinutesExport, isPollClosed } from '@veka/shared';
 
@@ -66,6 +67,9 @@ export async function createAnnouncement(formData: FormData) {
 
   const attachResult = await attachPostClusters(supabase, post.id, scope.clusterIds);
   if (attachResult.error) return { error: attachResult.error };
+
+  const linkResult = await linkPostToAssemblyFromForm(supabase, condominiumId, formData, post.id);
+  if (linkResult.error) return { error: linkResult.error };
 
   const delivery = await deliverCommunityPost({
     condominiumId,
@@ -221,6 +225,9 @@ export async function createPoll(formData: FormData) {
 
   const attachResult = await attachPostClusters(supabase, post.id, scope.clusterIds);
   if (attachResult.error) return { error: attachResult.error };
+
+  const linkResult = await linkPostToAssemblyFromForm(supabase, condominiumId, formData, post.id);
+  if (linkResult.error) return { error: linkResult.error };
 
   const delivery = await deliverCommunityPost({
     condominiumId,

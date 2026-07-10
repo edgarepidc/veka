@@ -22,6 +22,7 @@ import {
   unlinkAssemblyPost,
   updateAssembly,
 } from '@/app/(panel)/comunidad/assembly-actions';
+import { AssemblyLinkedPostCard } from '@/components/AssemblyLinkedPostCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { createClient } from '@/lib/supabase/client';
 import type {
@@ -115,6 +116,16 @@ export function AssembliesPanel({
   const availableDocuments = useMemo(
     () => documents.filter((doc) => !linkedDocumentIds.has(doc.id)),
     [documents, linkedDocumentIds],
+  );
+
+  const postsById = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
+
+  const linkedPostDetails = useMemo(
+    () =>
+      (selected?.posts ?? [])
+        .map((linked) => postsById.get(linked.id))
+        .filter((post): post is CommunityPostRow => Boolean(post)),
+    [postsById, selected?.posts],
   );
 
   function run(action: () => Promise<{ error?: string }>, success: string) {
@@ -324,32 +335,21 @@ export function AssembliesPanel({
                 </button>
               </form>
               <ul className="mt-3 space-y-2">
-                {selected.posts.length === 0 ? (
+                {linkedPostDetails.length === 0 ? (
                   <li className="text-sm text-subtle">Sin publicaciones vinculadas.</li>
                 ) : (
-                  selected.posts.map((post) => (
-                    <li
+                  linkedPostDetails.map((post) => (
+                    <AssemblyLinkedPostCard
                       key={post.id}
-                      className="glass-card-deep flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <div>
-                        <p className="text-sm text-[var(--text)]">{post.title}</p>
-                        <p className="text-xs text-subtle">{postTypeLabel(post.postType)}</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        className="glass-btn px-2 py-1 text-xs"
-                        onClick={() =>
-                          run(
-                            () => unlinkAssemblyPost(selected.id, post.id),
-                            'Publicación desvinculada.',
-                          )
-                        }
-                      >
-                        Quitar
-                      </button>
-                    </li>
+                      post={post}
+                      removing={pending}
+                      onRemove={() =>
+                        run(
+                          () => unlinkAssemblyPost(selected.id, post.id),
+                          'Publicación desvinculada.',
+                        )
+                      }
+                    />
                   ))
                 )}
               </ul>

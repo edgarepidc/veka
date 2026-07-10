@@ -717,17 +717,62 @@ export default function CommunityScreen() {
                         <Text style={[styles.assemblyBlockTitle, { color: theme.textSubtle }]}>
                           Avisos y encuestas
                         </Text>
-                        {assembly.posts.map((post) => (
-                          <Pressable
-                            key={post.id}
-                            onPress={() => openPost(post.id)}
-                            style={[styles.assemblyLink, { borderColor: theme.glassBorder }]}
-                          >
-                            <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '600' }}>
-                              {post.postType === 'poll' ? 'Encuesta' : 'Aviso'} · {post.title}
-                            </Text>
-                          </Pressable>
-                        ))}
+                        {assembly.posts.map((post) => {
+                          const pollClosed = Boolean(post.pollClosedAt);
+                          return (
+                            <View
+                              key={post.id}
+                              style={[styles.assemblyPostCard, { borderColor: theme.glassBorder }]}
+                            >
+                              <Pressable onPress={() => openPost(post.id)}>
+                                <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }}>
+                                  {post.postType === 'poll' ? 'Encuesta' : 'Aviso'} · {post.title}
+                                </Text>
+                              </Pressable>
+                              {post.body ? (
+                                <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 6, lineHeight: 19 }}>
+                                  {post.body}
+                                </Text>
+                              ) : null}
+                              {post.postType === 'poll' && post.pollOptions.length > 0 ? (
+                                <View style={{ marginTop: 8, gap: 6 }}>
+                                  <Text style={{ color: theme.textSubtle, fontSize: 11, fontWeight: '700' }}>
+                                    {post.totalVotes} voto{post.totalVotes === 1 ? '' : 's'}
+                                    {pollClosed ? ' · Cerrada' : ' · Abierta'}
+                                  </Text>
+                                  {post.pollOptions.map((opt) => {
+                                    const pct =
+                                      post.totalVotes > 0
+                                        ? Math.round((opt.votes / post.totalVotes) * 100)
+                                        : 0;
+                                    return (
+                                      <View key={opt.id}>
+                                        <View style={styles.pollRow}>
+                                          <Text style={{ color: theme.text, fontSize: 12, flex: 1 }}>
+                                            {opt.label}
+                                          </Text>
+                                          <Text style={{ color: theme.textSubtle, fontSize: 11 }}>
+                                            {opt.votes} ({pct}%)
+                                          </Text>
+                                        </View>
+                                        <View
+                                          style={[styles.pollBarTrack, { backgroundColor: theme.glassDeep }]}
+                                        >
+                                          <View
+                                            style={[
+                                              styles.pollBarFill,
+                                              { width: `${pct}%`, backgroundColor: `${theme.accent}66` },
+                                            ]}
+                                          />
+                                        </View>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
                       </View>
                     ) : null}
 
@@ -905,6 +950,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 6,
+  },
+  assemblyPostCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  pollBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  pollBarFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   agreementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
   docTitle: { fontSize: 13, fontWeight: '600' },

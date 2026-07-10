@@ -14,6 +14,7 @@ import {
 
 import { setActiveCondominium } from '@/app/(panel)/configuracion/condominio/actions/set-active-condo';
 import { AssembliesPanel } from '@/components/AssembliesPanel';
+import { AssemblyPublishSelect } from '@/components/AssemblyPublishSelect';
 import { CommunityTeamRoster } from '@/components/CommunityTeamRoster';
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { VigilanceCommitteePanel } from '@/components/VigilanceCommitteePanel';
@@ -717,6 +718,7 @@ export function CommunityManager({
                   <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
                   Fijar en la parte superior
                 </label>
+                <AssemblyPublishSelect assemblies={assemblies} clusterId={selectedClusterId} />
                 <button type="submit" disabled={pending} className="glass-btn-primary">
                   {pending ? 'Publicando…' : 'Publicar aviso'}
                 </button>
@@ -809,6 +811,8 @@ export function CommunityManager({
                   <input type="checkbox" name="is_pinned" className="rounded border-white/20" />
                   Fijar en la parte superior
                 </label>
+
+                <AssemblyPublishSelect assemblies={assemblies} clusterId={selectedClusterId} />
 
                 <button type="submit" disabled={pending} className="glass-btn-primary">
                   {pending ? 'Publicando…' : 'Publicar encuesta'}

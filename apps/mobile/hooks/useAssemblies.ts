@@ -10,6 +10,20 @@ import {
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { supabase } from '@/lib/supabase';
 
+export interface AssemblyLinkedPostItem {
+  id: string;
+  title: string;
+  postType: string;
+  body: string | null;
+  imageUrl: string | null;
+  isFormal: boolean;
+  quorumPercent: number | null;
+  pollClosesAt: string | null;
+  pollClosedAt: string | null;
+  pollOptions: { id: string; label: string; votes: number }[];
+  totalVotes: number;
+}
+
 export interface AssemblyListItem {
   id: string;
   title: string;
@@ -18,7 +32,7 @@ export interface AssemblyListItem {
   statusLabel: string;
   notes: string | null;
   clusters: ClusterRef[];
-  posts: { id: string; title: string; postType: string }[];
+  posts: AssemblyLinkedPostItem[];
   documents: { id: string; title: string; fileUrl: string }[];
   agreements: {
     id: string;
@@ -32,6 +46,67 @@ export interface AssemblyListItem {
 function asArray<T>(value: T | T[] | null | undefined): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+async function enrichAssemblyPosts(
+  rows: Record<string, unknown>[],
+): Promise<Map<string, AssemblyLinkedPostItem>> {
+  const postIds = new Set<string>();
+  for (const row of rows) {
+    for (const link of asArray(
+      row.assembly_posts as { post: { id: string } | { id: string }[] | null }[],
+    )) {
+      const post = Array.isArray(link.post) ? link.post[0] : link.post;
+      if (post?.id) postIds.add(post.id);
+    }
+  }
+
+  if (postIds.size === 0) return new Map();
+
+  const { data } = await supabase
+    .from('posts')
+    .select(
+      'id, title, body, post_type, image_url, is_formal, quorum_percent, poll_closes_at, poll_closed_at, poll_options(id, label)',
+    )
+    .in('id', Array.from(postIds));
+
+  const optionIds = (data ?? []).flatMap((row) =>
+    asArray(row.poll_options as { id: string }[]).map((opt) => opt.id),
+  );
+
+  const { data: votes } =
+    optionIds.length > 0
+      ? await supabase.from('poll_votes').select('poll_option_id').in('poll_option_id', optionIds)
+      : { data: [] as { poll_option_id: string }[] };
+
+  const voteCounts = new Map<string, number>();
+  for (const vote of votes ?? []) {
+    voteCounts.set(vote.poll_option_id, (voteCounts.get(vote.poll_option_id) ?? 0) + 1);
+  }
+
+  const map = new Map<string, AssemblyLinkedPostItem>();
+  for (const row of data ?? []) {
+    const pollOptions = asArray(row.poll_options as { id: string; label: string }[]).map((opt) => ({
+      id: opt.id,
+      label: opt.label,
+      votes: voteCounts.get(opt.id) ?? 0,
+    }));
+    const totalVotes = pollOptions.reduce((sum, opt) => sum + opt.votes, 0);
+    map.set(row.id, {
+      id: row.id,
+      title: row.title,
+      postType: row.post_type,
+      body: row.body ?? null,
+      imageUrl: row.image_url ?? null,
+      isFormal: Boolean(row.is_formal),
+      quorumPercent: row.quorum_percent != null ? Number(row.quorum_percent) : null,
+      pollClosesAt: row.poll_closes_at ?? null,
+      pollClosedAt: row.poll_closed_at ?? null,
+      pollOptions,
+      totalVotes,
+    });
+  }
+  return map;
 }
 
 export function useAssemblies(primary: ActiveMembership | null) {
@@ -55,7 +130,7 @@ export function useAssemblies(primary: ActiveMembership | null) {
         `
         id, title, scheduled_at, status, notes,
         assembly_clusters(cluster:clusters(id, name)),
-        assembly_posts(post:posts(id, title, post_type)),
+        assembly_posts(post:posts(id)),
         assembly_documents(document:documents(id, title, file_url)),
         assembly_agreements(id, title, sort_order, is_done, ticket:maintenance_tickets(title, status))
       `,
@@ -64,9 +139,11 @@ export function useAssemblies(primary: ActiveMembership | null) {
       .order('scheduled_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false });
 
+    const rawRows = (data ?? []) as Record<string, unknown>[];
+    const postsById = await enrichAssemblyPosts(rawRows);
     const memberClusterId = primary.unit?.cluster?.id ?? null;
 
-    const rows = ((data ?? []) as Record<string, unknown>[]).map((row) => {
+    const rows = rawRows.map((row) => {
       const statusRaw = String(row.status ?? 'draft');
       const status: AssemblyStatus = isAssemblyStatus(statusRaw) ? statusRaw : 'draft';
 
@@ -78,16 +155,14 @@ export function useAssemblies(primary: ActiveMembership | null) {
         .filter((item): item is ClusterRef => Boolean(item));
 
       const posts = asArray(
-        row.assembly_posts as {
-          post: { id: string; title: string; post_type: string } | { id: string; title: string; post_type: string }[] | null;
-        }[],
+        row.assembly_posts as { post: { id: string } | { id: string }[] | null }[],
       )
         .map((link) => {
           const post = Array.isArray(link.post) ? link.post[0] : link.post;
-          if (!post) return null;
-          return { id: post.id, title: post.title, postType: post.post_type };
+          if (!post?.id) return null;
+          return postsById.get(post.id) ?? null;
         })
-        .filter((item): item is { id: string; title: string; postType: string } => Boolean(item));
+        .filter((item): item is AssemblyLinkedPostItem => Boolean(item));
 
       const documents = asArray(
         row.assembly_documents as {
