@@ -18,7 +18,7 @@ export interface ResidentDirectoryRow {
 
 export interface CommitteeMemberRow {
   id: string;
-  membershipId: string;
+  membershipId: string | null;
   committeeKind: CommitteeKind;
   title: string;
   fullName: string;
@@ -28,6 +28,7 @@ export interface CommitteeMemberRow {
   unitIdentifier: string | null;
   clusterId: string | null;
   clusterName: string | null;
+  isManual?: boolean;
 }
 
 function relationshipLabel(value: string | null): string | null {

@@ -48,6 +48,56 @@ export function isStaffCommunityRole(role: string | null | undefined): boolean {
   return role != null && STAFF_AUTHOR_ROLES.has(role);
 }
 
+/** Maximum nesting depth for comment replies (root = level 1). */
+export const MAX_COMMENT_DEPTH = 5;
+
+export interface CommentTreeNode<T extends { id: string; parent_id?: string | null }> {
+  comment: T;
+  depth: number;
+  children: CommentTreeNode<T>[];
+}
+
+export function buildCommentTree<T extends { id: string; parent_id?: string | null }>(
+  comments: T[],
+  maxDepth = MAX_COMMENT_DEPTH,
+): CommentTreeNode<T>[] {
+  const childrenByParent = new Map<string | null, T[]>();
+
+  for (const comment of comments) {
+    const parentId = comment.parent_id ?? null;
+    const list = childrenByParent.get(parentId) ?? [];
+    list.push(comment);
+    childrenByParent.set(parentId, list);
+  }
+
+  function walk(parentId: string | null, depth: number): CommentTreeNode<T>[] {
+    if (depth >= maxDepth) return [];
+    return (childrenByParent.get(parentId) ?? []).map((comment) => ({
+      comment,
+      depth,
+      children: walk(comment.id, depth + 1),
+    }));
+  }
+
+  return walk(null, 0);
+}
+
+export function flattenCommentTree<T extends { id: string; parent_id?: string | null }>(
+  roots: CommentTreeNode<T>[],
+): Array<{ comment: T; depth: number }> {
+  const result: Array<{ comment: T; depth: number }> = [];
+
+  function walk(nodes: CommentTreeNode<T>[]) {
+    for (const node of nodes) {
+      result.push({ comment: node.comment, depth: node.depth });
+      walk(node.children);
+    }
+  }
+
+  walk(roots);
+  return result;
+}
+
 export interface PollOptionVotes {
   id: string;
   label: string;

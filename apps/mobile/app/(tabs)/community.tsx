@@ -39,6 +39,9 @@ import { useCommunityDirectory } from '@/hooks/useCommunityDirectory';
 import { useMembership } from '@/hooks/useMembership';
 import { useCommunityNotifications } from '@/providers/CommunityNotificationsProvider';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/providers/AuthProvider';
+import { CommentThread } from '@/components/community/CommentThread';
+import { openInAppDocument } from '@/lib/open-document';
 import { supabase } from '@/lib/supabase';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉'];
@@ -84,8 +87,9 @@ export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, canVoteInPost, hasOutstandingDebt } =
+  const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, deleteComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
+  const { user } = useAuth();
   const {
     sections: directorySections,
     committee,
@@ -113,7 +117,9 @@ export default function CommunityScreen() {
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
   const [scrollToPostId, setScrollToPostId] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [sendingComment, setSendingComment] = useState<Record<string, boolean>>({});
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
 
   function openPost(postId: string) {
     const post = posts.find((item) => item.id === postId);
@@ -185,19 +191,43 @@ export default function CommunityScreen() {
     }
   }
 
+  async function submitReply(postId: string, parentId: string) {
+    const key = `${postId}:${parentId}`;
+    const body = (replyDrafts[key] ?? '').trim();
+    if (!body || sendingComment[key]) return;
+
+    setSendingComment((current) => ({ ...current, [key]: true }));
+    try {
+      const result = await addComment(postId, body, parentId);
+      if (result.error) {
+        Alert.alert('Comentario', result.error);
+        return;
+      }
+      setReplyDrafts((current) => ({ ...current, [key]: '' }));
+      setReplyingToId(null);
+    } finally {
+      setSendingComment((current) => ({ ...current, [key]: false }));
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    const result = await deleteComment(commentId);
+    if (result.error) Alert.alert('Comentario', result.error);
+  }
+
+  async function openStoredDocument(pathOrUrl: string, title?: string) {
+    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+      openInAppDocument(pathOrUrl, title);
+      return;
+    }
+    const { data } = await supabase.storage.from(STORAGE_BUCKETS.DOCUMENTS).createSignedUrl(pathOrUrl, 3600);
+    if (data?.signedUrl) openInAppDocument(data.signedUrl, title);
+  }
+
   const filteredPosts = useMemo(() => {
     if (filter === 'all') return posts;
     return posts.filter((p) => p.post_type === filter);
   }, [filter, posts]);
-
-  async function openStoredDocument(pathOrUrl: string) {
-    if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-      await Linking.openURL(pathOrUrl);
-      return;
-    }
-    const { data } = await supabase.storage.from(STORAGE_BUCKETS.DOCUMENTS).createSignedUrl(pathOrUrl, 3600);
-    if (data?.signedUrl) await Linking.openURL(data.signedUrl);
-  }
 
   function formatAssemblyDate(iso: string | null): string {
     if (!iso) return 'Sin fecha';
@@ -502,56 +532,26 @@ export default function CommunityScreen() {
                       ) : null}
 
                       {post.post_type === 'announcement' || post.post_type === 'photo' ? (
-                        <View style={styles.comments}>
-                          <Text style={{ color: theme.textSubtle, fontSize: 11, fontWeight: '700', marginBottom: 8 }}>
-                            COMENTARIOS ({post.comments.length})
-                          </Text>
-                          {post.comments.map((comment) => (
-                            <View key={comment.id} style={[styles.commentRow, { borderColor: theme.glassBorder }]}>
-                              <Avatar initials={comment.author_initials} color={comment.author_color} size={28} />
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>
-                                  {comment.author_name}
-                                </Text>
-                                <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 18 }}>
-                                  {comment.body}
-                                </Text>
-                                <Text style={{ color: theme.textSubtle, fontSize: 10, marginTop: 2 }}>
-                                  {timeAgo(comment.created_at)}
-                                </Text>
-                              </View>
-                            </View>
-                          ))}
-                          <View style={[styles.commentComposer, { borderColor: theme.glassBorder, backgroundColor: theme.glassDeep }]}>
-                            <TextInput
-                              value={commentDrafts[post.id] ?? ''}
-                              onChangeText={(value) =>
-                                setCommentDrafts((current) => ({ ...current, [post.id]: value }))
-                              }
-                              placeholder="Escribe un comentario…"
-                              placeholderTextColor={theme.textSubtle}
-                              style={{ flex: 1, color: theme.text, fontSize: 13, paddingVertical: 8 }}
-                              multiline
-                            />
-                            <Pressable
-                              onPress={() => void submitComment(post.id)}
-                              disabled={!((commentDrafts[post.id] ?? '').trim()) || sendingComment[post.id]}
-                              style={[
-                                styles.commentSend,
-                                {
-                                  backgroundColor:
-                                    !((commentDrafts[post.id] ?? '').trim()) || sendingComment[post.id]
-                                      ? theme.textSubtle
-                                      : theme.accent,
-                                },
-                              ]}
-                            >
-                              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-                                {sendingComment[post.id] ? 'Enviando…' : 'Enviar'}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
+                        <CommentThread
+                          postId={post.id}
+                          comments={post.comments}
+                          currentUserId={user?.id}
+                          theme={theme}
+                          commentDrafts={commentDrafts}
+                          replyDrafts={replyDrafts}
+                          sendingComment={sendingComment}
+                          onChangeDraft={(id, value) =>
+                            setCommentDrafts((current) => ({ ...current, [id]: value }))
+                          }
+                          onChangeReplyDraft={(key, value) =>
+                            setReplyDrafts((current) => ({ ...current, [key]: value }))
+                          }
+                          onSubmit={(id) => void submitComment(id)}
+                          onSubmitReply={(id, parentId) => void submitReply(id, parentId)}
+                          onDelete={(id) => void handleDeleteComment(id)}
+                          onReply={setReplyingToId}
+                          replyingToId={replyingToId}
+                        />
                       ) : null}
 
                       <View style={styles.reactions}>
@@ -603,7 +603,7 @@ export default function CommunityScreen() {
                     accent={docAccent(doc.category)}
                     style={styles.docCard}
                   >
-                    <Pressable onPress={() => void Linking.openURL(doc.file_url)} style={styles.docRowInner}>
+                    <Pressable onPress={() => openInAppDocument(doc.file_url, doc.title)} style={styles.docRowInner}>
                       <View style={[styles.docIcon, { backgroundColor: `${theme.accent3}22` }]}>
                         <Text style={{ fontSize: 20 }}>📄</Text>
                       </View>
@@ -636,12 +636,13 @@ export default function CommunityScreen() {
                   ) : (
                     section.members.map((member) => (
                       <View
-                        key={member.membershipId}
+                        key={member.id}
                         style={[styles.directoryRow, { borderColor: theme.glassBorder }]}
                       >
                         <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>{member.fullName}</Text>
                         <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 2 }}>
                           {member.roleLabel}
+                          {member.isManual ? ' · Sin cuenta en app' : ''}
                           {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
                           {member.clusterName
                             ? ` · ${member.clusterName}`
@@ -665,12 +666,13 @@ export default function CommunityScreen() {
                 ) : (
                   committee.map((member) => (
                     <View
-                      key={member.membershipId}
+                      key={member.id}
                       style={[styles.directoryRow, { borderColor: theme.glassBorder }]}
                     >
                       <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>{member.fullName}</Text>
                       <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 2 }}>
                         {member.title ?? 'Integrante'}
+                        {member.isManual ? ' · Sin cuenta en app' : ''}
                         {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
                         {member.clusterName ? ` · ${member.clusterName}` : ' · Condominio general'}
                         {member.phone ? ` · Tel. ${member.phone}` : ''}
@@ -782,7 +784,7 @@ export default function CommunityScreen() {
                         {assembly.documents.map((doc) => (
                           <Pressable
                             key={doc.id}
-                            onPress={() => void openStoredDocument(doc.fileUrl)}
+                            onPress={() => void openStoredDocument(doc.fileUrl, doc.title)}
                             style={[styles.assemblyLink, { borderColor: theme.glassBorder }]}
                           >
                             <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '600' }}>{doc.title}</Text>

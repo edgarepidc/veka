@@ -123,6 +123,7 @@ function RootLayoutNav() {
           headerShadowVisible: false,
         }}
       />
+      <Stack.Screen name="document-viewer" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Info' }} />
     </Stack>
   );

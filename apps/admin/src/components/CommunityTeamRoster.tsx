@@ -4,25 +4,50 @@ import { STAFF_ROLE_LABELS, STAFF_SECTIONS, type MembershipRole } from '@veka/sh
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import type { CommunityDirectoryMember } from '@/lib/load-community-directory';
+import type { ManualDirectoryEntry } from '@/lib/load-manual-directory';
+
+type RosterMember = CommunityDirectoryMember & {
+  isManual?: boolean;
+  roleLabel?: string | null;
+};
 
 export function CommunityTeamRoster({
   members,
+  manualStaff = [],
   clusterId,
   scopeLabel,
 }: {
   members: CommunityDirectoryMember[];
+  manualStaff?: ManualDirectoryEntry[];
   clusterId: string;
   scopeLabel: string;
 }) {
   const sections = STAFF_SECTIONS.map((section) => ({
     section,
-    members: members.filter((member) => {
-      if (!section.roles.includes(member.role)) return false;
-      if (!clusterId) return true;
-      // Staff without unit still show at condo level; with unit respect cluster filter.
-      if (!member.clusterId) return true;
-      return member.clusterId === clusterId;
-    }),
+    members: [
+      ...members.filter((member) => {
+        if (!section.roles.includes(member.role)) return false;
+        if (!clusterId) return true;
+        if (!member.clusterId) return true;
+        return member.clusterId === clusterId;
+      }),
+      ...manualStaff
+        .filter((entry) => entry.staffSectionId === section.id)
+        .map(
+          (entry): RosterMember => ({
+            membershipId: `manual-${entry.id}`,
+            userId: `manual-${entry.id}`,
+            role: section.defaultInviteRole,
+            fullName: entry.fullName,
+            phone: entry.phone,
+            unitIdentifier: entry.unitIdentifier,
+            clusterId: entry.clusterId,
+            clusterName: entry.clusterName,
+            isManual: true,
+            roleLabel: entry.roleLabel,
+          }),
+        ),
+    ] as RosterMember[],
   }));
 
   return (
@@ -52,7 +77,8 @@ export function CommunityTeamRoster({
                 <li key={member.membershipId} className="glass-card-deep px-4 py-3">
                   <p className="text-sm font-medium text-[var(--text)]">{member.fullName}</p>
                   <p className="mt-1 text-xs text-subtle">
-                    {STAFF_ROLE_LABELS[member.role as MembershipRole] ?? member.role}
+                    {member.roleLabel ?? STAFF_ROLE_LABELS[member.role as MembershipRole] ?? member.role}
+                    {member.isManual ? ' · Sin cuenta en app' : ''}
                     {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
                     {member.clusterName
                       ? ` · ${member.clusterName}`

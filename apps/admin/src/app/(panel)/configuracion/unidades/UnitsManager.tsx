@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { formatUnitLabel, UNIT_KIND_LABELS, UNIT_RELATIONSHIP_CHIP_LABELS, UNIT_RELATIONSHIP_LABELS, type UnitKind } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatChip } from '@/components/ui/StatChip';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 import type { ClusterRow, UnitOccupant, UnitRow as UnitData } from '@/lib/load-condominium';
@@ -302,7 +303,7 @@ function ClusterSection({
 
           <ul className="mt-4 space-y-3">
             {units.length === 0 ? (
-              <li className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              <li className="glass-notice-amber text-sm">
                 Este cluster no tiene unidades. Agrega la primera casa o depto arriba.
               </li>
             ) : (
@@ -339,37 +340,6 @@ function ClusterStatChips({ stats }: { stats: ClusterStats }) {
         <StatChip tone="green" label="Completo" value={0} hideZero />
       )}
     </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  tone,
-  hideZero,
-}: {
-  label: string;
-  value: number;
-  tone: 'blue' | 'green' | 'purple' | 'amber' | 'muted';
-  hideZero?: boolean;
-}) {
-  if (hideZero && value === 0) return null;
-
-  const tones = {
-    blue: 'border-sky-400/25 bg-sky-400/15 text-sky-200',
-    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
-    purple: 'border-violet-400/25 bg-violet-400/15 text-violet-200',
-    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
-    muted: 'border-white/15 bg-white/8 text-subtle',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}
-    >
-      <span className="opacity-80">{label}</span>
-      {label !== 'Completo' && label !== 'Sin unidades' ? <span>{value}</span> : null}
-    </span>
   );
 }
 
@@ -428,7 +398,7 @@ function UnitCard({
           </div>
 
           {vacant ? (
-            <div className="mt-3 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+            <div className="glass-notice-amber mt-3 px-3 py-2 text-xs">
               Sin persona registrada. Invita al residente propietario o inquilino para que acceda a la app.
             </div>
           ) : null}
@@ -489,7 +459,7 @@ function OccupantLine({
     <p className="text-[var(--text)]">
       <span className="text-muted">{label}:</span> {occupant.name}
       {occupant.pending ? (
-        <span className="ml-2 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs text-amber-200">
+        <span className="glass-tag-amber ml-2 px-2 py-0.5 text-xs">
           Invitación pendiente{occupant.email ? ` · ${occupant.email}` : ''}
         </span>
       ) : null}

@@ -1,3 +1,4 @@
+import { ConfigNav } from '@/components/ConfigNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { HELP } from '@/lib/help-content';
 import { requireAdminSession } from '@/lib/require-admin';
@@ -23,6 +24,7 @@ export default async function InvitacionesPage() {
         subtitle="Invita propietarios, inquilinos y personal. Se envía un correo con instrucciones para activar el acceso."
         help={<p>{HELP.unidades}</p>}
       />
+      <ConfigNav />
       <InvitationsPanel
         condominiumId={session.activeCondominiumId}
         condominiumName={session.membership?.condominium_name ?? 'Condominio'}

@@ -422,6 +422,75 @@ body {
   color: #334155;
 }
 
+.glass-notice-amber,
+.glass-notice-green {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.35rem;
+}
+
+.glass-notice-amber {
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+}
+
+.glass-notice-green {
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+}
+
+:root .glass-notice-amber,
+[data-theme='light'] .glass-notice-amber {
+  border-color: color-mix(in srgb, var(--warning) 55%, #d97706);
+  background: color-mix(in srgb, var(--warning) 14%, white);
+  color: #92400e;
+}
+
+:root .glass-notice-green,
+[data-theme='light'] .glass-notice-green {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: #1f4a36;
+}
+
+.glass-notice-red {
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.35rem;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+:root .glass-notice-red,
+[data-theme='light'] .glass-notice-red {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, white);
+  color: #991b1b;
+}
+
+.text-status-amber {
+  color: #fcd34d;
+}
+
+.text-status-green {
+  color: #6ee7b7;
+}
+
+:root .text-status-amber,
+[data-theme='light'] .text-status-amber {
+  color: #b45309;
+}
+
+:root .text-status-green,
+[data-theme='light'] .text-status-green {
+  color: #166534;
+}
+
 .serif-title {
   font-family: var(--font-serif);
 }

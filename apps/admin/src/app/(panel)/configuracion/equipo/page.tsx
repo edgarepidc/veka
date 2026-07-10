@@ -3,13 +3,19 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { HELP } from '@/lib/help-content';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadStaffTeam } from '@/lib/load-team';
+import { loadManualDirectoryEntries } from '@/lib/load-manual-directory';
 
 import { TeamManager } from './TeamManager';
 
 export default async function EquipoConfigPage() {
-  const [session, team] = await Promise.all([loadAdminSession(), loadStaffTeam()]);
-
+  const session = await loadAdminSession();
   if (!session) return null;
+
+  const [team, manualEntries] = await Promise.all([
+    loadStaffTeam(),
+    loadManualDirectoryEntries(session.activeCondominiumId ?? undefined),
+  ]);
+  const manualStaff = manualEntries.filter((entry) => entry.entryKind === 'staff');
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -24,6 +30,7 @@ export default async function EquipoConfigPage() {
         members={team.members}
         invitations={team.invitations}
         currentUserId={session.userId}
+        manualStaff={manualStaff}
       />
     </div>
   );

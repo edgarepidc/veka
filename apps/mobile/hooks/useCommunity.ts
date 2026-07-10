@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { canVoteInPoll, formatCommunityAuthorName, isDelinquentCharge, isPollClosed, STORAGE_BUCKETS, type ClusterRef } from '@veka/shared';
+import { canVoteInPoll, formatCommunityAuthorName, isDelinquentCharge, isPollClosed, MAX_COMMENT_DEPTH, STORAGE_BUCKETS, type ClusterRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -35,6 +35,7 @@ export interface CommunityPost {
 export interface PostComment {
   id: string;
   post_id: string;
+  parent_id: string | null;
   body: string;
   created_at: string;
   author_id: string;
@@ -67,6 +68,21 @@ function authorColor(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash + id.charCodeAt(i)) % AUTHOR_COLORS.length;
   return AUTHOR_COLORS[hash] ?? AUTHOR_COLORS[0];
+}
+
+function commentBranchIds(comments: PostComment[], rootId: string): Set<string> {
+  const ids = new Set<string>([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const comment of comments) {
+      if (comment.parent_id && ids.has(comment.parent_id) && !ids.has(comment.id)) {
+        ids.add(comment.id);
+        grew = true;
+      }
+    }
+  }
+  return ids;
 }
 
 async function resolveDocumentUrl(fileUrl: string): Promise<string> {
@@ -194,10 +210,10 @@ export function useCommunity(primary: ActiveMembership | null) {
       commentPostIds.length
         ? supabase
             .from('post_comments')
-            .select('id, post_id, body, created_at, author_id')
+            .select('id, post_id, parent_id, body, created_at, author_id')
             .in('post_id', commentPostIds)
             .order('created_at', { ascending: true })
-        : Promise.resolve({ data: [] as { id: string; post_id: string; body: string; created_at: string; author_id: string }[] }),
+        : Promise.resolve({ data: [] as { id: string; post_id: string; parent_id: string | null; body: string; created_at: string; author_id: string }[] }),
       postIds.length
         ? supabase
             .from('post_clusters')
@@ -263,6 +279,7 @@ export function useCommunity(primary: ActiveMembership | null) {
       const mapped: PostComment = {
         id: comment.id,
         post_id: comment.post_id,
+        parent_id: comment.parent_id ?? null,
         body: comment.body,
         created_at: comment.created_at,
         author_id: comment.author_id,
@@ -451,6 +468,7 @@ export function useCommunity(primary: ActiveMembership | null) {
           const row = payload.new as {
             id?: string;
             post_id?: string;
+            parent_id?: string | null;
             body?: string;
             created_at?: string;
             author_id?: string;
@@ -469,6 +487,7 @@ export function useCommunity(primary: ActiveMembership | null) {
                   {
                     id: row.id!,
                     post_id: row.post_id!,
+                    parent_id: row.parent_id ?? null,
                     body: row.body!,
                     created_at: row.created_at!,
                     author_id: row.author_id!,
@@ -477,6 +496,25 @@ export function useCommunity(primary: ActiveMembership | null) {
                     author_color: authorColor(row.author_id!),
                   },
                 ],
+              };
+            }),
+          );
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'post_comments' },
+        (payload) => {
+          const row = payload.old as { id?: string; post_id?: string };
+          if (!row.id || !row.post_id) return;
+
+          setPosts((current) =>
+            current.map((post) => {
+              if (post.id !== row.post_id) return post;
+              const removeIds = commentBranchIds(post.comments, row.id!);
+              return {
+                ...post,
+                comments: post.comments.filter((comment) => !removeIds.has(comment.id)),
               };
             }),
           );
@@ -574,7 +612,7 @@ export function useCommunity(primary: ActiveMembership | null) {
   );
 
   const addComment = useCallback(
-    async (postId: string, body: string): Promise<{ error?: string }> => {
+    async (postId: string, body: string, parentId?: string | null): Promise<{ error?: string }> => {
       if (!user) return { error: 'Inicia sesión para comentar.' };
       const trimmed = body.trim();
       if (!trimmed) return { error: 'Escribe un comentario.' };
@@ -584,17 +622,34 @@ export function useCommunity(primary: ActiveMembership | null) {
         return { error: 'Solo puedes comentar en avisos.' };
       }
 
+      if (parentId) {
+        const parent = post.comments.find((comment) => comment.id === parentId);
+        if (!parent) return { error: 'El comentario al que respondes ya no existe.' };
+      }
+
       const { data, error } = await supabase
         .from('post_comments')
-        .insert({ post_id: postId, author_id: user.id, body: trimmed })
-        .select('id, post_id, body, created_at, author_id')
+        .insert({
+          post_id: postId,
+          author_id: user.id,
+          body: trimmed,
+          parent_id: parentId ?? null,
+        })
+        .select('id, post_id, parent_id, body, created_at, author_id')
         .single();
 
-      if (error || !data) return { error: 'No se pudo publicar el comentario.' };
+      if (error) {
+        if (error.message.includes('post_comment_can_reply')) {
+          return { error: `Solo se permiten hasta ${MAX_COMMENT_DEPTH} niveles de respuesta.` };
+        }
+        return { error: 'No se pudo publicar el comentario.' };
+      }
+      if (!data) return { error: 'No se pudo publicar el comentario.' };
 
       const mapped: PostComment = {
         id: data.id,
         post_id: data.post_id,
+        parent_id: data.parent_id ?? null,
         body: data.body,
         created_at: data.created_at,
         author_id: data.author_id,
@@ -616,6 +671,28 @@ export function useCommunity(primary: ActiveMembership | null) {
     [posts, user],
   );
 
+  const deleteComment = useCallback(
+    async (commentId: string): Promise<{ error?: string }> => {
+      if (!user) return { error: 'Inicia sesión.' };
+
+      const post = posts.find((item) => item.comments.some((comment) => comment.id === commentId));
+      const removeIds = post ? commentBranchIds(post.comments, commentId) : new Set([commentId]);
+
+      const { error } = await supabase.from('post_comments').delete().eq('id', commentId).eq('author_id', user.id);
+      if (error) return { error: 'No se pudo eliminar el comentario.' };
+
+      setPosts((current) =>
+        current.map((item) => ({
+          ...item,
+          comments: item.comments.filter((comment) => !removeIds.has(comment.id)),
+        })),
+      );
+
+      return {};
+    },
+    [posts, user],
+  );
+
   const canVoteFormalPolls = canVoteInPoll(primary?.unit_relationship ?? null, true, {
     hasOutstandingDebt,
   });
@@ -629,6 +706,7 @@ export function useCommunity(primary: ActiveMembership | null) {
     toggleReaction,
     votePoll,
     addComment,
+    deleteComment,
     canVoteFormalPolls,
     canVoteInPost,
     hasOutstandingDebt,

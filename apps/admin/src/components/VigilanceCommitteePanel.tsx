@@ -7,6 +7,7 @@ import {
   addCommitteeMember,
   removeCommitteeMember,
 } from '@/app/(panel)/comunidad/committee-actions';
+import { addManualCommitteeEntry, removeManualDirectoryEntry } from '@/app/(panel)/configuracion/equipo/manual-directory-actions';
 import type { CommitteeMemberRow, ResidentDirectoryRow } from '@/lib/load-committee';
 
 export function VigilanceCommitteePanel({
@@ -66,11 +67,19 @@ export function VigilanceCommitteePanel({
     });
   }
 
-  function runRemove(id: string) {
+  function runManualAdd(formData: FormData) {
+    setMessage(null);
+    start(async () => {
+      const result = await addManualCommitteeEntry(formData);
+      setMessage(result.error ?? 'Integrante manual agregado al comité.');
+    });
+  }
+
+  function runRemove(id: string, isManual?: boolean) {
     if (!confirm('¿Quitar a esta persona del comité de vigilancia?')) return;
     setMessage(null);
     start(async () => {
-      const result = await removeCommitteeMember(id);
+      const result = isManual ? await removeManualDirectoryEntry(id) : await removeCommitteeMember(id);
       setMessage(result.error ?? 'Integrante removido.');
     });
   }
@@ -133,6 +142,38 @@ export function VigilanceCommitteePanel({
         </button>
       </form>
 
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <p className="text-sm font-semibold text-[var(--text)]">Agregar sin cuenta en la app</p>
+        <p className="mt-1 text-xs text-subtle">
+          Para integrantes del comité que no tienen usuario en Veka.
+        </p>
+        <form action={runManualAdd} className="mt-3 grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
+          <input type="hidden" name="condominium_id" value={condominiumId} />
+          <input type="text" name="full_name" required placeholder="Nombre completo" className="glass-input" />
+          <select name="committee_title" defaultValue={VIGILANCE_TITLE_OPTIONS[0]} className="glass-input">
+            {VIGILANCE_TITLE_OPTIONS.map((option) => (
+              <option key={option} value={option} className="bg-slate-900">
+                {option}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={pending} className="glass-btn-primary">
+            {pending ? 'Agregando…' : 'Agregar'}
+          </button>
+          <input type="text" name="phone" placeholder="Teléfono (opcional)" className="glass-input sm:col-span-2" />
+          <input
+            type="text"
+            name="unit_identifier"
+            placeholder="Depto (opcional)"
+            className="glass-input sm:col-span-2"
+          />
+          <label className="flex items-center gap-2 text-xs text-muted sm:col-span-3">
+            <input type="checkbox" name="show_phone" defaultChecked className="h-4 w-4 rounded border-white/20" />
+            Mostrar teléfono en Mi comunidad
+          </label>
+        </form>
+      </div>
+
       {availableResidents.length === 0 ? (
         <p className="text-xs text-subtle">
           {residents.length === 0
@@ -156,6 +197,7 @@ export function VigilanceCommitteePanel({
                 <p className="text-sm font-medium text-[var(--text)]">{member.fullName}</p>
                 <p className="text-xs text-subtle">
                   {member.title}
+                  {member.isManual ? ' · Sin cuenta en app' : ''}
                   {member.unitIdentifier ? ` · ${member.unitIdentifier}` : ''}
                   {member.clusterName ? ` · ${member.clusterName}` : ' · Condominio general'}
                   {member.phone ? ` · Tel. ${member.phone}` : ''}
@@ -164,7 +206,7 @@ export function VigilanceCommitteePanel({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => runRemove(member.id)}
+                onClick={() => runRemove(member.id, member.isManual)}
                 className="glass-btn px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
               >
                 Quitar

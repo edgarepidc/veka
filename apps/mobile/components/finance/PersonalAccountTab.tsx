@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   chargeBalanceDue,
@@ -34,6 +34,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
 import { chargeAccentTone, paymentAccentTone } from '@/lib/finance-accent';
 import { mapChargeTone, mapPaymentTone } from '@/lib/tagTone';
+import { openInAppDocument } from '@/lib/open-document';
 import { supabase } from '@/lib/supabase';
 
 interface PersonalAccountTabProps {
@@ -52,12 +53,12 @@ interface PersonalAccountTabProps {
 
 async function openPaymentProof(path: string): Promise<void> {
   if (path.startsWith('http://') || path.startsWith('https://')) {
-    await Linking.openURL(path);
+    openInAppDocument(path, 'Comprobante de pago');
     return;
   }
   const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 3600);
   if (data?.signedUrl) {
-    await Linking.openURL(data.signedUrl);
+    openInAppDocument(data.signedUrl, 'Comprobante de pago');
   } else {
     Alert.alert('Comprobante', 'No se pudo abrir el archivo.');
   }

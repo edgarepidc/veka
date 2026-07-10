@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import {
   documentStoragePath,
+  buildCommentTree,
   computePollQuorumResult,
+  flattenCommentTree,
   formatClusterScopeLabel,
   isImageStoragePath,
   isPollClosed,
@@ -26,6 +28,7 @@ import { HELP } from '@/lib/help-content';
 import type { ClusterOption } from '@/lib/community-clusters';
 import type { CommunityDocumentRow, CommunityPostRow } from '@/lib/load-community';
 import type { AssemblyRow, AssemblyTicketOption } from '@/lib/load-assemblies';
+import type { ManualDirectoryEntry } from '@/lib/load-manual-directory';
 import type { CommunityDirectoryMember } from '@/lib/load-community-directory';
 import type { CommitteeMemberRow, ResidentDirectoryRow } from '@/lib/load-committee';
 
@@ -169,6 +172,7 @@ export function CommunityManager({
   initialCondominiumId,
   clusters: initialClusters,
   directoryMembers,
+  manualStaff,
   residents,
   vigilanceMembers,
   assemblies: initialAssemblies,
@@ -180,6 +184,7 @@ export function CommunityManager({
   initialCondominiumId: string;
   clusters: ClusterOption[];
   directoryMembers: CommunityDirectoryMember[];
+  manualStaff: ManualDirectoryEntry[];
   residents: ResidentDirectoryRow[];
   vigilanceMembers: CommitteeMemberRow[];
   assemblies: AssemblyRow[];
@@ -473,13 +478,13 @@ export function CommunityManager({
                         ) : null}
                         {post.post_type === 'poll' ? (
                           <span
-                            className={`text-[10px] font-semibold uppercase tracking-wide ${post.is_formal ? 'text-amber-200' : 'text-sky-200'}`}
+                            className={`text-[10px] font-semibold uppercase tracking-wide ${post.is_formal ? 'text-status-amber' : 'text-sky-200'}`}
                           >
                             {post.is_formal ? 'Formal' : 'Informal'}
                           </span>
                         ) : null}
                         {post.post_type === 'poll' && post.require_payment_current ? (
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-status-green">
                             Al corriente
                           </span>
                         ) : null}
@@ -582,10 +587,11 @@ export function CommunityManager({
                           <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
                             Comentarios ({post.comments.length})
                           </p>
-                          {post.comments.map((comment) => (
+                          {flattenCommentTree(buildCommentTree(post.comments)).map(({ comment, depth }) => (
                             <div
                               key={comment.id}
                               className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                              style={{ marginLeft: depth * 16 }}
                             >
                               <div>
                                 <p className="text-sm text-[var(--text)]">{comment.body}</p>
@@ -640,6 +646,7 @@ export function CommunityManager({
             <div className="mt-4">
               <CommunityTeamRoster
                 members={directoryRows}
+                manualStaff={manualStaff}
                 clusterId={selectedClusterId}
                 scopeLabel={scopeLabel}
               />

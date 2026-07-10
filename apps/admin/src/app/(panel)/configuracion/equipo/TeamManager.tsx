@@ -8,9 +8,12 @@ import {
 } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatChip } from '@/components/ui/StatChip';
 import type { StaffInvitation, TeamMember } from '@/lib/load-team';
 
 import { inviteStaffMember, setStaffPhoneVisibility, updateMemberRole } from './actions';
+import { addManualStaffEntry, removeManualDirectoryEntry } from './manual-directory-actions';
+import type { ManualDirectoryEntry } from '@/lib/load-manual-directory';
 
 const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
   administrative: ['admin'],
@@ -22,14 +25,33 @@ export function TeamManager({
   members,
   invitations,
   currentUserId,
+  manualStaff = [],
 }: {
   members: TeamMember[];
   invitations: StaffInvitation[];
   currentUserId: string;
+  manualStaff?: ManualDirectoryEntry[];
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  function runManualAdd(formData: FormData) {
+    setMessage(null);
+    start(async () => {
+      const result = await addManualStaffEntry(formData);
+      setMessage(result.error ?? 'Persona agregada al directorio.');
+    });
+  }
+
+  function runManualRemove(entryId: string) {
+    if (!confirm('¿Quitar esta persona del directorio manual?')) return;
+    setMessage(null);
+    start(async () => {
+      const result = await removeManualDirectoryEntry(entryId);
+      setMessage(result.error ?? 'Registro manual eliminado.');
+    });
+  }
 
   const sections = useMemo(
     () =>
@@ -37,8 +59,9 @@ export function TeamManager({
         section,
         members: members.filter((m) => section.roles.includes(m.role)),
         invitations: invitations.filter((i) => section.roles.includes(i.role)),
+        manualEntries: manualStaff.filter((entry) => entry.staffSectionId === section.id),
       })),
-    [invitations, members],
+    [invitations, manualStaff, members],
   );
 
   function isOpen(sectionId: string) {
@@ -85,7 +108,9 @@ export function TeamManager({
           className={`text-sm ${
             message.includes('Invitación') ||
             message.includes('actualizado') ||
-            message.includes('Teléfono')
+            message.includes('Teléfono') ||
+            message.includes('agregada') ||
+            message.includes('eliminado')
               ? 'text-accent'
               : 'text-red-300'
           }`}
@@ -94,7 +119,7 @@ export function TeamManager({
         </p>
       ) : null}
 
-      {sections.map(({ section, members: sectionMembers, invitations: sectionInvites }) => {
+      {sections.map(({ section, members: sectionMembers, invitations: sectionInvites, manualEntries }) => {
         const open = isOpen(section.id);
         const pendingCount = sectionInvites.length;
         const registeredCount = sectionMembers.length;
@@ -147,7 +172,7 @@ export function TeamManager({
                           className="glass-card-deep flex items-center justify-between gap-3 px-3 py-2 text-sm"
                         >
                           <span className="text-[var(--text)]">{invite.email}</span>
-                          <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-200">
+                          <span className="glass-tag-amber px-2 py-0.5 text-xs capitalize">
                             Pendiente
                           </span>
                         </li>
@@ -158,7 +183,7 @@ export function TeamManager({
 
                 <ul className="space-y-2">
                   {sectionMembers.length === 0 ? (
-                    <li className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                    <li className="glass-notice-amber text-sm">
                       Sin personal registrado en esta área.
                     </li>
                   ) : (
@@ -226,36 +251,73 @@ export function TeamManager({
                     })
                   )}
                 </ul>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-semibold text-[var(--text)]">Registrar sin cuenta en la app</p>
+                  <p className="mt-1 text-xs text-subtle">
+                    Para personal que no usará Veka pero debe aparecer en Mi comunidad.
+                  </p>
+                  <form action={runManualAdd} className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input type="hidden" name="staff_section_id" value={section.id} />
+                    <input
+                      type="text"
+                      name="full_name"
+                      required
+                      placeholder="Nombre completo"
+                      className="glass-input sm:col-span-2"
+                    />
+                    <input type="text" name="role_label" placeholder="Cargo (opcional)" className="glass-input" />
+                    <input type="text" name="phone" placeholder="Teléfono" className="glass-input" />
+                    <input
+                      type="text"
+                      name="unit_identifier"
+                      placeholder="Depto / área (opcional)"
+                      className="glass-input sm:col-span-2"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-muted sm:col-span-2">
+                      <input type="checkbox" name="show_phone" defaultChecked className="h-4 w-4 rounded border-white/20" />
+                      Mostrar teléfono en Mi comunidad
+                    </label>
+                    <button type="submit" disabled={pending} className="glass-btn-primary sm:col-span-2">
+                      Agregar al directorio
+                    </button>
+                  </form>
+
+                  {manualEntries.length > 0 ? (
+                    <ul className="mt-4 space-y-2">
+                      {manualEntries.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="glass-card-deep flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium text-[var(--text)]">{entry.fullName}</p>
+                            <p className="text-xs text-subtle">
+                              {entry.roleLabel ?? section.title}
+                              {entry.unitIdentifier ? ` · ${entry.unitIdentifier}` : ''}
+                              {entry.phone ? ` · Tel. ${entry.phone}` : ''}
+                              {' · Sin cuenta en app'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => runManualRemove(entry.id)}
+                            className="glass-btn px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                          >
+                            Quitar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </GlassCard>
         );
       })}
     </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'green' | 'amber';
-}) {
-  const tones = {
-    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
-    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}
-    >
-      <span className="opacity-80">{label}</span>
-      <span>{value}</span>
-    </span>
   );
 }
 

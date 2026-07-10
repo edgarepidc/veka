@@ -28,6 +28,7 @@ import {
 } from '@/app/(panel)/espacios/actions';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { StatChip } from '@/components/ui/StatChip';
 import { StatusTag } from '@/components/ui/StatusTag';
 import type { AmenityRow, ClusterOption, ReservationRow } from '@/lib/load-espacios';
 import type { SpacesSettings } from '@veka/shared';
@@ -92,20 +93,8 @@ function RulesSummaryChip({
   value: string;
   tone?: 'neutral' | 'green' | 'amber';
 }) {
-  const tones = {
-    neutral: 'border-white/15 bg-white/5 text-subtle',
-    green: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-200',
-    amber: 'border-amber-400/35 bg-amber-400/15 text-amber-100',
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${tones[tone]}`}
-    >
-      <span className="opacity-80">{label}</span>
-      <span>{value}</span>
-    </span>
-  );
+  const mappedTone = tone === 'neutral' ? 'muted' : tone;
+  return <StatChip label={label} value={value} tone={mappedTone} />;
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -622,7 +611,7 @@ export function SpacesManager({
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs">
                         {amenity.requires_approval ? (
-                          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-200">Aprobación</span>
+                          <span className="glass-tag-amber px-2 py-0.5">Aprobación</span>
                         ) : null}
                         {amenity.restrict_if_overdue ? (
                           <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-red-200">Restringe morosos</span>

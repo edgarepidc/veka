@@ -12,6 +12,7 @@ export interface CommunityPollOptionRow {
 export interface CommunityCommentRow {
   id: string;
   post_id: string;
+  parent_id: string | null;
   body: string;
   created_at: string;
   author_id: string;
@@ -99,7 +100,7 @@ export async function loadCommunityPosts(condominiumId?: string): Promise<Commun
     announcementIds.length > 0
       ? supabase
           .from('post_comments')
-          .select('id, post_id, body, created_at, author_id')
+          .select('id, post_id, parent_id, body, created_at, author_id')
           .in('post_id', announcementIds)
           .order('created_at', { ascending: true })
       : Promise.resolve({ data: [] as CommunityCommentRow[] }),

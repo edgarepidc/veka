@@ -8,10 +8,10 @@ import type {
   RecurringFeeAmountMode,
   RecurringFeeStatus,
 } from '@veka/shared';
+import { StatChip } from '@/components/ui/StatChip';
 import {
   RECURRING_FEE_AMOUNT_MODES,
   buildVariableFeeCaptureCsv,
-  cardTagClass,
   currentPeriodMonth,
   defaultFeeConcept,
   defaultVariableFeeConcept,
@@ -92,23 +92,6 @@ function feeScopeFromClusterFilter(clusterFilterId: string): 'general' | 'cluste
   return clusterFilterId ? 'cluster' : 'general';
 }
 
-function StatChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'neutral' | 'green' | 'amber' | 'red';
-}) {
-  const tagTone =
-    tone === 'amber' ? 'orange' : tone === 'neutral' ? 'gray' : tone;
-  return (
-    <span className={`${cardTagClass(tagTone)} px-2 py-0.5 text-xs`}>
-      {label}: <span className="font-semibold">{value}</span>
-    </span>
-  );
-}
 
 export function CuotasPanel({
   condominiumId,

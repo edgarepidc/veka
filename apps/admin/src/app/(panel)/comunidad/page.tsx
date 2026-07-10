@@ -6,6 +6,7 @@ import { loadAssemblies, loadAssemblyTicketOptions } from '@/lib/load-assemblies
 import { loadCommunityDocuments, loadCommunityPosts } from '@/lib/load-community';
 import { loadCommunityDirectory } from '@/lib/load-community-directory';
 import { loadCondominiumClusters } from '@/lib/community-clusters';
+import { loadManualDirectoryEntries } from '@/lib/load-manual-directory';
 import { loadCommitteeMembers, loadResidentDirectory } from '@/lib/load-committee';
 
 export default async function ComunidadPage() {
@@ -22,6 +23,7 @@ export default async function ComunidadPage() {
     vigilanceMembers,
     assemblies,
     assemblyTickets,
+    manualEntries,
   ] = await Promise.all([
     loadCommunityPosts(condominiumId),
     loadCommunityDocuments(condominiumId),
@@ -31,7 +33,27 @@ export default async function ComunidadPage() {
     loadCommitteeMembers(condominiumId, 'vigilance'),
     loadAssemblies(condominiumId),
     loadAssemblyTicketOptions(condominiumId),
+    loadManualDirectoryEntries(condominiumId),
   ]);
+
+  const manualStaff = manualEntries.filter((entry) => entry.entryKind === 'staff');
+  const manualCommittee = manualEntries
+    .filter((entry) => entry.entryKind === 'committee')
+    .map((entry) => ({
+      id: entry.id,
+      membershipId: null,
+      committeeKind: 'vigilance' as const,
+      title: entry.committeeTitle ?? 'Integrante',
+      fullName: entry.fullName,
+      phone: entry.phone,
+      role: 'resident' as const,
+      roleLabel: 'Comité de vigilancia',
+      unitIdentifier: entry.unitIdentifier,
+      clusterId: entry.clusterId,
+      clusterName: entry.clusterName,
+      isManual: true,
+    }));
+  const combinedVigilanceMembers = [...vigilanceMembers, ...manualCommittee];
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -55,8 +77,9 @@ export default async function ComunidadPage() {
         initialCondominiumId={condominiumId}
         clusters={clusters}
         directoryMembers={directoryMembers}
+        manualStaff={manualStaff}
         residents={residents}
-        vigilanceMembers={vigilanceMembers}
+        vigilanceMembers={combinedVigilanceMembers}
         assemblies={assemblies}
         assemblyTickets={assemblyTickets}
       />
