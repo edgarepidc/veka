@@ -7,6 +7,7 @@ import { avatarStoragePath, resolveStorageImageUrl, STORAGE_BUCKETS } from '@vek
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { AppearancePicker } from '@/components/ui/AppearancePicker';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
 import type { AdminSession } from '@/lib/load-admin-session';
 
 import { updateAdminPassword, updateAdminProfile } from './actions';
@@ -39,9 +40,9 @@ export function ProfileForm({ session }: { session: AdminSession }) {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Datos personales</h2>
+        <SectionHeading>Datos personales</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Esta información se usa en el panel y en comunicaciones con residentes.
         </p>
@@ -113,7 +114,7 @@ export function ProfileForm({ session }: { session: AdminSession }) {
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Apariencia</h2>
+        <SectionHeading>Apariencia</SectionHeading>
         <p className="mt-1 text-sm text-muted">
           Elige tema claro u oscuro para el panel. La preferencia se guarda en este navegador.
         </p>
@@ -123,7 +124,7 @@ export function ProfileForm({ session }: { session: AdminSession }) {
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Seguridad</h2>
+        <SectionHeading>Seguridad</SectionHeading>
         <p className="mt-1 text-sm text-muted">Actualiza tu contraseña de acceso al panel.</p>
 
         <form

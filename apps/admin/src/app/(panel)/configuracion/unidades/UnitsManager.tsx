@@ -121,7 +121,7 @@ export function UnitsManager({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <GlassCard>
         <SectionHeading help={HELP.unidades}>Nuevo cluster / torre / villa</SectionHeading>
         <p className="mt-1 text-sm text-muted">

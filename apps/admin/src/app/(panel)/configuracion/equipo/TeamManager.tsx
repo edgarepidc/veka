@@ -8,8 +8,10 @@ import {
 } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
 import { StatChip } from '@/components/ui/StatChip';
 import type { StaffInvitation, TeamMember } from '@/lib/load-team';
+import { HELP } from '@/lib/help-content';
 
 import { inviteStaffMember, setStaffPhoneVisibility, updateMemberRole } from './actions';
 import { addManualStaffEntry, removeManualDirectoryEntry } from './manual-directory-actions';
@@ -97,11 +99,14 @@ export function TeamManager({
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted">
-        Usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se invitan desde
-        Unidades; el comité de vigilancia se arma en Comunidad → Mi comunidad.
-      </p>
+    <div className="space-y-3">
+      <GlassCard>
+        <SectionHeading help={HELP.equipo}>Equipo del condominio</SectionHeading>
+        <p className="mt-1 text-sm text-muted">
+          Usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se invitan desde
+          Unidades; el comité de vigilancia se arma en Comunidad → Mi comunidad.
+        </p>
+      </GlassCard>
 
       {message ? (
         <p

@@ -32,8 +32,15 @@ export default async function ConfiguracionPage() {
         highlight={isAdmin ? 'administrativa' : 'personal'}
         subtitle={
           isAdmin
-            ? 'Perfil, unidades, invitaciones y equipo del condominio activo.'
+            ? 'Unidades, invitaciones y equipo del condominio activo.'
             : 'Tu perfil y preferencias de acceso.'
+        }
+        help={
+          <p>
+            {isAdmin
+              ? 'Organiza torres y vecinos, invita accesos y define el equipo operativo. La marca del condominio se edita en Platform.'
+              : 'Actualiza tu perfil, apariencia y contraseña de acceso.'}
+          </p>
         }
       />
       <Suspense

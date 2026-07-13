@@ -5,6 +5,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { MEMBERSHIP_ROLES, type MembershipRole } from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { StatusTag } from '@/components/ui/StatusTag';
+import { HELP } from '@/lib/help-content';
 import { createClient } from '@/lib/supabase/client';
 
 const ROLE_LABELS: Record<MembershipRole, string> = {
@@ -21,6 +24,7 @@ const INVITE_ROLES = MEMBERSHIP_ROLES.filter((r) => r !== 'super_admin');
 interface UnitOption {
   id: string;
   identifier: string;
+  clusterName?: string | null;
 }
 
 interface InvitationRow {
@@ -32,21 +36,40 @@ interface InvitationRow {
   unit: { identifier: string } | null;
 }
 
+function invitationTone(status: string): 'green' | 'orange' | 'gray' | 'red' {
+  if (status === 'pending') return 'orange';
+  if (status === 'accepted') return 'green';
+  if (status === 'revoked' || status === 'expired') return 'red';
+  return 'gray';
+}
+
+function invitationLabel(status: string): string {
+  if (status === 'pending') return 'Pendiente';
+  if (status === 'accepted') return 'Aceptada';
+  if (status === 'revoked') return 'Revocada';
+  if (status === 'expired') return 'Expirada';
+  return status;
+}
+
 export function InvitationsPanel({
   condominiumId,
   condominiumName,
+  units: unitsProp,
 }: {
   condominiumId: string;
   condominiumName: string;
+  units?: UnitOption[];
 }) {
   const supabase = createClient();
-  const [units, setUnits] = useState<UnitOption[]>([]);
+  const [fetchedUnits, setFetchedUnits] = useState<UnitOption[]>([]);
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [email, setEmail] = useState('');
   const [unitId, setUnitId] = useState('');
   const [role, setRole] = useState<MembershipRole>('resident');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const units = unitsProp ?? fetchedUnits;
 
   const loadInvitations = useCallback(async () => {
     const res = await fetch(`/api/invitations?condominiumId=${condominiumId}`);
@@ -55,14 +78,23 @@ export function InvitationsPanel({
   }, [condominiumId]);
 
   useEffect(() => {
+    if (unitsProp) return;
     void supabase
       .from('units')
       .select('id, identifier')
       .eq('condominium_id', condominiumId)
-      .then(({ data }) => setUnits((data as UnitOption[]) ?? []));
+      .then(({ data }) => setFetchedUnits((data as UnitOption[]) ?? []));
+  }, [condominiumId, supabase, unitsProp]);
 
+  useEffect(() => {
     void loadInvitations();
-  }, [condominiumId, loadInvitations, supabase]);
+  }, [loadInvitations]);
+
+  useEffect(() => {
+    if (unitId && !units.some((unit) => unit.id === unitId)) {
+      setUnitId('');
+    }
+  }, [unitId, units]);
 
   async function sendInvitation(e: React.FormEvent) {
     e.preventDefault();
@@ -90,17 +122,20 @@ export function InvitationsPanel({
 
     setEmail('');
     setUnitId('');
-    const emailNote = data.emailSent ? ' Se envió el correo de invitación.' : ' (correo no enviado: revisa RESEND_API_KEY)';
+    const emailNote = data.emailSent
+      ? ' Se envió el correo de invitación.'
+      : ' (correo no enviado: revisa RESEND_API_KEY)';
     setMessage(`Invitación creada para ${data.invitation.email}.${emailNote}`);
     void loadInvitations();
   }
 
   return (
-    <>
-      <GlassCard className="mb-6">
-        <h2 className="text-lg font-semibold text-[var(--text)]">Nueva invitación</h2>
+    <div className="space-y-3">
+      <GlassCard>
+        <SectionHeading help={HELP.invitaciones}>Nueva invitación</SectionHeading>
         <p className="mt-1 text-sm text-muted">
-          Invita a alguien a <strong>{condominiumName}</strong>. Recibirá un correo para registrarse con el mismo email.
+          Invita a alguien a <strong>{condominiumName}</strong>. Recibirá un correo para registrarse con el
+          mismo email.
         </p>
         <form onSubmit={sendInvitation} className="mt-4 space-y-3">
           <input
@@ -111,7 +146,11 @@ export function InvitationsPanel({
             placeholder="correo@usuario.com"
             className="glass-input"
           />
-          <select value={role} onChange={(e) => setRole(e.target.value as MembershipRole)} className="glass-input">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as MembershipRole)}
+            className="glass-input"
+          >
             {INVITE_ROLES.map((r) => (
               <option key={r} value={r} className="bg-slate-900">
                 {ROLE_LABELS[r]}
@@ -125,7 +164,7 @@ export function InvitationsPanel({
               </option>
               {units.map((unit) => (
                 <option key={unit.id} value={unit.id} className="bg-slate-900">
-                  {unit.identifier}
+                  {unit.clusterName ? `${unit.identifier} · ${unit.clusterName}` : unit.identifier}
                 </option>
               ))}
             </select>
@@ -133,28 +172,40 @@ export function InvitationsPanel({
           <button type="submit" disabled={loading} className="glass-btn-primary">
             {loading ? 'Creando…' : 'Crear invitación'}
           </button>
-          {message ? <p className="text-sm text-muted">{message}</p> : null}
+          {message ? (
+            <p
+              className={`text-sm ${
+                message.includes('creada') || message.includes('envió') ? 'text-accent' : 'text-red-300'
+              }`}
+            >
+              {message}
+            </p>
+          ) : null}
         </form>
       </GlassCard>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Invitaciones recientes</h2>
+        <SectionHeading>Invitaciones recientes</SectionHeading>
+        <p className="mt-1 text-sm text-muted">Últimas invitaciones del condominio activo.</p>
         <ul className="mt-4 space-y-2">
           {invitations.length === 0 ? (
             <li className="text-sm text-subtle">No hay invitaciones todavía.</li>
           ) : (
             invitations.map((inv) => (
-              <li key={inv.id} className="glass-card-deep flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <li
+                key={inv.id}
+                className="glass-card-deep flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+              >
                 <span className="text-[var(--text)]">
                   {inv.email} · {ROLE_LABELS[inv.role as MembershipRole] ?? inv.role}
                   {inv.unit?.identifier ? ` · ${inv.unit.identifier}` : ''}
                 </span>
-                <span className="glass-tag-green capitalize">{inv.status}</span>
+                <StatusTag label={invitationLabel(inv.status)} tone={invitationTone(inv.status)} />
               </li>
             ))
           )}
         </ul>
       </GlassCard>
-    </>
+    </div>
   );
 }

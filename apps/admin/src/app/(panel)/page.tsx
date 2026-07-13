@@ -22,7 +22,7 @@ const modules = [
   },
   {
     title: 'Configuración',
-    description: 'Perfil, unidades, invitaciones y equipo.',
+    description: 'Unidades, invitaciones, equipo y perfil.',
     href: '/configuracion',
     icon: '⚙️',
   },
