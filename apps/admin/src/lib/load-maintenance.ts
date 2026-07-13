@@ -6,6 +6,11 @@ import type {
   MaintenanceTicketStatus,
 } from '@veka/shared';
 
+export interface ClusterOption {
+  id: string;
+  name: string;
+}
+
 export interface MaintenanceRoutineEvidenceRow {
   id: string;
   evidence_date: string;
@@ -24,8 +29,15 @@ export interface MaintenanceRoutineRow {
   is_active: boolean;
   sort_order: number;
   created_at: string;
-  amenity: { name: string } | null;
+  amenity: { name: string; cluster_id: string | null } | null;
   evidence: MaintenanceRoutineEvidenceRow[];
+}
+
+export interface MaintenanceTicketAttachmentRow {
+  id: string;
+  file_url: string;
+  file_name: string | null;
+  sort_order: number;
 }
 
 export interface MaintenanceTicketRow {
@@ -38,8 +50,13 @@ export interface MaintenanceTicketRow {
   admin_notes: string | null;
   created_at: string;
   resolved_at: string | null;
-  unit: { identifier: string } | null;
-  amenity: { name: string } | null;
+  unit: {
+    identifier: string;
+    cluster_id: string | null;
+    cluster: { name: string } | null;
+  } | null;
+  amenity: { name: string; cluster_id: string | null } | null;
+  attachments: MaintenanceTicketAttachmentRow[];
 }
 
 export interface AmenityOption {
@@ -47,27 +64,38 @@ export interface AmenityOption {
   name: string;
 }
 
+function asSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 export async function loadMaintenanceData(condominiumId?: string): Promise<{
   tickets: MaintenanceTicketRow[];
   routines: MaintenanceRoutineRow[];
   amenities: AmenityOption[];
+  clusters: ClusterOption[];
   condominiumId: string;
 }> {
   const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
-  const [ticketsRes, routinesRes, amenitiesRes] = await Promise.all([
+  const [ticketsRes, routinesRes, amenitiesRes, clustersRes] = await Promise.all([
     supabase
       .from('maintenance_tickets')
       .select(
-        'id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at, unit:units(identifier), amenity:amenities(name)',
+        `
+        id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at,
+        unit:units(identifier, cluster_id, cluster:clusters(name)),
+        amenity:amenities(name, cluster_id),
+        attachments:maintenance_ticket_attachments(id, file_url, file_name, sort_order)
+      `,
       )
       .eq('condominium_id', condoId)
       .order('created_at', { ascending: false }),
     supabase
       .from('maintenance_routines')
       .select(
-        'id, title, description, day_of_week, recurrence, monthly_day, anchor_date, is_active, sort_order, created_at, amenity:amenities(name)',
+        'id, title, description, day_of_week, recurrence, monthly_day, anchor_date, is_active, sort_order, created_at, amenity:amenities(name, cluster_id)',
       )
       .eq('condominium_id', condoId)
       .order('day_of_week', { ascending: true, nullsFirst: false })
@@ -78,6 +106,7 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
       .eq('condominium_id', condoId)
       .eq('is_active', true)
       .order('name'),
+    supabase.from('clusters').select('id, name').eq('condominium_id', condoId).order('name'),
   ]);
 
   const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
@@ -103,13 +132,50 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
     evidenceByRoutine.set(row.routine_id, list);
   }
 
+  const tickets = (ticketsRes.data ?? []).map((row) => {
+    const raw = row as Record<string, unknown>;
+    const unitRaw = asSingle(raw.unit as MaintenanceTicketRow['unit'] | MaintenanceTicketRow['unit'][] | null);
+    const clusterRaw = unitRaw ? asSingle(unitRaw.cluster) : null;
+    const amenityRaw = asSingle(
+      raw.amenity as MaintenanceTicketRow['amenity'] | MaintenanceTicketRow['amenity'][] | null,
+    );
+    const attachmentsRaw = Array.isArray(raw.attachments)
+      ? (raw.attachments as MaintenanceTicketAttachmentRow[])
+      : [];
+
+    return {
+      id: String(raw.id),
+      title: String(raw.title),
+      description: (raw.description as string | null) ?? null,
+      category: raw.category as MaintenanceTicketCategory,
+      status: raw.status as MaintenanceTicketStatus,
+      photo_url: (raw.photo_url as string | null) ?? null,
+      admin_notes: (raw.admin_notes as string | null) ?? null,
+      created_at: String(raw.created_at),
+      resolved_at: (raw.resolved_at as string | null) ?? null,
+      unit: unitRaw
+        ? {
+            identifier: unitRaw.identifier,
+            cluster_id: unitRaw.cluster_id ?? null,
+            cluster: clusterRaw,
+          }
+        : null,
+      amenity: amenityRaw,
+      attachments: attachmentsRaw
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    } satisfies MaintenanceTicketRow;
+  });
+
   return {
     condominiumId: condoId,
-    tickets: (ticketsRes.data ?? []) as unknown as MaintenanceTicketRow[],
+    tickets,
     routines: routineRows.map((row) => ({
       ...row,
+      amenity: asSingle(row.amenity as MaintenanceRoutineRow['amenity'] | MaintenanceRoutineRow['amenity'][] | null),
       evidence: evidenceByRoutine.get(row.id) ?? [],
     })),
     amenities: (amenitiesRes.data ?? []) as AmenityOption[],
+    clusters: (clustersRes.data ?? []) as ClusterOption[],
   };
 }

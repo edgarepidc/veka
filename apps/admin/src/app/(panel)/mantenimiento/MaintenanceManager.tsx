@@ -9,10 +9,12 @@ import {
   STORAGE_BUCKETS,
   WEEKDAY_LABELS,
   WEEKDAY_ORDER,
+  amenityScopeLabel,
   groupEvidenceByDate,
   groupRoutinesByWeekday,
+  isImageStoragePath,
   maintenanceFilePath,
-  matchesMaintenanceTicketFilter,
+  matchesClusterResourceScope,
   recurrenceLabel,
   resolveStorageImageUrl,
   ticketCategoryLabel,
@@ -22,10 +24,12 @@ import {
   routineCardVariant,
   type MaintenancePeriodFilter,
   type MaintenanceRecurrence,
-  type MaintenanceTicketFilter,
+  type MaintenanceTicketStatus,
 } from '@veka/shared';
 
+import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { MultiImageUpload } from '@/components/MultiImageUpload';
+import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatusTag } from '@/components/ui/StatusTag';
 import { SectionHeading } from '@/components/ui/SectionHeading';
@@ -33,15 +37,18 @@ import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
 import type {
   AmenityOption,
+  ClusterOption,
   MaintenanceRoutineEvidenceRow,
   MaintenanceRoutineRow,
   MaintenanceTicketRow,
 } from '@/lib/load-maintenance';
 
 import {
+  addTicketAttachment,
   createMaintenanceRoutine,
   createMaintenanceRoutineEvidence,
   deleteMaintenanceRoutine,
+  deleteTicketAttachment,
   updateTicketStatus,
 } from './actions';
 
@@ -54,15 +61,27 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'mensual', label: 'Mantenimiento mensual' },
 ];
 
-const TICKET_FILTERS: { id: MaintenanceTicketFilter; label: string }[] = [
-  { id: 'active', label: 'Activos' },
+const KANBAN_COLUMNS: { id: MaintenanceTicketStatus; label: string }[] = [
   { id: 'open', label: 'Abiertos' },
+  { id: 'in_progress', label: 'En progreso' },
+  { id: 'resolved', label: 'Resueltos' },
   { id: 'closed', label: 'Cerrados' },
-  { id: 'all', label: 'Todos' },
 ];
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function ticketClusterId(ticket: MaintenanceTicketRow): string | null {
+  return ticket.unit?.cluster_id ?? ticket.amenity?.cluster_id ?? null;
+}
+
+function ticketScopeLabel(ticket: MaintenanceTicketRow): string {
+  return amenityScopeLabel(
+    ticketClusterId(ticket),
+    ticket.unit?.cluster?.name ?? null,
+    'Todo',
+  );
 }
 
 function RoutineEvidenceGallery({
@@ -102,21 +121,151 @@ function RoutineEvidenceGallery({
   );
 }
 
+function TicketCard({
+  ticket,
+  condominiumId,
+  pending,
+  onRun,
+  onOpenFile,
+}: {
+  ticket: MaintenanceTicketRow;
+  condominiumId: string;
+  pending: boolean;
+  onRun: (
+    action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>,
+    formData: FormData,
+    ok: string,
+  ) => void;
+  onOpenFile: (path: string) => void;
+}) {
+  return (
+    <GlassCard variant="accent" accent={ticketAccentTone(ticket.status)} className="space-y-3 !p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-[var(--text)]">{ticket.title}</p>
+          <p className="mt-1 text-[11px] text-subtle">
+            {ticket.unit?.identifier ? `Unidad ${ticket.unit.identifier}` : 'Área común'}
+            {ticket.amenity?.name ? ` · ${ticket.amenity.name}` : ''}
+            {' · '}
+            {formatDate(ticket.created_at)}
+          </p>
+        </div>
+        <StatusTag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        <span className="glass-tag-blue px-2 py-0.5 text-[10px]">{ticketCategoryLabel(ticket.category)}</span>
+        <span className="glass-tag-gray px-2 py-0.5 text-[10px]">{ticketScopeLabel(ticket)}</span>
+      </div>
+
+      {ticket.description ? <p className="text-sm text-muted line-clamp-3">{ticket.description}</p> : null}
+
+      <div className="flex flex-wrap gap-2">
+        {ticket.photo_url ? (
+          <button
+            type="button"
+            onClick={() => onOpenFile(ticket.photo_url!)}
+            className="text-xs font-semibold text-accent hover:underline"
+          >
+            Foto del reporte
+          </button>
+        ) : null}
+        {ticket.attachments.map((attachment) => (
+          <button
+            key={attachment.id}
+            type="button"
+            onClick={() => onOpenFile(attachment.file_url)}
+            className="text-xs font-semibold text-accent-2 hover:underline"
+          >
+            {attachment.file_name
+              ?? (isImageStoragePath(attachment.file_url) ? 'Evidencia' : 'PDF')}
+          </button>
+        ))}
+      </div>
+
+      {ticket.attachments.length > 0 ? (
+        <ul className="space-y-1">
+          {ticket.attachments.map((attachment) => (
+            <li key={attachment.id} className="flex items-center justify-between gap-2 text-xs text-muted">
+              <span className="truncate">{attachment.file_name ?? attachment.file_url.split('/').pop()}</span>
+              <form action={(fd) => onRun(deleteTicketAttachment, fd, 'Adjunto eliminado.')}>
+                <input type="hidden" name="attachment_id" value={attachment.id} />
+                <button type="submit" disabled={pending} className="text-red-300 hover:underline">
+                  Quitar
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <form
+        action={(fd) => onRun(addTicketAttachment, fd, 'Evidencia agregada.')}
+        className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/40 p-2"
+      >
+        <input type="hidden" name="ticket_id" value={ticket.id} />
+        <FileUpload
+          bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
+          inputName="file_url"
+          fileNameInputName="file_name"
+          label="Agregar evidencia"
+          hint="Imagen o PDF (máx. 2 MB / 5 MB)."
+          uploadButtonLabel="Subir"
+          buildPath={(ext) => maintenanceFilePath(condominiumId, 'tickets', crypto.randomUUID(), ext)}
+        />
+        <button type="submit" disabled={pending} className="glass-btn-secondary w-full text-xs">
+          Guardar adjunto
+        </button>
+      </form>
+
+      <div className="flex flex-wrap gap-1">
+        {MAINTENANCE_TICKET_STATUSES.filter((status) => status !== ticket.status).map((status) => (
+          <form key={status} action={(fd) => onRun(updateTicketStatus, fd, 'Ticket actualizado.')}>
+            <input type="hidden" name="ticket_id" value={ticket.id} />
+            <input type="hidden" name="status" value={status} />
+            <input type="hidden" name="admin_notes" value={ticket.admin_notes ?? ''} />
+            <button type="submit" disabled={pending} className="glass-tag-gray px-2 py-1 text-[10px] hover:opacity-80">
+              → {ticketStatusLabel(status)}
+            </button>
+          </form>
+        ))}
+      </div>
+
+      <form action={(fd) => onRun(updateTicketStatus, fd, 'Ticket actualizado.')} className="space-y-2">
+        <input type="hidden" name="ticket_id" value={ticket.id} />
+        <input type="hidden" name="status" value={ticket.status} />
+        <textarea
+          name="admin_notes"
+          rows={2}
+          defaultValue={ticket.admin_notes ?? ''}
+          placeholder="Notas para el residente"
+          className="glass-input text-xs"
+        />
+        <button type="submit" disabled={pending} className="glass-btn-primary w-full text-xs">
+          Guardar notas
+        </button>
+      </form>
+    </GlassCard>
+  );
+}
+
 export function MaintenanceManager({
   tickets,
   routines,
   amenities,
+  clusters,
   condominiumId,
 }: {
   tickets: MaintenanceTicketRow[];
   routines: MaintenanceRoutineRow[];
   amenities: AmenityOption[];
+  clusters: ClusterOption[];
   condominiumId: string;
 }) {
   const supabase = createClient();
 
   const [tab, setTab] = useState<Tab>('tickets');
-  const [ticketFilter, setTicketFilter] = useState<MaintenanceTicketFilter>('active');
+  const [scopeFilter, setScopeFilter] = useState('');
   const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [routineRecurrence, setRoutineRecurrence] = useState<MaintenanceRecurrence>('weekly');
   const [message, setMessage] = useState<string | null>(null);
@@ -125,9 +274,25 @@ export function MaintenanceManager({
   const routineGroups = useMemo(() => groupRoutinesByWeekday(routines), [routines]);
 
   const filteredTickets = useMemo(
-    () => tickets.filter((ticket) => matchesMaintenanceTicketFilter(ticket.status, ticketFilter)),
-    [ticketFilter, tickets],
+    () =>
+      tickets.filter((ticket) =>
+        matchesClusterResourceScope(ticketClusterId(ticket), scopeFilter || 'all'),
+      ),
+    [scopeFilter, tickets],
   );
+
+  const ticketsByStatus = useMemo(() => {
+    const map: Record<MaintenanceTicketStatus, MaintenanceTicketRow[]> = {
+      open: [],
+      in_progress: [],
+      resolved: [],
+      closed: [],
+    };
+    for (const ticket of filteredTickets) {
+      map[ticket.status].push(ticket);
+    }
+    return map;
+  }, [filteredTickets]);
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>,
@@ -151,19 +316,36 @@ export function MaintenanceManager({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="glass-tab-strip">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-3">
+      <GlassCard className="!p-3">
+        <div className="glass-tab-strip">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {clusters.length > 0 ? (
+          <div className="mt-3">
+            <FinanceScopeFilter
+              condominiums={[{ id: condominiumId, name: 'Condominio' }]}
+              clusters={clusters}
+              condominiumId={condominiumId}
+              clusterId={scopeFilter}
+              onCondominiumChange={() => {}}
+              onClusterChange={setScopeFilter}
+              align="start"
+              allLabel="Todo"
+            />
+          </div>
+        ) : null}
+      </GlassCard>
 
       {message ? (
         <p className={`text-sm ${message.includes('Error') || message.includes('obligat') ? 'text-red-300' : 'text-accent'}`}>
@@ -174,80 +356,42 @@ export function MaintenanceManager({
       {tab === 'tickets' ? (
         <div className="space-y-4">
           <p className="text-sm text-muted">
-            Reportes de residentes sobre desperfectos en su unidad o áreas comunes. Actualiza el estado y deja
-            notas internas.
+            Tablero de reportes. Mueve el estado con los atajos, deja notas y adjunta evidencias (imagen o PDF).
           </p>
-          <div className="glass-tab-strip">
-            {TICKET_FILTERS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTicketFilter(item.id)}
-                className={`glass-tab ${ticketFilter === item.id ? 'glass-tab-active' : ''}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+
           {filteredTickets.length === 0 ? (
             <GlassCard variant="muted">
-              <p className="text-sm text-subtle">No hay tickets en este filtro.</p>
+              <p className="text-sm text-subtle">No hay tickets en este alcance.</p>
             </GlassCard>
           ) : (
-            filteredTickets.map((ticket) => (
-              <GlassCard
-                key={ticket.id}
-                variant="accent"
-                accent={ticketAccentTone(ticket.status)}
-                className="space-y-3"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-[var(--text)]">{ticket.title}</p>
-                    <p className="mt-1 text-xs text-subtle">
-                      {ticket.unit?.identifier ? `Unidad ${ticket.unit.identifier}` : 'Área común'}
-                      {ticket.amenity?.name ? ` · ${ticket.amenity.name}` : ''}
-                      {' · '}
-                      {ticketCategoryLabel(ticket.category)}
-                      {' · '}
-                      {formatDate(ticket.created_at)}
-                    </p>
-                    {ticket.description ? <p className="mt-2 text-sm text-muted">{ticket.description}</p> : null}
+            <div className="grid gap-3 xl:grid-cols-4 lg:grid-cols-2">
+              {KANBAN_COLUMNS.map((column) => (
+                <div key={column.id} className="min-w-0 space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-bold uppercase tracking-wide text-subtle">{column.label}</p>
+                    <span className="glass-tag-gray px-2 py-0.5 text-[10px]">
+                      {ticketsByStatus[column.id].length}
+                    </span>
                   </div>
-                  <StatusTag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
+                  <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/30 p-2 min-h-[120px]">
+                    {ticketsByStatus[column.id].length === 0 ? (
+                      <p className="px-1 py-4 text-center text-xs text-subtle">Sin tickets</p>
+                    ) : (
+                      ticketsByStatus[column.id].map((ticket) => (
+                        <TicketCard
+                          key={ticket.id}
+                          ticket={ticket}
+                          condominiumId={condominiumId}
+                          pending={pending}
+                          onRun={run}
+                          onOpenFile={(path) => void openFile(path)}
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
-
-                {ticket.photo_url ? (
-                  <button
-                    type="button"
-                    onClick={() => void openFile(ticket.photo_url!)}
-                    className="text-sm text-accent-2 hover:underline"
-                  >
-                    Ver foto del reporte
-                  </button>
-                ) : null}
-
-                <form action={(fd) => run(updateTicketStatus, fd, 'Ticket actualizado.')} className="grid gap-2 sm:grid-cols-3">
-                  <input type="hidden" name="ticket_id" value={ticket.id} />
-                  <select name="status" defaultValue={ticket.status} className="glass-input">
-                    {MAINTENANCE_TICKET_STATUSES.map((status) => (
-                      <option key={status} value={status} className="bg-slate-900">
-                        {ticketStatusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    name="admin_notes"
-                    defaultValue={ticket.admin_notes ?? ''}
-                    placeholder="Notas para el residente"
-                    className="glass-input sm:col-span-2"
-                  />
-                  <button type="submit" disabled={pending} className="glass-btn-primary sm:col-span-3">
-                    Guardar seguimiento
-                  </button>
-                </form>
-              </GlassCard>
-            ))
+              ))}
+            </div>
           )}
         </div>
       ) : null}

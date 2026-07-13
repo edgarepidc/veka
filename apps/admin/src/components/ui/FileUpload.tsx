@@ -19,6 +19,7 @@ export function FileUpload({
   buildPath,
   currentPath,
   inputName,
+  fileNameInputName,
   label,
   hint,
   uploadButtonLabel = 'Subir archivo',
@@ -27,6 +28,7 @@ export function FileUpload({
   buildPath: (ext: string) => string;
   currentPath?: string | null;
   inputName: string;
+  fileNameInputName?: string;
   label: string;
   hint?: string;
   uploadButtonLabel?: string;
@@ -82,6 +84,9 @@ export function FileUpload({
       {hint ? <p className="mt-0.5 text-xs text-subtle">{hint}</p> : null}
 
       <input type="hidden" name={inputName} value={storedPath} />
+      {fileNameInputName ? (
+        <input type="hidden" name={fileNameInputName} value={fileName ?? ''} />
+      ) : null}
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
         {displayUrl ? (

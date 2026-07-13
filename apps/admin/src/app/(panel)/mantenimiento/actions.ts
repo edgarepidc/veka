@@ -272,3 +272,77 @@ export async function deleteMaintenanceRoutine(formData: FormData) {
   revalidatePath('/mantenimiento');
   return { success: true };
 }
+
+export async function addTicketAttachment(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const ticketId = String(formData.get('ticket_id') ?? '').trim();
+  const fileUrl = String(formData.get('file_url') ?? '').trim();
+  const fileName = String(formData.get('file_name') ?? '').trim();
+
+  if (!ticketId) return { error: 'Ticket inválido.' };
+  if (!fileUrl) return { error: 'Sube una imagen o PDF.' };
+
+  const { data: ticket } = await supabase
+    .from('maintenance_tickets')
+    .select('id')
+    .eq('id', ticketId)
+    .eq('condominium_id', condominiumId)
+    .maybeSingle();
+
+  if (!ticket) return { error: 'Ticket no encontrado.' };
+
+  const { count } = await supabase
+    .from('maintenance_ticket_attachments')
+    .select('id', { count: 'exact', head: true })
+    .eq('ticket_id', ticketId);
+
+  const { error } = await supabase.from('maintenance_ticket_attachments').insert({
+    ticket_id: ticketId,
+    file_url: fileUrl,
+    file_name: fileName || null,
+    sort_order: count ?? 0,
+    uploaded_by: user.id,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/mantenimiento');
+  return { success: true };
+}
+
+export async function deleteTicketAttachment(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const attachmentId = String(formData.get('attachment_id') ?? '').trim();
+  if (!attachmentId) return { error: 'Adjunto inválido.' };
+
+  const { data: attachment } = await supabase
+    .from('maintenance_ticket_attachments')
+    .select('id, ticket:maintenance_tickets!inner(condominium_id)')
+    .eq('id', attachmentId)
+    .maybeSingle();
+
+  const ticket = attachment?.ticket as { condominium_id: string } | { condominium_id: string }[] | null;
+  const condoFromTicket = Array.isArray(ticket) ? ticket[0]?.condominium_id : ticket?.condominium_id;
+  if (!attachment || condoFromTicket !== condominiumId) {
+    return { error: 'Adjunto no encontrado.' };
+  }
+
+  const { error } = await supabase.from('maintenance_ticket_attachments').delete().eq('id', attachmentId);
+  if (error) return { error: error.message };
+
+  revalidatePath('/mantenimiento');
+  return { success: true };
+}

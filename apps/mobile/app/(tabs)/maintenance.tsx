@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -16,6 +16,7 @@ import {
   MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_TICKET_CATEGORIES,
   groupEvidenceByDate,
+  matchesClusterResourceScope,
   recurrenceLabel,
   ticketCategoryLabel,
   ticketStatusLabel,
@@ -30,9 +31,11 @@ import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/Keyb
 import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
 import { ImageCarousel } from '@/components/ui/ImageCarousel';
 import { Tag } from '@/components/ui/Tag';
+import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useMaintenance } from '@/hooks/useMaintenance';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
@@ -43,6 +46,7 @@ export default function MaintenanceScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
+  const { scopeFilterItems, hasClusters, loading: clustersLoading } = useCondominiumClusters(primary);
   const { tickets, routines, routineGroups, loading, refreshing, actionError, refresh, createTicket, getSignedUrl } =
     useMaintenance(primary);
 
@@ -54,6 +58,7 @@ export default function MaintenanceScreen() {
   const ticketRefs = useRef<Record<string, View | null>>({});
 
   const [tab, setTab] = useState('tickets');
+  const [scopeFilter, setScopeFilter] = useState('all');
   const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null);
@@ -63,6 +68,36 @@ export default function MaintenanceScreen() {
   const [category, setCategory] = useState<MaintenanceTicketCategory>('unit');
   const [photo, setPhoto] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const myClusterId = primary?.unit?.cluster?.id ?? null;
+
+  const visibleTickets = useMemo(() => {
+    if (scopeFilter === 'all') return tickets;
+    // Resident tickets belong to their unit; keep them when viewing their tower or Todo.
+    if (!myClusterId) return tickets;
+    return myClusterId === scopeFilter ? tickets : [];
+  }, [myClusterId, scopeFilter, tickets]);
+
+  const visibleRoutines = useMemo(
+    () =>
+      routines.filter((routine) =>
+        matchesClusterResourceScope(routine.amenity?.cluster_id ?? null, scopeFilter),
+      ),
+    [routines, scopeFilter],
+  );
+
+  const visibleRoutineGroups = useMemo(
+    () =>
+      routineGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((routine) =>
+            matchesClusterResourceScope(routine.amenity?.cluster_id ?? null, scopeFilter),
+          ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [routineGroups, scopeFilter],
+  );
 
   useEffect(() => {
     if (ticketIdParam) setScrollToTicketId(ticketIdParam);
@@ -127,7 +162,7 @@ export default function MaintenanceScreen() {
     if (url) await Linking.openURL(url);
   }
 
-  if (membershipLoading || loading) {
+  if (membershipLoading || clustersLoading || loading) {
     return (
       <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -172,6 +207,9 @@ export default function MaintenanceScreen() {
             active={tab}
             onChange={setTab}
           />
+          {hasClusters ? (
+            <ScopeFilterBar items={scopeFilterItems} active={scopeFilter} onChange={setScopeFilter} />
+          ) : null}
         </View>
 
         {actionError ? (
@@ -187,12 +225,12 @@ export default function MaintenanceScreen() {
               onPress={() => setSheetOpen(true)}
               style={styles.createAction}
             />
-            {tickets.length === 0 ? (
+            {visibleTickets.length === 0 ? (
               <GlassCard variant="muted" style={styles.mt}>
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>No tienes tickets todavía.</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 14 }}>No tienes tickets en esta vista.</Text>
               </GlassCard>
             ) : (
-              tickets.map((ticket) => (
+              visibleTickets.map((ticket) => (
                 <View
                   key={ticket.id}
                   ref={(node) => {
@@ -247,14 +285,14 @@ export default function MaintenanceScreen() {
               active={periodFilter}
               onChange={(key) => setPeriodFilter(key as MaintenancePeriodFilter)}
             />
-            {routines.length === 0 ? (
+            {visibleRoutines.length === 0 ? (
               <GlassCard variant="muted" style={styles.mt}>
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>
-                  Sin actividades programadas. El administrador publicará el programa mensual aquí.
+                  Sin actividades en este alcance. El administrador publicará el programa mensual aquí.
                 </Text>
               </GlassCard>
             ) : (
-              routineGroups.map((group) =>
+              visibleRoutineGroups.map((group) =>
                 group.items.length === 0 ? null : (
                   <View key={group.label} style={styles.mt}>
                     <Text style={[styles.dayHeading, { color: theme.accent }]}>{group.label}</Text>
