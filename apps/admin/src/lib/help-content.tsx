@@ -85,7 +85,7 @@ export const HELP = {
   equipo:
     'Invita y gestiona usuarios con rol en la app: staff admin, mantenimiento y seguridad. Desde aquí decides si el teléfono del staff se muestra en Comunidad → Mi comunidad.',
   condominio:
-    'Paso 1 del alta: datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos.',
+    'Datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos. Se edita desde Platform (super admin).',
   residente:
     'Consulta cargos pendientes, sube comprobante o paga en línea. Los abonos parciales se aplican al cargo más antiguo primero.',
 } as const;

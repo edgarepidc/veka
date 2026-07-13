@@ -3,9 +3,8 @@ import { Suspense } from 'react';
 import { ConfigManager } from '@/app/(panel)/configuracion/ConfigManager';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { HELP } from '@/lib/help-content';
 import { loadAdminSession } from '@/lib/load-admin-session';
-import { loadClustersAndUnits, loadCondominium } from '@/lib/load-condominium';
+import { loadClustersAndUnits } from '@/lib/load-condominium';
 import { loadManualDirectoryEntries } from '@/lib/load-manual-directory';
 import { loadStaffTeam } from '@/lib/load-team';
 
@@ -16,8 +15,7 @@ export default async function ConfiguracionPage() {
   const isAdmin = session.isAdmin;
   const condominiumId = session.activeCondominiumId;
 
-  const [condominium, unitsBundle, team, manualEntries] = await Promise.all([
-    isAdmin && condominiumId ? loadCondominium(condominiumId) : Promise.resolve(null),
+  const [unitsBundle, team, manualEntries] = await Promise.all([
     isAdmin ? loadClustersAndUnits() : Promise.resolve({ clusters: [], units: [] }),
     isAdmin ? loadStaffTeam() : Promise.resolve({ members: [], invitations: [] }),
     isAdmin && condominiumId
@@ -31,13 +29,12 @@ export default async function ConfiguracionPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Configuración"
-        highlight={isAdmin ? 'del condominio' : 'personal'}
+        highlight={isAdmin ? 'administrativa' : 'personal'}
         subtitle={
           isAdmin
-            ? 'Arma el condominio en orden: datos y marca → torres/unidades → invitaciones → equipo.'
+            ? 'Perfil, unidades, invitaciones y equipo del condominio activo.'
             : 'Tu perfil y preferencias de acceso.'
         }
-        help={<p>{isAdmin ? HELP.condominio : 'Actualiza tu perfil y contraseña.'}</p>}
       />
       <Suspense
         fallback={
@@ -49,7 +46,6 @@ export default async function ConfiguracionPage() {
         <ConfigManager
           session={session}
           isAdmin={isAdmin}
-          condominium={condominium}
           clusters={unitsBundle.clusters}
           units={unitsBundle.units}
           teamMembers={team.members}

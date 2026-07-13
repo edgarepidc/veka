@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function CondominioConfigRedirectPage() {
-  redirect('/configuracion?tab=condominio');
+  redirect('/configuracion?tab=perfil');
 }
