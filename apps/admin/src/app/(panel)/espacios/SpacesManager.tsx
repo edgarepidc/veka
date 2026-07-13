@@ -610,7 +610,7 @@ export function SpacesManager({
                           <span className="glass-tag-amber px-2 py-0.5">Aprobación</span>
                         ) : null}
                         {amenity.restrict_if_overdue ? (
-                          <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-red-200">Restringe morosos</span>
+                          <span className="glass-tag-red px-2 py-0.5">Restringe morosos</span>
                         ) : null}
                       </div>
                     </div>
