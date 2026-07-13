@@ -79,7 +79,7 @@ export function AdminTopBar({
             />
           ) : null}
           <Link
-            href="/configuracion/perfil"
+            href="/configuracion?tab=perfil"
             className="flex items-center gap-3 rounded-xl px-2 py-1 transition hover:bg-white/10"
           >
             <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] text-sm font-bold text-accent">

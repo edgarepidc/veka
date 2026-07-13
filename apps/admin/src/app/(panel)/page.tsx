@@ -23,7 +23,7 @@ const modules = [
   {
     title: 'Configuración',
     description: 'Perfil, condominio, unidades y equipo.',
-    href: '/configuracion/perfil',
+    href: '/configuracion',
     icon: '⚙️',
   },
 ];

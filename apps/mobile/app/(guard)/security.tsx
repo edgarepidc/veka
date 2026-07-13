@@ -29,6 +29,7 @@ import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
 import { TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
+import { VisitQrScanner } from '@/components/VisitQrScanner';
 import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useGuardSecurity } from '@/hooks/useGuardSecurity';
 import { useMembership } from '@/hooks/useMembership';
@@ -147,13 +148,14 @@ export default function GuardSecurityScreen() {
     };
   }, [getPackagePhotoUrl, visiblePackages]);
 
-  async function handleValidateRef() {
-    if (!manualRef.trim()) return;
+  async function handleValidateRef(raw?: string) {
+    const payload = (raw ?? manualRef).trim();
+    if (!payload) return;
     Keyboard.dismiss();
     setScanning(true);
     setScanError(null);
     setCheckInResult(null);
-    const result = await checkInVisit(manualRef.trim());
+    const result = await checkInVisit(payload);
     setScanning(false);
     if (result.error) {
       setScanError(result.error);
@@ -275,8 +277,14 @@ export default function GuardSecurityScreen() {
           <GlassCard>
             <Text style={[styles.cardTitle, { color: theme.text }]}>Escanear o validar QR</Text>
             <Text style={[styles.hint, { color: theme.textMuted }]}>
-              Pega el JSON del QR o los 32 caracteres de referencia del pase del residente.
+              Abre la cámara para leer el pase del residente, o pega la referencia manualmente.
             </Text>
+            <VisitQrScanner
+              active={tab === 'scan'}
+              onScan={(payload) => {
+                void handleValidateRef(payload);
+              }}
+            />
             <GlassInput
               value={manualRef}
               onChangeText={setManualRef}

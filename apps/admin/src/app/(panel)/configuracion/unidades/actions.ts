@@ -8,6 +8,7 @@ import { sendInvitationEmail } from '@/lib/invitation-email';
 import { createClient } from '@/lib/supabase/server';
 
 function revalidateUnits() {
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/unidades');
   revalidatePath('/configuracion/invitaciones');
 }

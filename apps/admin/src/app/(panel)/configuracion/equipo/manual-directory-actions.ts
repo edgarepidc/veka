@@ -41,6 +41,7 @@ export async function addManualStaffEntry(formData: FormData) {
   });
 
   if (error) return { error: error.message };
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/equipo');
   revalidatePath('/comunidad');
   return { success: true };
@@ -105,6 +106,7 @@ export async function removeManualDirectoryEntry(entryId: string) {
     .eq('condominium_id', condominiumId);
 
   if (error) return { error: error.message };
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/equipo');
   revalidatePath('/comunidad');
   return { success: true };

@@ -49,6 +49,7 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
 
   if (error) return { error: error.message };
 
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/equipo');
   revalidatePath('/comunidad');
   return { success: true };
@@ -88,6 +89,7 @@ export async function setStaffPhoneVisibility(membershipId: string, showPhone: b
 
   if (error) return { error: error.message };
 
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/equipo');
   revalidatePath('/comunidad');
   return { success: true };
@@ -148,6 +150,7 @@ export async function inviteStaffMember(formData: FormData) {
     roleLabel: STAFF_ROLE_LABELS[role] ?? role,
   });
 
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/equipo');
   revalidatePath('/comunidad');
   return { success: true };

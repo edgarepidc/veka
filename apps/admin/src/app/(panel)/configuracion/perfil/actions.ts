@@ -43,6 +43,7 @@ export async function updateAdminProfile(formData: FormData) {
     return { error: 'No se pudo guardar el perfil.' };
   }
 
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/perfil');
   revalidatePath('/comunidad');
   revalidatePath('/');

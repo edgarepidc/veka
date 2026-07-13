@@ -53,12 +53,12 @@ const ADMIN_NAV: NavItem[] = [
     icon: IoConstructOutline,
     iconActive: IoConstruct,
   },
-  { href: '/configuracion/perfil', label: 'Configuración', icon: IoSettingsOutline, iconActive: IoSettings },
+  { href: '/configuracion', label: 'Configuración', icon: IoSettingsOutline, iconActive: IoSettings },
 ];
 
 const RESIDENT_NAV: NavItem[] = [
   { href: '/mi-cuenta', label: 'Mi cuenta', icon: IoCardOutline, iconActive: IoCard },
-  { href: '/configuracion/perfil', label: 'Mi perfil', icon: IoPersonOutline, iconActive: IoPerson },
+  { href: '/configuracion?tab=perfil', label: 'Mi perfil', icon: IoPersonOutline, iconActive: IoPerson },
 ];
 
 const GUARD_NAV: NavItem[] = [
@@ -68,7 +68,7 @@ const GUARD_NAV: NavItem[] = [
     icon: IoShieldCheckmarkOutline,
     iconActive: IoShieldCheckmark,
   },
-  { href: '/configuracion/perfil', label: 'Mi perfil', icon: IoPersonOutline, iconActive: IoPerson },
+  { href: '/configuracion?tab=perfil', label: 'Mi perfil', icon: IoPersonOutline, iconActive: IoPerson },
 ];
 
 function isNavActive(pathname: string, href: string) {

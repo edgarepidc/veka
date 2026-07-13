@@ -80,10 +80,12 @@ export const HELP = {
     'Caseta: valida pases QR, registra paquetes (con foto) y opera visitas/entregas del día. Los chips Todo/torre filtran unidades y la bitácora. Las políticas de rentas con adeudo las edita administración.',
   unidades:
     'Torres (clusters) y unidades con coeficiente de participación. Desde aquí envías invitaciones a residentes.',
+  invitaciones:
+    'Invita por correo a propietarios, inquilinos o personal. Cada invitación se canjea al registrarse en la app.',
   equipo:
     'Invita y gestiona usuarios con rol en la app: staff admin, mantenimiento y seguridad. Desde aquí decides si el teléfono del staff se muestra en Comunidad → Mi comunidad.',
   condominio:
-    'Datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos.',
+    'Paso 1 del alta: datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos.',
   residente:
     'Consulta cargos pendientes, sube comprobante o paga en línea. Los abonos parciales se aplican al cargo más antiguo primero.',
 } as const;

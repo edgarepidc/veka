@@ -69,6 +69,7 @@ export async function updateCondominium(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  revalidatePath('/configuracion');
   revalidatePath('/configuracion/condominio');
   revalidatePath('/');
   return { success: true };
