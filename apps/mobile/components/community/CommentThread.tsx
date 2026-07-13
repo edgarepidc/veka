@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type MutableRefObject } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   MAX_COMMENT_DEPTH,
@@ -41,6 +41,8 @@ export function CommentThread({
   onDelete,
   onReply,
   replyingToId,
+  highlightCommentId,
+  commentRefs,
 }: {
   postId: string;
   comments: PostComment[];
@@ -56,6 +58,8 @@ export function CommentThread({
   onDelete: (commentId: string) => void;
   onReply: (commentId: string | null) => void;
   replyingToId: string | null;
+  highlightCommentId?: string | null;
+  commentRefs?: MutableRefObject<Record<string, View | null>>;
 }) {
   const threaded = useMemo(() => flattenCommentTree(buildCommentTree(comments)), [comments]);
 
@@ -83,8 +87,23 @@ export function CommentThread({
         const isReplying = replyingToId === comment.id;
 
         return (
-          <View key={comment.id} style={{ marginLeft: depth * INDENT, marginBottom: 8 }}>
-            <View style={[styles.commentRow, { borderColor: theme.glassBorder }]}>
+          <View
+            key={comment.id}
+            ref={(node) => {
+              if (commentRefs) commentRefs.current[comment.id] = node;
+            }}
+            collapsable={false}
+            style={{ marginLeft: depth * INDENT, marginBottom: 8 }}
+          >
+            <View
+              style={[
+                styles.commentRow,
+                {
+                  borderColor: highlightCommentId === comment.id ? theme.accent : theme.glassBorder,
+                  backgroundColor: highlightCommentId === comment.id ? `${theme.accent}14` : 'transparent',
+                },
+              ]}
+            >
               <Avatar initials={comment.author_initials} color={comment.author_color} size={28} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>{comment.author_name}</Text>

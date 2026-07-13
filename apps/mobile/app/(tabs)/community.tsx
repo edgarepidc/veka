@@ -104,24 +104,29 @@ export default function CommunityScreen() {
     refresh: refreshAssemblies,
   } = useAssemblies(primary);
   const { notifications, unreadCount, markRead, markAllRead } = useCommunityNotifications();
-  const params = useLocalSearchParams<{ postId?: string | string[] }>();
+  const params = useLocalSearchParams<{ postId?: string | string[]; commentId?: string | string[] }>();
   const postIdParam = Array.isArray(params.postId) ? params.postId[0] : params.postId;
+  const commentIdParam = Array.isArray(params.commentId) ? params.commentId[0] : params.commentId;
 
   const scrollRef = useRef<ScrollView>(null);
   const contentRef = useRef<View>(null);
   const postRefs = useRef<Record<string, View | null>>({});
+  const commentRefs = useRef<Record<string, View | null>>({});
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
   const [showInbox, setShowInbox] = useState(false);
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
-  const [scrollToPostId, setScrollToPostId] = useState<string | null>(null);
+  const [highlightCommentId, setHighlightCommentId] = useState<string | null>(null);
+  const [scrollTarget, setScrollTarget] = useState<{ postId: string; commentId?: string | null } | null>(
+    null,
+  );
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [sendingComment, setSendingComment] = useState<Record<string, boolean>>({});
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
 
-  function openPost(postId: string) {
+  function openPost(postId: string, commentId?: string | null) {
     const post = posts.find((item) => item.id === postId);
     setTab('feed');
     if (post?.post_type === 'poll') setFilter('poll');
@@ -129,36 +134,68 @@ export default function CommunityScreen() {
     else if (post?.post_type === 'announcement') setFilter('announcement');
     else setFilter('all');
     setShowInbox(false);
-    setScrollToPostId(postId);
+    setScrollTarget({ postId, commentId: commentId ?? null });
   }
 
   useEffect(() => {
-    if (postIdParam) setScrollToPostId(postIdParam);
-  }, [postIdParam]);
+    if (postIdParam) setScrollTarget({ postId: postIdParam, commentId: commentIdParam ?? null });
+  }, [postIdParam, commentIdParam]);
 
   useEffect(() => {
-    if (!scrollToPostId || loading) return;
-    if (!posts.some((item) => item.id === scrollToPostId)) return;
+    if (!scrollTarget || loading) return;
+    const { postId, commentId } = scrollTarget;
+    if (!posts.some((item) => item.id === postId)) return;
 
     const timer = setTimeout(() => {
-      const postView = postRefs.current[scrollToPostId];
       const content = contentRef.current;
-      if (!postView || !content) return;
+      const postView = postRefs.current[postId];
+      if (!content || !postView) {
+        setScrollTarget(null);
+        return;
+      }
 
-      postView.measureLayout(
-        content,
-        (_x, y) => {
-          scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-          setHighlightPostId(scrollToPostId);
-          setScrollToPostId(null);
-          setTimeout(() => setHighlightPostId(null), 2500);
-        },
-        () => undefined,
-      );
+      const scrollToView = (view: View, onDone: () => void) => {
+        view.measureLayout(
+          content,
+          (_x, y) => {
+            scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+            onDone();
+          },
+          () => onDone(),
+        );
+      };
+
+      scrollToView(postView, () => {
+        if (commentId) {
+          setTimeout(() => {
+            const commentView = commentRefs.current[commentId];
+            if (!commentView) {
+              setHighlightPostId(postId);
+              setScrollTarget(null);
+              setTimeout(() => setHighlightPostId(null), 2500);
+              return;
+            }
+            scrollToView(commentView, () => {
+              setHighlightPostId(postId);
+              setHighlightCommentId(commentId);
+              setScrollTarget(null);
+              setTimeout(() => {
+                setHighlightPostId(null);
+                setHighlightCommentId(null);
+              }, 2500);
+            });
+          }, 220);
+          return;
+        }
+
+        setHighlightPostId(postId);
+        setScrollTarget(null);
+        setTimeout(() => setHighlightPostId(null), 2500);
+      });
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [scrollToPostId, loading, posts]);
+  }, [scrollTarget, loading, posts]);
 
   function confirmVote(postId: string, optionId: string, label: string) {
     Alert.alert('Confirmar voto', `¿Registrar tu voto por "${label}"? No podrás cambiarlo después.`, [
@@ -291,7 +328,7 @@ export default function CommunityScreen() {
                     key={item.id}
                     onPress={() => {
                       void markRead(item.id);
-                      if (item.entity_id) openPost(item.entity_id);
+                      if (item.entity_id) openPost(item.entity_id, item.comment_id);
                     }}
                     style={[
                       styles.inboxItem,
@@ -551,6 +588,8 @@ export default function CommunityScreen() {
                           onDelete={(id) => void handleDeleteComment(id)}
                           onReply={setReplyingToId}
                           replyingToId={replyingToId}
+                          highlightCommentId={highlightCommentId}
+                          commentRefs={commentRefs}
                         />
                       ) : null}
 

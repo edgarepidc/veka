@@ -10,7 +10,9 @@ export interface UserNotification {
   notification_type: string;
   title: string;
   body: string | null;
+  entity_type: string;
   entity_id: string | null;
+  comment_id: string | null;
   read_at: string | null;
   created_at: string;
 }
@@ -41,7 +43,7 @@ export function CommunityNotificationsProvider({ children }: { children: ReactNo
 
     const { data } = await supabase
       .from('user_notifications')
-      .select('id, condominium_id, notification_type, title, body, entity_id, read_at, created_at')
+      .select('id, condominium_id, notification_type, title, body, entity_type, entity_id, comment_id, read_at, created_at')
       .eq('user_id', user.id)
       .eq('condominium_id', primary.condominium_id)
       .order('created_at', { ascending: false })

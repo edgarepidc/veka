@@ -6,6 +6,8 @@ export type CommunityNotificationType =
   | 'community_poll'
   | 'community_poll_closed'
   | 'community_comment'
+  | 'community_comment_reply'
+  | 'community_post_comment'
   | 'community_announcement';
 
 export interface CreateUserNotificationInput {
@@ -15,6 +17,7 @@ export interface CreateUserNotificationInput {
   title: string;
   body?: string | null;
   entityId?: string | null;
+  commentId?: string | null;
 }
 
 async function getCondoMemberUserIds(admin: SupabaseClient, condominiumId: string): Promise<string[]> {
@@ -69,6 +72,7 @@ export async function createUserNotifications(
     body: input.body ?? null,
     entity_type: 'post',
     entity_id: input.entityId ?? null,
+    comment_id: input.commentId ?? null,
   }));
 
   const { error } = await admin.from('user_notifications').insert(rows);
