@@ -457,7 +457,7 @@ export function MaintenanceManager({
               clusterId={scopeFilter}
               onCondominiumChange={() => {}}
               onClusterChange={setScopeFilter}
-              align="start"
+              align="end"
               allLabel="Todo"
             />
           </div>

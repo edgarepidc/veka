@@ -226,7 +226,7 @@ export function SpacesManager({
               clusterId={scopeFilter}
               onCondominiumChange={() => {}}
               onClusterChange={setScopeFilter}
-              align="start"
+              align="end"
               allLabel="Todo"
             />
           </div>
