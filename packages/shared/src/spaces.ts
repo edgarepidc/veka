@@ -197,8 +197,9 @@ export function amenityAppliesToUnitCluster(
 export function amenityScopeLabel(
   clusterId: string | null | undefined,
   clusterName?: string | null,
+  condominiumName?: string | null,
 ): string {
-  if (!clusterId) return 'Todo el fraccionamiento';
+  if (!clusterId) return condominiumName?.trim() || 'Todo el fraccionamiento';
   return clusterName ?? 'Torre / cluster';
 }
 

@@ -472,6 +472,23 @@ export function useSpaces(primary: ActiveMembership | null) {
 
   const clearActionError = useCallback(() => setActionError(null), []);
 
+  const getReservationById = useCallback(
+    async (reservationId: string): Promise<Reservation | null> => {
+      if (!user || !primary?.unit_id) return null;
+
+      const { data } = await supabase
+        .from('reservations')
+        .select('id, amenity_id, starts_at, ends_at, status, amenity:amenities (name, image_url)')
+        .eq('id', reservationId)
+        .eq('unit_id', primary.unit_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      return (data as Reservation | null) ?? null;
+    },
+    [primary?.unit_id, user],
+  );
+
   return {
     amenities: visibleAmenities,
     allAmenities: amenities,
@@ -486,6 +503,7 @@ export function useSpaces(primary: ActiveMembership | null) {
     blockIfOverdue,
     checkUnitDebt,
     clearActionError,
+    getReservationById,
     refresh,
     fetchBookedSlots,
     createReservation,

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -82,6 +82,7 @@ export default function SpacesScreen() {
     blockIfOverdue,
     checkUnitDebt,
     clearActionError,
+    getReservationById,
     refresh,
     fetchBookedSlots,
     createReservation,
@@ -99,7 +100,9 @@ export default function SpacesScreen() {
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [reservationsView, setReservationsView] = useState<ReservationsView>('list');
+  const handledReservationParam = useRef<string | null>(null);
 
   const amenityById = useMemo(
     () => new Map(allAmenities.map((amenity) => [amenity.id, amenity])),
@@ -110,6 +113,7 @@ export default function SpacesScreen() {
     async (amenity: Amenity) => {
       clearActionError();
       setSuccessMessage(null);
+      setInfoMessage(null);
       if (blockIfOverdue && amenity.restrict_if_overdue) {
         const delinquent = await checkUnitDebt();
         if (delinquent) {
@@ -128,13 +132,29 @@ export default function SpacesScreen() {
 
   useEffect(() => {
     const reservationId = params.reservationId;
-    if (!reservationId || reservations.length === 0) return;
-    const found = reservations.find((row) => row.id === reservationId);
-    if (found) {
+    if (!reservationId || loading) return;
+    if (handledReservationParam.current === reservationId) return;
+
+    void (async () => {
+      const fromList = reservations.find((row) => row.id === reservationId) ?? null;
+      const found = fromList ?? (await getReservationById(reservationId));
+      handledReservationParam.current = reservationId;
       setTab('reservations');
+
+      if (!found) {
+        setInfoMessage('Esta reserva ya no está disponible o no pertenece a tu unidad.');
+        return;
+      }
+
+      if (found.status === 'cancelled') {
+        setInfoMessage('Tu reserva fue cancelada o rechazada. Abre el detalle para más información.');
+      } else if (found.status === 'confirmed') {
+        setSuccessMessage('Tu reserva está confirmada.');
+      }
+
       setSelectedReservation(found);
-    }
-  }, [params.reservationId, reservations]);
+    })();
+  }, [getReservationById, loading, params.reservationId, reservations]);
 
   if (membershipLoading || clustersLoading || loading) {
     return (
@@ -168,6 +188,7 @@ export default function SpacesScreen() {
               onRefresh={() => {
                 clearActionError();
                 setSuccessMessage(null);
+                setInfoMessage(null);
                 void refresh();
               }}
               tintColor={theme.accent}
@@ -196,6 +217,13 @@ export default function SpacesScreen() {
               </Text>
             </View>
           ) : null}
+          {infoMessage ? (
+            <View style={[styles.banner, surfaceAccentBanner(theme, 'orange')]}>
+              <Text style={[styles.success, { color: accentColor(theme, 'orange'), marginHorizontal: 0, marginBottom: 0 }]}>
+                {infoMessage}
+              </Text>
+            </View>
+          ) : null}
           {actionError ? (
             <View style={[styles.banner, surfaceAccentBanner(theme, 'danger')]}>
               <Text style={[styles.error, { color: accentColor(theme, 'danger'), marginHorizontal: 0, marginBottom: 0 }]}>
@@ -220,8 +248,13 @@ export default function SpacesScreen() {
 
             {tab === 'spaces' ? (
               amenities.length === 0 ? (
-                <GlassCard variant="muted">
-                  <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay espacios en esta vista.</Text>
+                <GlassCard>
+                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin espacios en esta vista</Text>
+                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                    {hasClusters
+                      ? 'Prueba otro alcance o espera a que administración publique amenidades.'
+                      : 'Cuando administración publique amenidades, aparecerán aquí.'}
+                  </Text>
                 </GlassCard>
               ) : (
                 amenities.map((amenity) => {
@@ -292,8 +325,14 @@ export default function SpacesScreen() {
                 </View>
 
                 {reservations.length === 0 ? (
-                  <GlassCard variant="muted">
-                    <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
+                  <GlassCard>
+                    <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin reservas próximas</Text>
+                    <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                      Reserva un espacio común desde la pestaña Espacios.
+                    </Text>
+                    <Pressable onPress={() => setTab('spaces')} style={{ marginTop: 12, alignSelf: 'center' }}>
+                      <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Ver espacios →</Text>
+                    </Pressable>
                   </GlassCard>
                 ) : reservationsView === 'calendar' ? (
                   <ReservationsCalendar
@@ -363,8 +402,14 @@ export default function SpacesScreen() {
         onReserve={async (startsAt, endsAt) => {
           if (!selectedAmenity) return { error: null, pending: false };
           const result = await createReservation(selectedAmenity, startsAt, endsAt);
-          if (!result.error && result.pending) {
-            setSuccessMessage('Solicitud enviada. La administración debe aprobar tu reserva.');
+          if (!result.error) {
+            setInfoMessage(null);
+            if (result.pending) {
+              setSuccessMessage('Solicitud enviada. La administración debe aprobar tu reserva.');
+            } else {
+              setSuccessMessage('Reserva confirmada. Ya puedes verla en Mis reservas.');
+              setTab('reservations');
+            }
           }
           return result;
         }}
@@ -411,8 +456,12 @@ export default function SpacesScreen() {
         }
         onCancel={async (reservationId) => {
           setCancellingId(reservationId);
-          await cancelReservation(reservationId);
+          const result = await cancelReservation(reservationId);
           setCancellingId(null);
+          if (!result.error) {
+            setInfoMessage(null);
+            setSuccessMessage('Reserva cancelada.');
+          }
         }}
         formatRange={formatReservationRange}
         fallbackEmoji={

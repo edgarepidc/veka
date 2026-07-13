@@ -26,15 +26,18 @@ interface ReservationDetailModalProps {
   fallbackEmoji: string;
 }
 
-function reservationTone(status: Reservation['status']): 'green' | 'orange' | 'gray' {
+function reservationTone(status: Reservation['status']): 'green' | 'orange' | 'gray' | 'red' {
   if (status === 'pending') return 'orange';
   if (status === 'confirmed') return 'green';
+  if (status === 'cancelled') return 'red';
   return 'gray';
 }
 
 function statusLabel(status: Reservation['status']): string {
   if (status === 'pending') return 'Pendiente de aprobación';
   if (status === 'confirmed') return 'Confirmada';
+  if (status === 'cancelled') return 'Cancelada';
+  if (status === 'completed') return 'Completada';
   return status;
 }
 
@@ -121,6 +124,17 @@ export function ReservationDetailModal({
             <Text style={[styles.note, { color: colors.muted }]}>
               La administración debe aprobar esta solicitud antes de que quede confirmada.
             </Text>
+          ) : null}
+
+          {reservation.status === 'cancelled' ? (
+            <>
+              <Text style={[styles.note, { color: colors.muted }]}>
+                Esta reserva ya no está activa. Puedes volver a reservar el espacio si aún está disponible.
+              </Text>
+              {onRebook ? (
+                <PrimaryButton label="Reservar de nuevo" onPress={onRebook} style={{ marginTop: 20 }} />
+              ) : null}
+            </>
           ) : null}
 
           {reservation.status === 'confirmed' || reservation.status === 'pending' ? (

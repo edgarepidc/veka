@@ -93,7 +93,7 @@ function RulesSummaryChip({
 }: {
   label: string;
   value: string;
-  tone?: 'neutral' | 'green' | 'amber';
+  tone?: 'neutral' | 'green' | 'amber' | 'red' | 'gray';
 }) {
   const mappedTone = tone === 'neutral' ? 'muted' : tone;
   return <StatChip label={label} value={value} tone={mappedTone} />;
@@ -162,14 +162,25 @@ export function SpacesManager({
   const rulesFormKey = [blockIfOverdue, notifyReservationUpdates].join('|');
 
   const scopeLabel = useMemo(() => {
-    if (!scopeFilter) return 'Todo el fraccionamiento';
+    if (!scopeFilter) return 'Todo';
     return clusters.find((cluster) => cluster.id === scopeFilter)?.name ?? 'Torre';
   }, [clusters, scopeFilter]);
 
-  const formClusterId = isNew ? scopeFilter : (editing?.cluster_id ?? '');
-  const formScopeLabel = isNew
-    ? scopeLabel
-    : amenityScopeLabel(editing?.cluster_id, editing?.cluster?.name);
+  const formClusterId = editing?.cluster_id ?? '';
+  const formScopeLabel = amenityScopeLabel(editing?.cluster_id, editing?.cluster?.name, 'Todo');
+
+  function openNewAmenity() {
+    const cluster = scopeFilter
+      ? (clusters.find((row) => row.id === scopeFilter) ?? null)
+      : null;
+    setEditing({
+      ...EMPTY_AMENITY,
+      id: '',
+      created_at: new Date().toISOString(),
+      cluster_id: scopeFilter || null,
+      cluster: cluster ? { name: cluster.name } : null,
+    });
+  }
 
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
@@ -216,6 +227,7 @@ export function SpacesManager({
               onCondominiumChange={() => {}}
               onClusterChange={setScopeFilter}
               align="start"
+              allLabel="Todo"
             />
           </div>
         ) : null}
@@ -240,12 +252,12 @@ export function SpacesManager({
                 <RulesSummaryChip
                   label="Bloqueo por mora"
                   value={blockIfOverdue ? 'Activo' : 'Inactivo'}
-                  tone={blockIfOverdue ? 'amber' : 'neutral'}
+                  tone={blockIfOverdue ? 'amber' : 'gray'}
                 />
                 <RulesSummaryChip
                   label="Notificaciones"
                   value={notifyReservationUpdates ? 'Activas' : 'Inactivas'}
-                  tone={notifyReservationUpdates ? 'green' : 'neutral'}
+                  tone={notifyReservationUpdates ? 'green' : 'red'}
                 />
               </div>
             ) : null}
@@ -256,7 +268,7 @@ export function SpacesManager({
           <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4">
             <p className="text-sm text-muted">
               Activa el bloqueo por adeudos (cada amenidad puede marcarse con restricción por mora) y
-              las notificaciones al residente.
+              las notificaciones al residente al aprobar, rechazar o cancelar.
             </p>
             <form
               key={rulesFormKey}
@@ -283,7 +295,7 @@ export function SpacesManager({
                   name="notify_reservation_updates"
                   defaultChecked={notifyReservationUpdates}
                 />
-                Notificar al residente cuando se aprueba o cancela su reserva
+                Notificar al residente cuando se aprueba, rechaza o cancela su reserva
               </label>
               <div className="flex flex-wrap items-end gap-2">
                 <button
@@ -326,14 +338,7 @@ export function SpacesManager({
           <div className="flex flex-wrap items-center justify-end gap-3">
             <button
               type="button"
-              onClick={() =>
-                setEditing({
-                  ...EMPTY_AMENITY,
-                  id: '',
-                  created_at: new Date().toISOString(),
-                  cluster: null,
-                })
-              }
+              onClick={openNewAmenity}
               className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
             >
               Nueva amenidad
@@ -588,7 +593,7 @@ export function SpacesManager({
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-[var(--text)]">{amenity.name}</p>
                       <p className="mt-1 text-xs text-subtle">
-                        {amenityScopeLabel(amenity.cluster_id, amenity.cluster?.name)}
+                        {amenityScopeLabel(amenity.cluster_id, amenity.cluster?.name, 'Todo')}
                       </p>
                       {amenity.description ? (
                         <p className="mt-1 text-sm text-muted">{amenity.description}</p>
@@ -704,6 +709,7 @@ export function SpacesManager({
                         {amenityScopeLabel(
                           reservation.amenity?.cluster_id,
                           reservation.amenity?.cluster?.name,
+                          'Todo',
                         )}{' '}
                         · Hasta {formatDateTime(reservation.ends_at)}
                       </p>

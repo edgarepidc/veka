@@ -580,8 +580,7 @@ export async function deliverAdminPendingReservation(
       skipped += 1;
     } else {
       const result = await sendExpoPush(tokens, title, message, {
-        screen: 'spaces',
-        reservationId: input.reservationId,
+        kind: 'admin_pending_reservation',
       });
       pushSent += result.sent;
       failures += result.failed;

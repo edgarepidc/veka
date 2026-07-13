@@ -57,6 +57,7 @@ export function FinanceScopeFilter({
   onCondominiumChange,
   onClusterChange,
   align = 'end',
+  allLabel = 'Todo el condominio',
 }: {
   condominiums: CondominiumOption[];
   clusters: ClusterOption[];
@@ -65,6 +66,7 @@ export function FinanceScopeFilter({
   onCondominiumChange: (id: string) => void;
   onClusterChange: (id: string) => void;
   align?: 'start' | 'end';
+  allLabel?: string;
 }) {
   const showCondominium = condominiums.length > 1;
   const chipAlign = align === 'end' ? 'justify-end' : 'justify-start';
@@ -90,7 +92,7 @@ export function FinanceScopeFilter({
       <div className={`flex flex-wrap gap-2 ${chipAlign}`}>
         <ScopeChip
           active={clusterId === ''}
-          label="Todo el condominio"
+          label={allLabel}
           icon={IoBusinessOutline}
           iconActive={IoBusiness}
           onClick={() => onClusterChange('')}
