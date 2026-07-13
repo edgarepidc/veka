@@ -14,7 +14,7 @@ export function ticketAccentTone(status: MaintenanceTicketStatus): CardAccentTon
     case 'resolved':
       return 'green';
     case 'closed':
-      return 'purple';
+      return 'green';
     default:
       return 'blue';
   }
@@ -29,7 +29,7 @@ export function ticketTagTone(status: MaintenanceTicketStatus): CardTagTone {
     case 'resolved':
       return 'green';
     case 'closed':
-      return 'gray';
+      return 'green';
     default:
       return 'gray';
   }

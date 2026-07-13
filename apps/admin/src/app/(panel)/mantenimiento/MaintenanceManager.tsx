@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import {
   MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_RECURRENCES,
-  MAINTENANCE_TICKET_STATUSES,
+  MAINTENANCE_TICKET_BOARD_STATUSES,
   RECURRENCE_LABELS,
   STORAGE_BUCKETS,
   WEEKDAY_LABELS,
@@ -17,6 +17,7 @@ import {
   matchesClusterResourceScope,
   recurrenceLabel,
   resolveStorageImageUrl,
+  ticketBoardStatus,
   ticketCategoryLabel,
   ticketStatusLabel,
   ticketAccentTone,
@@ -24,7 +25,7 @@ import {
   routineCardVariant,
   type MaintenancePeriodFilter,
   type MaintenanceRecurrence,
-  type MaintenanceTicketStatus,
+  type MaintenanceTicketBoardStatus,
 } from '@veka/shared';
 
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
@@ -61,15 +62,14 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'mensual', label: 'Mantenimiento mensual' },
 ];
 
-const KANBAN_COLUMNS: { id: MaintenanceTicketStatus; label: string }[] = [
+const KANBAN_COLUMNS: { id: MaintenanceTicketBoardStatus; label: string }[] = [
   { id: 'open', label: 'Abiertos' },
   { id: 'in_progress', label: 'En progreso' },
   { id: 'resolved', label: 'Resueltos' },
-  { id: 'closed', label: 'Cerrados' },
 ];
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
 }
 
 function ticketClusterId(ticket: MaintenanceTicketRow): string | null {
@@ -138,14 +138,19 @@ function TicketCard({
   ) => void;
   onOpenFile: (path: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const boardStatus = ticketBoardStatus(ticket.status);
+  const evidenceCount = (ticket.photo_url ? 1 : 0) + ticket.attachments.length;
+
   return (
-    <GlassCard variant="accent" accent={ticketAccentTone(ticket.status)} className="space-y-3 !p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <GlassCard variant="accent" accent={ticketAccentTone(ticket.status)} className="space-y-2 !p-2.5">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-semibold text-[var(--text)]">{ticket.title}</p>
-          <p className="mt-1 text-[11px] text-subtle">
-            {ticket.unit?.identifier ? `Unidad ${ticket.unit.identifier}` : 'Área común'}
-            {ticket.amenity?.name ? ` · ${ticket.amenity.name}` : ''}
+          <p className="text-sm font-semibold leading-snug text-[var(--text)]">{ticket.title}</p>
+          <p className="mt-0.5 text-[10px] text-subtle">
+            {ticket.unit?.identifier ?? 'Área común'}
+            {' · '}
+            {ticketScopeLabel(ticket)}
             {' · '}
             {formatDate(ticket.created_at)}
           </p>
@@ -153,101 +158,114 @@ function TicketCard({
         <StatusTag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        <span className="glass-tag-blue px-2 py-0.5 text-[10px]">{ticketCategoryLabel(ticket.category)}</span>
-        <span className="glass-tag-gray px-2 py-0.5 text-[10px]">{ticketScopeLabel(ticket)}</span>
-      </div>
-
-      {ticket.description ? <p className="text-sm text-muted line-clamp-3">{ticket.description}</p> : null}
-
-      <div className="flex flex-wrap gap-2">
-        {ticket.photo_url ? (
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="glass-tag-blue px-1.5 py-0.5 text-[10px]">{ticketCategoryLabel(ticket.category)}</span>
+        {evidenceCount > 0 ? (
           <button
             type="button"
-            onClick={() => onOpenFile(ticket.photo_url!)}
-            className="text-xs font-semibold text-accent hover:underline"
+            onClick={() => {
+              if (ticket.photo_url) onOpenFile(ticket.photo_url);
+              else if (ticket.attachments[0]) onOpenFile(ticket.attachments[0].file_url);
+            }}
+            className="text-[10px] font-semibold text-accent hover:underline"
           >
-            Foto del reporte
+            {evidenceCount} evidencia{evidenceCount === 1 ? '' : 's'}
           </button>
         ) : null}
-        {ticket.attachments.map((attachment) => (
-          <button
-            key={attachment.id}
-            type="button"
-            onClick={() => onOpenFile(attachment.file_url)}
-            className="text-xs font-semibold text-accent-2 hover:underline"
-          >
-            {attachment.file_name
-              ?? (isImageStoragePath(attachment.file_url) ? 'Evidencia' : 'PDF')}
-          </button>
-        ))}
       </div>
 
-      {ticket.attachments.length > 0 ? (
-        <ul className="space-y-1">
-          {ticket.attachments.map((attachment) => (
-            <li key={attachment.id} className="flex items-center justify-between gap-2 text-xs text-muted">
-              <span className="truncate">{attachment.file_name ?? attachment.file_url.split('/').pop()}</span>
-              <form action={(fd) => onRun(deleteTicketAttachment, fd, 'Adjunto eliminado.')}>
-                <input type="hidden" name="attachment_id" value={attachment.id} />
-                <button type="submit" disabled={pending} className="text-red-300 hover:underline">
-                  Quitar
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
+      {ticket.description ? (
+        <p className="text-xs text-muted line-clamp-2">{ticket.description}</p>
       ) : null}
 
-      <form
-        action={(fd) => onRun(addTicketAttachment, fd, 'Evidencia agregada.')}
-        className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/40 p-2"
-      >
-        <input type="hidden" name="ticket_id" value={ticket.id} />
-        <FileUpload
-          bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
-          inputName="file_url"
-          fileNameInputName="file_name"
-          label="Agregar evidencia"
-          hint="Imagen o PDF (máx. 2 MB / 5 MB)."
-          uploadButtonLabel="Subir"
-          buildPath={(ext) => maintenanceFilePath(condominiumId, 'tickets', crypto.randomUUID(), ext)}
-        />
-        <button type="submit" disabled={pending} className="glass-btn-secondary w-full text-xs">
-          Guardar adjunto
-        </button>
-      </form>
+      {ticket.admin_notes ? (
+        <p className="text-[11px] text-accent line-clamp-2">Nota: {ticket.admin_notes}</p>
+      ) : null}
 
       <div className="flex flex-wrap gap-1">
-        {MAINTENANCE_TICKET_STATUSES.filter((status) => status !== ticket.status).map((status) => (
+        {MAINTENANCE_TICKET_BOARD_STATUSES.filter((status) => status !== boardStatus).map((status) => (
           <form key={status} action={(fd) => onRun(updateTicketStatus, fd, 'Ticket actualizado.')}>
             <input type="hidden" name="ticket_id" value={ticket.id} />
             <input type="hidden" name="status" value={status} />
             <input type="hidden" name="admin_notes" value={ticket.admin_notes ?? ''} />
-            <button type="submit" disabled={pending} className="glass-tag-gray px-2 py-1 text-[10px] hover:opacity-80">
+            <button type="submit" disabled={pending} className="glass-tag-gray px-2 py-0.5 text-[10px] hover:opacity-80">
               → {ticketStatusLabel(status)}
             </button>
           </form>
         ))}
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="ml-auto text-[10px] font-semibold text-subtle hover:text-accent"
+        >
+          {expanded ? 'Menos' : 'Notas / evidencia'}
+        </button>
       </div>
 
-      <form action={(fd) => onRun(updateTicketStatus, fd, 'Ticket actualizado.')} className="space-y-2">
-        <input type="hidden" name="ticket_id" value={ticket.id} />
-        <input type="hidden" name="status" value={ticket.status} />
-        <textarea
-          name="admin_notes"
-          rows={2}
-          defaultValue={ticket.admin_notes ?? ''}
-          placeholder="Notas para el residente"
-          className="glass-input text-xs"
-        />
-        <button type="submit" disabled={pending} className="glass-btn-primary w-full text-xs">
-          Guardar notas
-        </button>
-      </form>
+      {expanded ? (
+        <div className="space-y-2 border-t border-[var(--border)] pt-2">
+          {ticket.attachments.length > 0 ? (
+            <ul className="space-y-1">
+              {ticket.attachments.map((attachment) => (
+                <li key={attachment.id} className="flex items-center justify-between gap-2 text-[11px] text-muted">
+                  <button
+                    type="button"
+                    onClick={() => onOpenFile(attachment.file_url)}
+                    className="truncate text-left font-semibold text-accent hover:underline"
+                  >
+                    {attachment.file_name
+                      ?? (isImageStoragePath(attachment.file_url) ? 'Evidencia' : 'PDF')}
+                  </button>
+                  <form action={(fd) => onRun(deleteTicketAttachment, fd, 'Adjunto eliminado.')}>
+                    <input type="hidden" name="attachment_id" value={attachment.id} />
+                    <button type="submit" disabled={pending} className="text-red-300 hover:underline">
+                      Quitar
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <form
+            action={(fd) => onRun(addTicketAttachment, fd, 'Evidencia agregada.')}
+            className="space-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)]/40 p-2"
+          >
+            <input type="hidden" name="ticket_id" value={ticket.id} />
+            <FileUpload
+              bucket={STORAGE_BUCKETS.MAINTENANCE_FILES}
+              inputName="file_url"
+              fileNameInputName="file_name"
+              label="Agregar evidencia"
+              hint="Imagen o PDF"
+              uploadButtonLabel="Subir"
+              buildPath={(ext) => maintenanceFilePath(condominiumId, 'tickets', crypto.randomUUID(), ext)}
+            />
+            <button type="submit" disabled={pending} className="glass-btn-secondary w-full text-xs">
+              Guardar adjunto
+            </button>
+          </form>
+
+          <form action={(fd) => onRun(updateTicketStatus, fd, 'Ticket actualizado.')} className="space-y-2">
+            <input type="hidden" name="ticket_id" value={ticket.id} />
+            <input type="hidden" name="status" value={boardStatus} />
+            <textarea
+              name="admin_notes"
+              rows={2}
+              defaultValue={ticket.admin_notes ?? ''}
+              placeholder="Notas para el residente"
+              className="glass-input text-xs"
+            />
+            <button type="submit" disabled={pending} className="glass-btn-primary w-full text-xs">
+              Guardar notas
+            </button>
+          </form>
+        </div>
+      ) : null}
     </GlassCard>
   );
 }
+
 
 export function MaintenanceManager({
   tickets,
@@ -306,14 +324,13 @@ export function MaintenanceManager({
   );
 
   const ticketsByStatus = useMemo(() => {
-    const map: Record<MaintenanceTicketStatus, MaintenanceTicketRow[]> = {
+    const map: Record<MaintenanceTicketBoardStatus, MaintenanceTicketRow[]> = {
       open: [],
       in_progress: [],
       resolved: [],
-      closed: [],
     };
     for (const ticket of filteredTickets) {
-      map[ticket.status].push(ticket);
+      map[ticketBoardStatus(ticket.status)].push(ticket);
     }
     return map;
   }, [filteredTickets]);
@@ -388,7 +405,7 @@ export function MaintenanceManager({
               <p className="text-sm text-subtle">No hay tickets en este alcance.</p>
             </GlassCard>
           ) : (
-            <div className="grid gap-3 xl:grid-cols-4 lg:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-3">
               {KANBAN_COLUMNS.map((column) => (
                 <div key={column.id} className="min-w-0 space-y-2">
                   <div className="flex items-center justify-between px-1">

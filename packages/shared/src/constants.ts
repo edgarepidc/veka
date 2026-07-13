@@ -77,6 +77,10 @@ export type ReserveIncomeCategory = (typeof RESERVE_INCOME_CATEGORIES)[number];
 export const MAINTENANCE_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export type MaintenanceTicketStatus = (typeof MAINTENANCE_TICKET_STATUSES)[number];
 
+/** Statuses shown on the admin board / status actions. `closed` is legacy (= resolved). */
+export const MAINTENANCE_TICKET_BOARD_STATUSES = ['open', 'in_progress', 'resolved'] as const;
+export type MaintenanceTicketBoardStatus = (typeof MAINTENANCE_TICKET_BOARD_STATUSES)[number];
+
 export const MAINTENANCE_TICKET_CATEGORIES = [
   'unit',
   'common_area',

@@ -4,8 +4,9 @@ import { revalidatePath } from 'next/cache';
 import type { MaintenanceTicketStatus } from '@veka/shared';
 import {
   MAINTENANCE_RECURRENCES,
-  MAINTENANCE_TICKET_STATUSES,
+  MAINTENANCE_TICKET_BOARD_STATUSES,
   parseRoutineImageUrlsFromForm,
+  ticketBoardStatus,
   ticketStatusLabel,
 } from '@veka/shared';
 import type { MaintenanceRecurrence } from '@veka/shared';
@@ -26,11 +27,15 @@ export async function updateTicketStatus(formData: FormData) {
   if (!user) return { error: 'No autorizado' };
 
   const ticketId = String(formData.get('ticket_id') ?? '');
-  const status = String(formData.get('status') ?? '') as MaintenanceTicketStatus;
+  const rawStatus = String(formData.get('status') ?? '') as MaintenanceTicketStatus;
   const adminNotes = String(formData.get('admin_notes') ?? '').trim();
 
   if (!ticketId) return { error: 'Ticket inválido.' };
-  if (!MAINTENANCE_TICKET_STATUSES.includes(status)) return { error: 'Estado inválido.' };
+  if (!(MAINTENANCE_TICKET_BOARD_STATUSES as readonly string[]).includes(rawStatus) && rawStatus !== 'closed') {
+    return { error: 'Estado inválido.' };
+  }
+
+  const status = ticketBoardStatus(rawStatus);
 
   const { data: ticket } = await supabase
     .from('maintenance_tickets')
@@ -46,7 +51,7 @@ export async function updateTicketStatus(formData: FormData) {
     .update({
       status,
       admin_notes: adminNotes || null,
-      resolved_at: status === 'resolved' || status === 'closed' ? new Date().toISOString() : null,
+      resolved_at: status === 'resolved' ? new Date().toISOString() : null,
     })
     .eq('id', ticketId)
     .eq('condominium_id', condominiumId);
