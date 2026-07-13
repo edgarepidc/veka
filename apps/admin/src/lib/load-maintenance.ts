@@ -62,6 +62,7 @@ export interface MaintenanceTicketRow {
 export interface AmenityOption {
   id: string;
   name: string;
+  cluster_id: string | null;
 }
 
 function asSingle<T>(value: T | T[] | null | undefined): T | null {
@@ -79,19 +80,34 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
   const condoId = condominiumId ?? (await getLoaderCondominiumId());
   const supabase = await createClient();
 
-  const [ticketsRes, routinesRes, amenitiesRes, clustersRes] = await Promise.all([
-    supabase
-      .from('maintenance_tickets')
-      .select(
-        `
+  const ticketSelectWithAttachments = `
         id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at,
         unit:units(identifier, cluster_id, cluster:clusters(name)),
         amenity:amenities(name, cluster_id),
         attachments:maintenance_ticket_attachments(id, file_url, file_name, sort_order)
-      `,
-      )
+      `;
+  const ticketSelectFallback = `
+        id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at,
+        unit:units(identifier, cluster_id, cluster:clusters(name)),
+        amenity:amenities(name, cluster_id)
+      `;
+
+  let ticketsRes: { data: unknown[] | null; error: { message: string } | null } = await supabase
+    .from('maintenance_tickets')
+    .select(ticketSelectWithAttachments)
+    .eq('condominium_id', condoId)
+    .order('created_at', { ascending: false });
+
+  if (ticketsRes.error) {
+    console.error('[loadMaintenanceData] tickets with attachments failed:', ticketsRes.error.message);
+    ticketsRes = await supabase
+      .from('maintenance_tickets')
+      .select(ticketSelectFallback)
       .eq('condominium_id', condoId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false });
+  }
+
+  const [routinesRes, amenitiesRes, clustersRes] = await Promise.all([
     supabase
       .from('maintenance_routines')
       .select(
@@ -102,12 +118,16 @@ export async function loadMaintenanceData(condominiumId?: string): Promise<{
       .order('sort_order', { ascending: true }),
     supabase
       .from('amenities')
-      .select('id, name')
+      .select('id, name, cluster_id')
       .eq('condominium_id', condoId)
       .eq('is_active', true)
       .order('name'),
     supabase.from('clusters').select('id, name').eq('condominium_id', condoId).order('name'),
   ]);
+
+  if (ticketsRes.error) {
+    console.error('[loadMaintenanceData] tickets fallback failed:', ticketsRes.error.message);
+  }
 
   const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
   const routineIds = routineRows.map((row) => row.id);

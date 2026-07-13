@@ -271,14 +271,38 @@ export function MaintenanceManager({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const routineGroups = useMemo(() => groupRoutinesByWeekday(routines), [routines]);
-
   const filteredTickets = useMemo(
     () =>
       tickets.filter((ticket) =>
         matchesClusterResourceScope(ticketClusterId(ticket), scopeFilter || 'all'),
       ),
     [scopeFilter, tickets],
+  );
+
+  const filteredRoutines = useMemo(
+    () =>
+      routines.filter((routine) =>
+        matchesClusterResourceScope(routine.amenity?.cluster_id ?? null, scopeFilter || 'all'),
+      ),
+    [routines, scopeFilter],
+  );
+
+  const filteredRoutineGroups = useMemo(
+    () => groupRoutinesByWeekday(filteredRoutines),
+    [filteredRoutines],
+  );
+
+  const filteredAmenities = useMemo(
+    () =>
+      amenities.filter((amenity) =>
+        matchesClusterResourceScope(amenity.cluster_id, scopeFilter || 'all'),
+      ),
+    [amenities, scopeFilter],
+  );
+
+  const clusterNameById = useMemo(
+    () => new Map(clusters.map((cluster) => [cluster.id, cluster.name])),
+    [clusters],
   );
 
   const ticketsByStatus = useMemo(() => {
@@ -413,7 +437,7 @@ export function MaintenanceManager({
                   <option value="" className="bg-slate-900">
                     Área común (general)
                   </option>
-                  {amenities.map((a) => (
+                  {filteredAmenities.map((a) => (
                     <option key={a.id} value={a.id} className="bg-slate-900">
                       {a.name}
                     </option>
@@ -479,7 +503,7 @@ export function MaintenanceManager({
                   <option value="" disabled className="bg-slate-900">
                     Selecciona actividad
                   </option>
-                  {routines.map((routine) => (
+                  {filteredRoutines.map((routine) => (
                     <option key={routine.id} value={routine.id} className="bg-slate-900">
                       {routine.title}
                     </option>
@@ -524,10 +548,10 @@ export function MaintenanceManager({
             <p className="mt-2 text-xs text-subtle">{MAINTENANCE_PERIOD_LABELS[periodFilter]}</p>
 
             <div className="mt-4 space-y-4">
-              {routines.length === 0 ? (
-                <p className="text-sm text-subtle">Sin actividades programadas todavía.</p>
+              {filteredRoutines.length === 0 ? (
+                <p className="text-sm text-subtle">Sin actividades en este alcance.</p>
               ) : (
-                routineGroups.map((group) =>
+                filteredRoutineGroups.map((group) =>
                   group.items.length === 0 ? null : (
                     <div key={group.label}>
                       <p className="text-xs font-bold uppercase tracking-wide text-subtle">{group.label}</p>
@@ -546,6 +570,14 @@ export function MaintenanceManager({
                                 <p className="font-medium text-[var(--text)]">{routine.title}</p>
                                 <p className="text-xs text-subtle">
                                   {routine.amenity?.name ?? 'Áreas comunes'}
+                                  {' · '}
+                                  {amenityScopeLabel(
+                                    routine.amenity?.cluster_id ?? null,
+                                    routine.amenity?.cluster_id
+                                      ? (clusterNameById.get(routine.amenity.cluster_id) ?? null)
+                                      : null,
+                                    'Todo',
+                                  )}
                                   {' · '}
                                   {recurrenceLabel(routine.recurrence)}
                                   {routine.monthly_day ? ` · día ${routine.monthly_day}` : ''}

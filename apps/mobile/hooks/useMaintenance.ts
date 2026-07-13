@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MaintenanceRecurrence, MaintenanceTicketCategory, MaintenanceTicketStatus } from '@veka/shared';
 import {
   STORAGE_BUCKETS,
-  amenityAppliesToUnitCluster,
   groupRoutinesByWeekday,
   maintenanceFilePath,
 } from '@veka/shared';
@@ -25,6 +24,13 @@ export interface MaintenanceTicketRow {
   admin_notes: string | null;
   created_at: string;
   resolved_at: string | null;
+  unit_id: string | null;
+  unit: {
+    identifier: string;
+    cluster_id: string | null;
+    cluster: { id: string; name: string } | null;
+  } | null;
+  amenity: { name: string; cluster_id: string | null } | null;
 }
 
 export interface MaintenanceRoutineEvidenceRow {
@@ -51,6 +57,12 @@ export interface MaintenanceRoutineRow {
 export interface MaintenanceAmenityOption {
   id: string;
   name: string;
+  cluster_id: string | null;
+}
+
+function asSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 async function resolveMaintenanceFileUrl(path: string): Promise<string | null> {
@@ -109,13 +121,6 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
     if (!primary?.condominium_id) {
       setTickets([]);
       setRoutines([]);
-      setLoading(false);
-      return;
-    }
-
-    if (mode === 'resident' && !primary.unit_id) {
-      setTickets([]);
-      setRoutines([]);
       setAmenities([]);
       setLoading(false);
       return;
@@ -125,23 +130,24 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
       mode === 'staff'
         ? supabase
             .from('amenities')
-            .select('id, name')
+            .select('id, name, cluster_id')
             .eq('condominium_id', primary.condominium_id)
             .eq('is_active', true)
             .order('name', { ascending: true })
         : Promise.resolve({ data: [] as MaintenanceAmenityOption[], error: null });
 
-    const ticketsPromise =
-      mode === 'resident' && primary.unit_id
-        ? supabase
-            .from('maintenance_tickets')
-            .select('id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at')
-            .eq('unit_id', primary.unit_id)
-            .order('created_at', { ascending: false })
-        : Promise.resolve({ data: [] as MaintenanceTicketRow[], error: null });
-
     const [ticketsRes, routinesRes, amenitiesRes] = await Promise.all([
-      ticketsPromise,
+      supabase
+        .from('maintenance_tickets')
+        .select(
+          `
+          id, title, description, category, status, photo_url, admin_notes, created_at, resolved_at, unit_id,
+          unit:units(identifier, cluster_id, cluster:clusters(id, name)),
+          amenity:amenities(name, cluster_id)
+        `,
+        )
+        .eq('condominium_id', primary.condominium_id)
+        .order('created_at', { ascending: false }),
       supabase
         .from('maintenance_routines')
         .select(
@@ -154,18 +160,43 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
       amenitiesPromise,
     ]);
 
+    if (ticketsRes.error) {
+      setActionError(ticketsRes.error.message);
+    }
+
     setAmenities((amenitiesRes.data as MaintenanceAmenityOption[]) ?? []);
 
-    setTickets((ticketsRes.data as MaintenanceTicketRow[]) ?? []);
-
-    let routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
-
-    if (mode === 'resident') {
-      const unitClusterId = primary.unit?.cluster?.id ?? null;
-      routineRows = routineRows.filter((row) =>
-        amenityAppliesToUnitCluster(row.amenity?.cluster_id, unitClusterId),
+    const ticketRows = ((ticketsRes.data ?? []) as unknown as Record<string, unknown>[]).map((raw) => {
+      const unitRaw = asSingle(raw.unit as MaintenanceTicketRow['unit'] | MaintenanceTicketRow['unit'][] | null);
+      const clusterRaw = unitRaw ? asSingle(unitRaw.cluster) : null;
+      const amenityRaw = asSingle(
+        raw.amenity as MaintenanceTicketRow['amenity'] | MaintenanceTicketRow['amenity'][] | null,
       );
-    }
+      return {
+        id: String(raw.id),
+        title: String(raw.title),
+        description: (raw.description as string | null) ?? null,
+        category: raw.category as MaintenanceTicketCategory,
+        status: raw.status as MaintenanceTicketStatus,
+        photo_url: (raw.photo_url as string | null) ?? null,
+        admin_notes: (raw.admin_notes as string | null) ?? null,
+        created_at: String(raw.created_at),
+        resolved_at: (raw.resolved_at as string | null) ?? null,
+        unit_id: (raw.unit_id as string | null) ?? null,
+        unit: unitRaw
+          ? {
+              identifier: unitRaw.identifier,
+              cluster_id: unitRaw.cluster_id ?? null,
+              cluster: clusterRaw,
+            }
+          : null,
+        amenity: amenityRaw,
+      } satisfies MaintenanceTicketRow;
+    });
+
+    setTickets(ticketRows);
+
+    const routineRows = (routinesRes.data ?? []) as unknown as Omit<MaintenanceRoutineRow, 'evidence'>[];
 
     const routineIds = routineRows.map((row) => row.id);
     const { data: routineEvidence } = routineIds.length
@@ -196,11 +227,12 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
     setRoutines(
       routineRows.map((row) => ({
         ...row,
+        amenity: asSingle(row.amenity as MaintenanceRoutineRow['amenity'] | MaintenanceRoutineRow['amenity'][] | null),
         evidence: evidenceByRoutine.get(row.id) ?? [],
       })),
     );
     setLoading(false);
-  }, [mode, primary?.condominium_id, primary?.unit?.cluster?.id, primary?.unit_id]);
+  }, [mode, primary?.condominium_id]);
 
   useEffect(() => {
     setLoading(true);

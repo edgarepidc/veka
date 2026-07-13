@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_TICKET_CATEGORIES,
+  amenityScopeLabel,
   groupEvidenceByDate,
   matchesClusterResourceScope,
   recurrenceLabel,
@@ -69,14 +70,16 @@ export default function MaintenanceScreen() {
   const [photo, setPhoto] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const myClusterId = primary?.unit?.cluster?.id ?? null;
-
-  const visibleTickets = useMemo(() => {
-    if (scopeFilter === 'all') return tickets;
-    // Resident tickets belong to their unit; keep them when viewing their tower or Todo.
-    if (!myClusterId) return tickets;
-    return myClusterId === scopeFilter ? tickets : [];
-  }, [myClusterId, scopeFilter, tickets]);
+  const visibleTickets = useMemo(
+    () =>
+      tickets.filter((ticket) =>
+        matchesClusterResourceScope(
+          ticket.unit?.cluster_id ?? ticket.unit?.cluster?.id ?? ticket.amenity?.cluster_id ?? null,
+          scopeFilter,
+        ),
+      ),
+    [scopeFilter, tickets],
+  );
 
   const visibleRoutines = useMemo(
     () =>
@@ -201,7 +204,7 @@ export default function MaintenanceScreen() {
         <View style={styles.section}>
           <TabStrip
             tabs={[
-              { key: 'tickets', label: 'Mis tickets' },
+              { key: 'tickets', label: 'Tickets' },
               { key: 'mensual', label: 'Mantenimiento mensual' },
             ]}
             active={tab}
@@ -227,7 +230,7 @@ export default function MaintenanceScreen() {
             />
             {visibleTickets.length === 0 ? (
               <GlassCard variant="muted" style={styles.mt}>
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>No tienes tickets en esta vista.</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 14 }}>No hay tickets en este alcance.</Text>
               </GlassCard>
             ) : (
               visibleTickets.map((ticket) => (
@@ -253,6 +256,13 @@ export default function MaintenanceScreen() {
                     <Tag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
                   </View>
                   <Text style={[styles.meta, { color: theme.textSubtle }]}>
+                    {ticket.unit?.identifier ? `${ticket.unit.identifier} · ` : ''}
+                    {amenityScopeLabel(
+                      ticket.unit?.cluster_id ?? ticket.unit?.cluster?.id ?? ticket.amenity?.cluster_id ?? null,
+                      ticket.unit?.cluster?.name ?? null,
+                      'Todo',
+                    )}
+                    {' · '}
                     {ticketCategoryLabel(ticket.category)} · {new Date(ticket.created_at).toLocaleDateString('es-MX')}
                   </Text>
                   {ticket.description ? (

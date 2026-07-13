@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -17,6 +17,7 @@ import {
   MAINTENANCE_PERIOD_LABELS,
   STAFF_ROLE_LABELS,
   groupEvidenceByDate,
+  matchesClusterResourceScope,
   recurrenceLabel,
   type MaintenancePeriodFilter,
 } from '@veka/shared';
@@ -29,9 +30,11 @@ import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/Keyb
 import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
 import { FilterBar } from '@/components/ui/TabStrip';
 import { ImageCarousel } from '@/components/ui/ImageCarousel';
 import { Tag } from '@/components/ui/Tag';
+import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useMaintenance } from '@/hooks/useMaintenance';
 import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
@@ -52,6 +55,7 @@ export default function StaffMaintenanceScreen() {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { primary, loading: membershipLoading } = useMembership();
+  const { scopeFilterItems, hasClusters, loading: clustersLoading } = useCondominiumClusters(primary);
   const {
     routines,
     amenities,
@@ -66,6 +70,7 @@ export default function StaffMaintenanceScreen() {
   } = useMaintenance(primary, 'staff');
 
   const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
+  const [scopeFilter, setScopeFilter] = useState('all');
   const [activeSheet, setActiveSheet] = useState<StaffSheet>(null);
   const [selectedRoutineId, setSelectedRoutineId] = useState('');
   const [evidenceDate, setEvidenceDate] = useState(todayIsoDate());
@@ -82,6 +87,35 @@ export default function StaffMaintenanceScreen() {
     'Personal';
   const initials = displayName.slice(0, 2).toUpperCase();
   const roleLabel = STAFF_ROLE_LABELS[(primary?.role ?? 'staff') as MembershipRole] ?? 'Personal';
+
+  const visibleAmenities = useMemo(
+    () =>
+      amenities.filter((amenity) =>
+        matchesClusterResourceScope(amenity.cluster_id, scopeFilter),
+      ),
+    [amenities, scopeFilter],
+  );
+
+  const visibleRoutines = useMemo(
+    () =>
+      routines.filter((routine) =>
+        matchesClusterResourceScope(routine.amenity?.cluster_id ?? null, scopeFilter),
+      ),
+    [routines, scopeFilter],
+  );
+
+  const visibleRoutineGroups = useMemo(
+    () =>
+      routineGroups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((routine) =>
+            matchesClusterResourceScope(routine.amenity?.cluster_id ?? null, scopeFilter),
+          ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [routineGroups, scopeFilter],
+  );
 
   function closeSheet() {
     setActiveSheet(null);
@@ -167,7 +201,7 @@ export default function StaffMaintenanceScreen() {
     if (!result.error) closeSheet();
   }
 
-  if (membershipLoading || loading) {
+  if (membershipLoading || clustersLoading || loading) {
     return (
       <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -227,6 +261,9 @@ export default function StaffMaintenanceScreen() {
         {actionError ? <Text style={[styles.error, { color: theme.danger }]}>{actionError}</Text> : null}
 
         <View style={styles.section}>
+          {hasClusters ? (
+            <ScopeFilterBar items={scopeFilterItems} active={scopeFilter} onChange={setScopeFilter} />
+          ) : null}
           <FilterBar
             items={(Object.keys(MAINTENANCE_PERIOD_LABELS) as MaintenancePeriodFilter[]).map((key) => ({
               key,
@@ -237,14 +274,14 @@ export default function StaffMaintenanceScreen() {
           />
         </View>
 
-        {routines.length === 0 ? (
+        {visibleRoutines.length === 0 ? (
           <GlassCard variant="muted" style={styles.mt}>
             <Text style={{ color: theme.textMuted, fontSize: 14 }}>
-              Sin actividades todavía. Usa «Nuevo a demanda» para registrar un trabajo fuera del calendario.
+              Sin actividades en este alcance. Usa «Nuevo a demanda» para registrar un trabajo fuera del calendario.
             </Text>
           </GlassCard>
         ) : (
-          routineGroups.map((group) =>
+          visibleRoutineGroups.map((group) =>
             group.items.length === 0 ? null : (
               <View key={group.label} style={styles.mt}>
                 <Text style={[styles.dayHeading, { color: theme.accent }]}>{group.label}</Text>
@@ -318,7 +355,7 @@ export default function StaffMaintenanceScreen() {
       >
         <Text style={[styles.fieldLabel, { color: theme.textSubtle }]}>Actividad</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
-          {routines.map((routine) => (
+          {visibleRoutines.map((routine) => (
             <Pressable
               key={routine.id}
               onPress={() => setSelectedRoutineId(routine.id)}
@@ -411,7 +448,7 @@ export default function StaffMaintenanceScreen() {
               Áreas comunes
             </Text>
           </Pressable>
-          {amenities.map((amenity) => (
+          {visibleAmenities.map((amenity) => (
             <Pressable
               key={amenity.id}
               onPress={() => setAmenityId(amenity.id)}
