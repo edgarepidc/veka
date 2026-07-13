@@ -7,14 +7,12 @@ import {
   chargeDisplayTitle,
   chargeKindLabel,
   chargeStatusLabel,
-  chargeStatusTone,
   formatCurrency,
   installmentBalanceDue,
   installmentStatusLabel,
   parseAmountInput,
   paymentMethodLabel,
   paymentStatusLabel,
-  paymentStatusTone,
   planInstallmentsProgress,
   type PaymentTarget,
 } from '@veka/shared';
@@ -32,8 +30,7 @@ import type { ActiveMembership } from '@/hooks/useMembership';
 import type { FinanceCharge, FinancePayment } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
-import { chargeAccentTone, paymentAccentTone } from '@/lib/finance-accent';
-import { mapChargeTone, mapPaymentTone } from '@/lib/tagTone';
+import { chargeAccentTone, chargeTagTone, paymentAccentTone, paymentTagTone } from '@/lib/finance-accent';
 import { openInAppDocument } from '@/lib/open-document';
 import { supabase } from '@/lib/supabase';
 
@@ -191,8 +188,8 @@ export function PersonalAccountTab({
                   label={chargeStatusLabel(
                     charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending',
                   )}
-                  tone={mapChargeTone(
-                    chargeStatusTone(charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending'),
+                  tone={chargeTagTone(
+                    charges.find((c) => c.id === paymentTarget.chargeId)?.status ?? 'pending',
                   )}
                 />
               ) : null}
@@ -334,7 +331,7 @@ export function PersonalAccountTab({
                     </Text>
                   ) : null}
                 </View>
-                <Tag label={chargeStatusLabel(charge.status)} tone={mapChargeTone(chargeStatusTone(charge.status))} />
+                <Tag label={chargeStatusLabel(charge.status)} tone={chargeTagTone(charge.status)} />
               </View>
               <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15 }}>
                 {balance > 0 ? formatCurrency(balance) : formatCurrency(charge.amount)}
@@ -370,7 +367,7 @@ export function PersonalAccountTab({
                 </Text>
                 <Tag
                   label={paymentStatusLabel(payment.status)}
-                  tone={mapPaymentTone(paymentStatusTone(payment.status))}
+                  tone={paymentTagTone(payment.status)}
                 />
               </View>
               <Text style={{ color: theme.textMuted, fontSize: 13 }}>

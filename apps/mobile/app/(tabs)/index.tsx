@@ -21,8 +21,7 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
-import { mapChargeTone } from '@/lib/tagTone';
-import { chargeAccentTone } from '@/lib/finance-accent';
+import { chargeAccentTone, chargeTagTone } from '@/lib/finance-accent';
 import { packageAccentTone, reservationAccentTone } from '@/lib/card-accent';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -40,7 +39,6 @@ export default function DashboardScreen() {
     formatShortDate,
     formatDateTime,
     chargeStatusLabel,
-    chargeStatusTone,
     chargeDisplayTitle,
     chargeDisplaySubtitle,
     formatCurrency,
@@ -156,7 +154,7 @@ export default function DashboardScreen() {
                         </Text>
                         <Tag
                           label={chargeStatusLabel(data.nextPayment.status)}
-                          tone={mapChargeTone(chargeStatusTone(data.nextPayment.status))}
+                          tone={chargeTagTone(data.nextPayment.status)}
                         />
                       </View>
                       <Text style={[styles.amount, { color: theme.accent }]}>

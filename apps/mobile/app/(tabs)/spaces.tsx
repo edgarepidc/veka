@@ -14,17 +14,20 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
-import { AMENITY_CARD_WIDTH, AmenityCard } from '@/components/AmenityCard';
+import { AmenityCard } from '@/components/AmenityCard';
 import { AmenityReservationModal } from '@/components/AmenityReservationModal';
 import { ReservationDetailModal } from '@/components/ReservationDetailModal';
 import { ReservationsCalendar } from '@/components/ReservationsCalendar';
-import { ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
+import { ScreenHeader } from '@/components/ui/Avatar';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
+import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
+import { TabStrip } from '@/components/ui/TabStrip';
 import { Tag } from '@/components/ui/Tag';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { accentColor, surfaceAccentBanner } from '@/constants/surface';
 import { useAmenityAvailability } from '@/hooks/useAmenityAvailability';
 import { type Amenity, type Reservation, useSpaces } from '@/hooks/useSpaces';
+import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
 import { reservationAccentTone, reservationTagTone } from '@/lib/card-accent';
@@ -58,6 +61,7 @@ function amenityEmoji(name: string): string {
   return '🏢';
 }
 
+type SpacesTab = 'spaces' | 'reservations';
 type ReservationsView = 'list' | 'calendar';
 
 export default function SpacesScreen() {
@@ -65,6 +69,8 @@ export default function SpacesScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ reservationId?: string }>();
   const { primary, loading: membershipLoading } = useMembership();
+  const { condominiumName, scopeFilterItems, hasClusters, loading: clustersLoading } =
+    useCondominiumClusters(primary);
   const {
     amenities,
     reservations,
@@ -73,7 +79,6 @@ export default function SpacesScreen() {
     actionError,
     scopeFilter,
     setScopeFilter,
-    unitClusterName,
     blockIfOverdue,
     checkUnitDebt,
     clearActionError,
@@ -89,6 +94,7 @@ export default function SpacesScreen() {
 
   const { availabilityLabels, availabilityLoading } = useAmenityAvailability(amenities, fetchBookedSlots);
 
+  const [tab, setTab] = useState<SpacesTab>('spaces');
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -99,17 +105,6 @@ export default function SpacesScreen() {
     () => new Map(allAmenities.map((amenity) => [amenity.id, amenity])),
     [allAmenities],
   );
-
-  const scopeOptions = useMemo(() => {
-    const options: { id: 'all' | 'general' | 'cluster'; label: string }[] = [
-      { id: 'all', label: 'Todos' },
-      { id: 'general', label: 'Fraccionamiento' },
-    ];
-    if (primary?.unit?.cluster?.id) {
-      options.push({ id: 'cluster', label: unitClusterName ?? 'Mi torre' });
-    }
-    return options;
-  }, [primary?.unit?.cluster?.id, unitClusterName]);
 
   const openAmenity = useCallback(
     async (amenity: Amenity) => {
@@ -135,10 +130,13 @@ export default function SpacesScreen() {
     const reservationId = params.reservationId;
     if (!reservationId || reservations.length === 0) return;
     const found = reservations.find((row) => row.id === reservationId);
-    if (found) setSelectedReservation(found);
+    if (found) {
+      setTab('reservations');
+      setSelectedReservation(found);
+    }
   }, [params.reservationId, reservations]);
 
-  if (membershipLoading || loading) {
+  if (membershipLoading || clustersLoading || loading) {
     return (
       <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -206,166 +204,151 @@ export default function SpacesScreen() {
             </View>
           ) : null}
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scopeRow}>
-            {scopeOptions.map((option) => {
-              const active = scopeFilter === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => setScopeFilter(option.id)}
-                  style={[
-                    styles.scopeChip,
-                    {
-                      backgroundColor: active ? theme.accent : theme.surfaceMuted,
-                      borderColor: active ? theme.accent : 'transparent',
-                    },
-                  ]}
-                >
-                  <Text style={{ color: active ? theme.onAccent : theme.textMuted, fontSize: 12, fontWeight: '600' }}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <SectionLabel title="Amenidades" />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={AMENITY_CARD_WIDTH + 12}
-            contentContainerStyle={styles.tilesRow}
-          >
-            {amenities.length === 0 ? (
-              <GlassCard>
-                <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay espacios en esta vista.</Text>
-              </GlassCard>
-            ) : (
-              amenities.map((amenity) => {
-                const imageUri = resolveStorageImageUrl(
-                  SUPABASE_URL,
-                  amenity.image_url,
-                  STORAGE_BUCKETS.AMENITY_IMAGES,
-                );
-
-                return (
-                  <AmenityCard
-                    key={amenity.id}
-                    name={amenity.name}
-                    scopeLabel={amenity.cluster_name ?? 'Fraccionamiento'}
-                    hoursLabel={`${amenity.open_time.slice(0, 5)}–${amenity.close_time.slice(0, 5)}`}
-                    imageUri={imageUri}
-                    fallbackEmoji={amenityEmoji(amenity.name)}
-                    availabilityLabel={availabilityLabels[amenity.id]}
-                    availabilityLoading={availabilityLoading && !availabilityLabels[amenity.id]}
-                    requiresApproval={amenity.requires_approval}
-                    onPress={() => {
-                      void openAmenity(amenity);
-                    }}
-                  />
-                );
-              })
-            )}
-          </ScrollView>
-
-          <View style={styles.reservationsHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.textSubtle }]}>Mis reservas</Text>
-            <View style={[styles.viewToggle, { backgroundColor: theme.surfaceMuted }]}>
-              <Pressable
-                onPress={() => setReservationsView('list')}
-                style={[
-                  styles.viewToggleBtn,
-                  reservationsView === 'list' ? { backgroundColor: theme.surface } : null,
-                ]}
-              >
-                <Text
-                  style={{
-                    color: reservationsView === 'list' ? theme.text : theme.textMuted,
-                    fontSize: 12,
-                    fontWeight: '600',
-                  }}
-                >
-                  Lista
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setReservationsView('calendar')}
-                style={[
-                  styles.viewToggleBtn,
-                  reservationsView === 'calendar' ? { backgroundColor: theme.surface } : null,
-                ]}
-              >
-                <Text
-                  style={{
-                    color: reservationsView === 'calendar' ? theme.text : theme.textMuted,
-                    fontSize: 12,
-                    fontWeight: '600',
-                  }}
-                >
-                  Calendario
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
           <View style={styles.section}>
-            {reservations.length === 0 ? (
-              <GlassCard variant="muted">
-                <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
-              </GlassCard>
-            ) : reservationsView === 'calendar' ? (
-              <ReservationsCalendar
-                reservations={reservations}
-                onSelectReservation={setSelectedReservation}
-                amenityName={amenityName}
-                formatRange={formatReservationRange}
-              />
-            ) : (
-              reservations.map((reservation) => {
-                const imageUri = resolveStorageImageUrl(
-                  SUPABASE_URL,
-                  amenityImageUrl(reservation),
-                  STORAGE_BUCKETS.AMENITY_IMAGES,
-                );
-                const name = amenityName(reservation);
+            <TabStrip
+              tabs={[
+                { key: 'spaces', label: 'Espacios' },
+                { key: 'reservations', label: 'Mis reservas' },
+              ]}
+              active={tab}
+              onChange={(key) => setTab(key as SpacesTab)}
+            />
 
-                return (
-                  <Pressable key={reservation.id} onPress={() => setSelectedReservation(reservation)}>
-                    <GlassCard
-                      style={styles.cardGap}
-                      noPadding
-                      variant="accent"
-                      accent={reservationAccentTone(reservation.status)}
+            {hasClusters ? (
+              <ScopeFilterBar items={scopeFilterItems} active={scopeFilter} onChange={setScopeFilter} />
+            ) : null}
+
+            {tab === 'spaces' ? (
+              amenities.length === 0 ? (
+                <GlassCard variant="muted">
+                  <Text style={{ color: theme.textMuted, fontSize: 13 }}>No hay espacios en esta vista.</Text>
+                </GlassCard>
+              ) : (
+                amenities.map((amenity) => {
+                  const imageUri = resolveStorageImageUrl(
+                    SUPABASE_URL,
+                    amenity.image_url,
+                    STORAGE_BUCKETS.AMENITY_IMAGES,
+                  );
+
+                  return (
+                    <AmenityCard
+                      key={amenity.id}
+                      layout="list"
+                      name={amenity.name}
+                      scopeLabel={amenity.cluster_name ?? condominiumName}
+                      hoursLabel={`${amenity.open_time.slice(0, 5)}–${amenity.close_time.slice(0, 5)}`}
+                      imageUri={imageUri}
+                      fallbackEmoji={amenityEmoji(amenity.name)}
+                      availabilityLabel={availabilityLabels[amenity.id]}
+                      availabilityLoading={availabilityLoading && !availabilityLabels[amenity.id]}
+                      requiresApproval={amenity.requires_approval}
+                      onPress={() => {
+                        void openAmenity(amenity);
+                      }}
+                    />
+                  );
+                })
+              )
+            ) : (
+              <>
+                <View style={styles.reservationsToolbar}>
+                  <View style={[styles.viewToggle, { backgroundColor: theme.surfaceMuted }]}>
+                    <Pressable
+                      onPress={() => setReservationsView('list')}
+                      style={[
+                        styles.viewToggleBtn,
+                        reservationsView === 'list' ? { backgroundColor: theme.surface } : null,
+                      ]}
                     >
-                      <View style={styles.reservationRow}>
-                      {imageUri ? (
-                        <Image source={{ uri: imageUri }} style={styles.reservationThumb} resizeMode="cover" />
-                      ) : (
-                        <View style={[styles.reservationThumbFallback, { backgroundColor: theme.surfaceMuted }]}>
-                          <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
-                        </View>
-                      )}
-                      <View style={styles.reservationContent}>
-                        <View style={styles.cardTop}>
-                          <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
-                            {name}
-                          </Text>
-                          <Tag
-                            label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
-                            tone={reservationTagTone(reservation.status)}
-                          />
-                        </View>
-                        <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                          {formatReservationRange(reservation.starts_at, reservation.ends_at)}
-                        </Text>
-                        <Text style={[styles.viewDetail, { color: theme.accent }]}>Ver detalle</Text>
-                      </View>
-                      </View>
-                    </GlassCard>
-                  </Pressable>
-                );
-              })
+                      <Text
+                        style={{
+                          color: reservationsView === 'list' ? theme.text : theme.textMuted,
+                          fontSize: 12,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Lista
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setReservationsView('calendar')}
+                      style={[
+                        styles.viewToggleBtn,
+                        reservationsView === 'calendar' ? { backgroundColor: theme.surface } : null,
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: reservationsView === 'calendar' ? theme.text : theme.textMuted,
+                          fontSize: 12,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Calendario
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {reservations.length === 0 ? (
+                  <GlassCard variant="muted">
+                    <Text style={[styles.emptyText, { color: theme.textMuted }]}>No tienes reservas próximas.</Text>
+                  </GlassCard>
+                ) : reservationsView === 'calendar' ? (
+                  <ReservationsCalendar
+                    reservations={reservations}
+                    onSelectReservation={setSelectedReservation}
+                    amenityName={amenityName}
+                    formatRange={formatReservationRange}
+                  />
+                ) : (
+                  reservations.map((reservation) => {
+                    const imageUri = resolveStorageImageUrl(
+                      SUPABASE_URL,
+                      amenityImageUrl(reservation),
+                      STORAGE_BUCKETS.AMENITY_IMAGES,
+                    );
+                    const name = amenityName(reservation);
+
+                    return (
+                      <Pressable key={reservation.id} onPress={() => setSelectedReservation(reservation)}>
+                        <GlassCard
+                          style={styles.cardGap}
+                          noPadding
+                          variant="accent"
+                          accent={reservationAccentTone(reservation.status)}
+                        >
+                          <View style={styles.reservationRow}>
+                            {imageUri ? (
+                              <Image source={{ uri: imageUri }} style={styles.reservationThumb} resizeMode="cover" />
+                            ) : (
+                              <View style={[styles.reservationThumbFallback, { backgroundColor: theme.surfaceMuted }]}>
+                                <Text style={styles.reservationEmoji}>{amenityEmoji(name)}</Text>
+                              </View>
+                            )}
+                            <View style={styles.reservationContent}>
+                              <View style={styles.cardTop}>
+                                <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>
+                                  {name}
+                                </Text>
+                                <Tag
+                                  label={reservation.status === 'pending' ? 'Pendiente' : 'Confirmada'}
+                                  tone={reservationTagTone(reservation.status)}
+                                />
+                              </View>
+                              <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+                                {formatReservationRange(reservation.starts_at, reservation.ends_at)}
+                              </Text>
+                              <Text style={[styles.viewDetail, { color: theme.accent }]}>Ver detalle</Text>
+                            </View>
+                          </View>
+                        </GlassCard>
+                      </Pressable>
+                    );
+                  })
+                )}
+              </>
             )}
           </View>
         </ScrollView>
@@ -421,6 +404,7 @@ export default function SpacesScreen() {
                 const amenity = amenityById.get(selectedReservation.amenity_id);
                 if (!amenity) return;
                 setSelectedReservation(null);
+                setTab('spaces');
                 void openAmenity(amenity);
               }
             : undefined
@@ -447,25 +431,10 @@ const styles = StyleSheet.create({
   banner: { marginHorizontal: 20, marginBottom: 8 },
   success: { fontSize: 14, fontWeight: '600' },
   error: { fontSize: 14, fontWeight: '600' },
-  scopeRow: { gap: 8, paddingHorizontal: 20, marginBottom: 12 },
-  scopeChip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  tilesRow: { gap: 12, paddingHorizontal: 20, paddingBottom: 16 },
-  reservationsHeader: {
-    paddingHorizontal: 20,
+  reservationsToolbar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   viewToggle: {
     flexDirection: 'row',

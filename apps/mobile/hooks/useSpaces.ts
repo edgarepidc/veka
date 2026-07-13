@@ -5,6 +5,7 @@ import {
   isBlockedDate,
   isDelinquentCharge,
   isWithinBookingHorizon,
+  matchesClusterResourceScope,
   meetsMinBookingLead,
   minBookingLeadMessage,
   minCancelLeadMessage,
@@ -116,7 +117,7 @@ export function useSpaces(primary: ActiveMembership | null) {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [blockIfOverdue, setBlockIfOverdue] = useState(false);
-  const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | 'cluster'>('all');
+  const [scopeFilter, setScopeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -245,14 +246,9 @@ export function useSpaces(primary: ActiveMembership | null) {
   }, [load]);
 
   const visibleAmenities = useMemo(() => {
-    if (scopeFilter === 'general') {
-      return amenities.filter((amenity) => !amenity.cluster_id);
-    }
-    if (scopeFilter === 'cluster' && unitClusterId) {
-      return amenities.filter((amenity) => amenity.cluster_id === unitClusterId);
-    }
-    return amenities;
-  }, [amenities, scopeFilter, unitClusterId]);
+    if (scopeFilter === 'all') return amenities;
+    return amenities.filter((amenity) => matchesClusterResourceScope(amenity.cluster_id, scopeFilter));
+  }, [amenities, scopeFilter]);
 
   const fetchBookedSlots = useCallback(async (amenityId: string, day: Date) => {
     const dayStart = new Date(day);

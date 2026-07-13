@@ -6,6 +6,8 @@ import {
   expenseStatusLabel,
   formatCurrency,
   fundTypeLabel,
+  type ExpenseStatus,
+  type ScopeFilterItem,
 } from '@veka/shared';
 
 import { FinancePeriodFilter } from '@/components/finance/FinanceCharts';
@@ -13,10 +15,11 @@ import { CondoTransparencySummary } from '@/components/finance/CondoStatsViews';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionLabel } from '@/components/ui/Avatar';
 import { FilterBar } from '@/components/ui/TabStrip';
+import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
 import { Tag } from '@/components/ui/Tag';
 import type { CondoExpense, CondoExpenseGroup, CondoFund } from '@/hooks/useFinance';
 import { useTheme } from '@/hooks/useTheme';
-import { expenseAccentTone } from '@/lib/finance-accent';
+import { expenseAccentTone, expenseTagTone } from '@/lib/finance-accent';
 import { inFinancePeriod, type FinancePeriod } from '@/lib/finance-period';
 import {
   condoBudgetExecution,
@@ -41,6 +44,8 @@ interface CondoTransparencyTabProps {
   clusterName: string | null;
   myClusterId: string | null;
   unitIdentifier: string;
+  scopeFilterItems: ScopeFilterItem[];
+  hasClusters: boolean;
   funds: CondoFund[];
   visibleExpenses: CondoExpense[];
   condoIncomeRows: CondoIncomeRow[];
@@ -54,6 +59,8 @@ export function CondoTransparencyTab({
   clusterName,
   myClusterId,
   unitIdentifier,
+  scopeFilterItems,
+  hasClusters,
   funds,
   visibleExpenses,
   condoIncomeRows,
@@ -64,15 +71,6 @@ export function CondoTransparencyTab({
   const theme = useTheme();
   const [period, setPeriod] = useState<FinancePeriod>('1m');
   const [clusterFilter, setClusterFilter] = useState<string>('all');
-
-  const filterItems = useMemo(() => {
-    const items = [{ key: 'all', label: 'Todo lo visible' }];
-    items.push({ key: 'general', label: 'General' });
-    if (myClusterId && clusterName) {
-      items.push({ key: myClusterId, label: `Mi edificio (${clusterName})` });
-    }
-    return items;
-  }, [clusterName, myClusterId]);
 
   const scopedExpenses = useMemo(
     () =>
@@ -140,7 +138,7 @@ export function CondoTransparencyTab({
     [clusterFilter, condoIncomeRows, myClusterId, period, visibleExpenses],
   );
 
-  const showCollection = Boolean(myClusterId) && clusterFilter !== 'general';
+  const showCollection = Boolean(myClusterId) && clusterFilter !== 'all';
   const collectionLabel = clusterName ?? 'Mi edificio';
 
   const filteredGroups = useMemo(() => {
@@ -181,8 +179,10 @@ export function CondoTransparencyTab({
       </View>
 
       <View style={styles.section}>
-        <FilterBar items={filterItems} active={clusterFilter} onChange={setClusterFilter} />
-        <View style={{ marginTop: 10 }}>
+        {hasClusters ? (
+          <ScopeFilterBar items={scopeFilterItems} active={clusterFilter} onChange={setClusterFilter} />
+        ) : null}
+        <View style={{ marginTop: hasClusters ? 10 : 0 }}>
           <FinancePeriodFilter period={period} onChange={setPeriod} />
         </View>
         <CondoTransparencySummary
@@ -246,7 +246,7 @@ export function CondoTransparencyTab({
                   </View>
                   <Text
                     style={{
-                      color: fund.balance < 0 ? theme.danger : theme.accent2,
+                      color: fund.balance < 0 ? theme.danger : theme.accent,
                       fontWeight: '700',
                       fontSize: 16,
                     }}
@@ -270,7 +270,7 @@ export function CondoTransparencyTab({
           filteredGroups.flatMap((group) => [
             <View key={`${group.clusterId ?? 'general'}-header`} style={styles.groupHeader}>
               <Text style={[styles.cardTitle, { color: theme.text }]}>{group.clusterName}</Text>
-              <Text style={{ color: theme.accent2, fontWeight: '700', fontSize: 14 }}>
+              <Text style={{ color: theme.accent, fontWeight: '700', fontSize: 14 }}>
                 {formatCurrency(group.totalAmount)}
               </Text>
             </View>,
@@ -278,7 +278,7 @@ export function CondoTransparencyTab({
               <GlassCard
                 key={expense.id}
                 variant="accent"
-                accent={expenseAccentTone(expense.status)}
+                accent={expenseAccentTone(expense.status as ExpenseStatus)}
                 style={styles.cardGap}
               >
                 <View style={styles.expenseRowInner}>
@@ -293,8 +293,8 @@ export function CondoTransparencyTab({
                       {formatCurrency(expense.amount)}
                     </Text>
                     <Tag
-                      label={expenseStatusLabel(expense.status as 'pending' | 'paid')}
-                      tone={expense.status === 'paid' ? 'green' : 'orange'}
+                      label={expenseStatusLabel(expense.status as ExpenseStatus)}
+                      tone={expenseTagTone(expense.status as ExpenseStatus)}
                     />
                   </View>
                 </View>

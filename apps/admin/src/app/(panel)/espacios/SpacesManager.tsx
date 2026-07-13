@@ -11,6 +11,7 @@ import {
   formatBlockedDatesForInput,
   MAX_BOOKING_HORIZON_DAYS,
   MAX_LEAD_HOURS,
+  matchesClusterResourceScope,
   MIN_BOOKING_HORIZON_DAYS,
   resolveStorageImageUrl,
   STORAGE_BUCKETS,
@@ -26,6 +27,7 @@ import {
   updateSpacesSettings,
   upsertAmenity,
 } from '@/app/(panel)/espacios/actions';
+import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatChip } from '@/components/ui/StatChip';
@@ -132,8 +134,7 @@ export function SpacesManager({
   const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<AmenityRow | null>(null);
   const [draftId] = useState(() => crypto.randomUUID());
-  const [scopeFilter, setScopeFilter] = useState<'all' | 'general' | string>('all');
-  const [reservationScopeFilter, setReservationScopeFilter] = useState<'all' | 'general' | string>('all');
+  const [scopeFilter, setScopeFilter] = useState('');
   const [rulesExpanded, setRulesExpanded] = useState(false);
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -142,30 +143,19 @@ export function SpacesManager({
   const isNew = !editing?.id;
   const imageAmenityId = editing?.id || draftId;
 
-  const scopeOptions = useMemo(() => {
-    const options: { id: 'all' | 'general' | string; label: string }[] = [
-      { id: 'all', label: 'Todas' },
-      { id: 'general', label: 'Fraccionamiento' },
-      ...clusters.map((cluster) => ({ id: cluster.id, label: cluster.name })),
-    ];
-    return options;
-  }, [clusters]);
+  const filteredAmenities = useMemo(
+    () =>
+      amenities.filter((amenity) => matchesClusterResourceScope(amenity.cluster_id, scopeFilter || 'all')),
+    [amenities, scopeFilter],
+  );
 
-  const filteredAmenities = useMemo(() => {
-    if (scopeFilter === 'all') return amenities;
-    if (scopeFilter === 'general') return amenities.filter((amenity) => !amenity.cluster_id);
-    return amenities.filter((amenity) => amenity.cluster_id === scopeFilter);
-  }, [amenities, scopeFilter]);
-
-  const filteredReservations = useMemo(() => {
-    if (reservationScopeFilter === 'all') return reservations;
-    if (reservationScopeFilter === 'general') {
-      return reservations.filter((reservation) => !reservation.amenity?.cluster_id);
-    }
-    return reservations.filter(
-      (reservation) => reservation.amenity?.cluster_id === reservationScopeFilter,
-    );
-  }, [reservations, reservationScopeFilter]);
+  const filteredReservations = useMemo(
+    () =>
+      reservations.filter((reservation) =>
+        matchesClusterResourceScope(reservation.amenity?.cluster_id ?? null, scopeFilter || 'all'),
+      ),
+    [reservations, scopeFilter],
+  );
 
   const blockIfOverdue = Boolean(spacesSettings.block_reservations_if_overdue);
   const notifyReservationUpdates = spacesSettings.notify_reservation_updates !== false;
@@ -191,7 +181,36 @@ export function SpacesManager({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
+      <GlassCard className="!p-3">
+        <div className="glass-tab-strip">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {clusters.length > 0 ? (
+          <div className="mt-3">
+            <FinanceScopeFilter
+              condominiums={[{ id: condominiumId, name: 'Condominio' }]}
+              clusters={clusters}
+              condominiumId={condominiumId}
+              clusterId={scopeFilter}
+              onCondominiumChange={() => {}}
+              onClusterChange={setScopeFilter}
+              align="start"
+            />
+          </div>
+        ) : null}
+      </GlassCard>
+
       <GlassCard className="overflow-hidden p-0">
         <button
           type="button"
@@ -277,19 +296,6 @@ export function SpacesManager({
         ) : null}
       </GlassCard>
 
-      <div className="glass-tab-strip">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       {message ? (
         <p
           className={`text-sm ${message.includes('Error') || message.includes('obligat') || message.includes('inválid') ? 'text-red-300' : 'text-accent'}`}
@@ -300,23 +306,7 @@ export function SpacesManager({
 
       {tab === 'amenidades' ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              {scopeOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setScopeFilter(option.id)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                    scopeFilter === option.id
-                      ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]'
-                      : 'border-[var(--border)] text-muted'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <button
               type="button"
               onClick={() =>
@@ -664,22 +654,6 @@ export function SpacesManager({
           <p className="text-sm text-muted">
             Aprueba solicitudes pendientes o cancela reservas confirmadas cuando sea necesario.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {scopeOptions.map((option) => (
-              <button
-                key={`reservation-${option.id}`}
-                type="button"
-                onClick={() => setReservationScopeFilter(option.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  reservationScopeFilter === option.id
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]'
-                    : 'border-[var(--border)] text-muted'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
           {filteredReservations.length === 0 ? (
             <GlassCard variant="muted">
               <p className="text-sm text-subtle">No hay reservas próximas en esta vista.</p>

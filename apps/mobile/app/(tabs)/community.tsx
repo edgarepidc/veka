@@ -19,11 +19,11 @@ import {
   formatClusterScopeLabel,
   isImageStoragePath,
   isPollClosed,
+  matchesCommunityClusterScope,
   POLL_DEBT_MESSAGE,
   pollCloseLabel,
   STORAGE_BUCKETS,
   ticketStatusLabel,
-  type ClusterRef,
   type MaintenanceTicketStatus,
 } from '@veka/shared';
 
@@ -31,17 +31,27 @@ import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
+import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
 import { Tag } from '@/components/ui/Tag';
-import type { SurfaceAccentTone } from '@/constants/surface';
+import { accentColor } from '@/constants/surface';
 import { useAssemblies } from '@/hooks/useAssemblies';
 import { useCommunity } from '@/hooks/useCommunity';
 import { useCommunityDirectory } from '@/hooks/useCommunityDirectory';
+import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useMembership } from '@/hooks/useMembership';
 import { useCommunityNotifications } from '@/providers/CommunityNotificationsProvider';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/providers/AuthProvider';
 import { CommentThread } from '@/components/community/CommentThread';
 import { openInAppDocument } from '@/lib/open-document';
+import {
+  assemblyAccentTone,
+  assemblyTagTone,
+  docAccentTone,
+  postAccentTone,
+  postTypeTag,
+  scopeTagTone,
+} from '@/lib/card-accent';
 import { supabase } from '@/lib/supabase';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉'];
@@ -56,37 +66,12 @@ function timeAgo(iso: string): string {
   return `hace ${days}d`;
 }
 
-function postTypeTag(type: string): { label: string; tone: 'green' | 'blue' | 'purple' | 'gray' } {
-  if (type === 'poll') return { label: 'Encuesta', tone: 'purple' };
-  if (type === 'photo') return { label: 'Foto', tone: 'blue' };
-  if (type === 'announcement') return { label: 'Aviso', tone: 'green' };
-  return { label: 'Post', tone: 'gray' };
-}
-
-function postAccent(type: string, pinned: boolean): SurfaceAccentTone {
-  if (pinned) return 'green';
-  if (type === 'poll') return 'purple';
-  if (type === 'announcement') return 'green';
-  if (type === 'photo') return 'blue';
-  return 'orange';
-}
-
-function docAccent(category: string): SurfaceAccentTone {
-  const value = category.toLowerCase();
-  if (value.includes('reglamento')) return 'blue';
-  if (value.includes('minuta')) return 'purple';
-  if (value.includes('estado')) return 'green';
-  return 'orange';
-}
-
-function scopeTagTone(clusters: ClusterRef[]): 'gray' | 'blue' {
-  return clusters.length === 0 ? 'gray' : 'blue';
-}
-
 export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
+  const { condominiumName, scopeFilterItems, hasClusters, loading: clustersLoading } =
+    useCondominiumClusters(primary);
   const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, deleteComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
   const { user } = useAuth();
@@ -115,6 +100,7 @@ export default function CommunityScreen() {
 
   const [tab, setTab] = useState('feed');
   const [filter, setFilter] = useState('all');
+  const [clusterFilter, setClusterFilter] = useState('all');
   const [showInbox, setShowInbox] = useState(false);
   const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
   const [highlightCommentId, setHighlightCommentId] = useState<string | null>(null);
@@ -261,17 +247,32 @@ export default function CommunityScreen() {
     if (data?.signedUrl) openInAppDocument(data.signedUrl, title);
   }
 
+  const myClusterId = primary?.unit?.cluster?.id ?? null;
+
   const filteredPosts = useMemo(() => {
-    if (filter === 'all') return posts;
-    return posts.filter((p) => p.post_type === filter);
-  }, [filter, posts]);
+    let list = filter === 'all' ? posts : posts.filter((p) => p.post_type === filter);
+    if (clusterFilter !== 'all') {
+      list = list.filter((post) => matchesCommunityClusterScope(post.clusters, clusterFilter));
+    }
+    return list;
+  }, [clusterFilter, filter, posts]);
+
+  const filteredDocuments = useMemo(
+    () => documents.filter((doc) => matchesCommunityClusterScope(doc.clusters, clusterFilter)),
+    [clusterFilter, documents],
+  );
+
+  const filteredAssemblies = useMemo(
+    () => assemblies.filter((assembly) => matchesCommunityClusterScope(assembly.clusters, clusterFilter)),
+    [assemblies, clusterFilter],
+  );
 
   function formatAssemblyDate(iso: string | null): string {
     if (!iso) return 'Sin fecha';
     return new Date(iso).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  if (membershipLoading || loading || directoryLoading || assembliesLoading) {
+  if (membershipLoading || clustersLoading || loading || directoryLoading || assembliesLoading) {
     return (
       <ScreenBackground style={styles.centered}>
         <ActivityIndicator size="large" color={theme.accent} />
@@ -366,6 +367,10 @@ export default function CommunityScreen() {
             onChange={setTab}
           />
 
+          {tab !== 'directory' && hasClusters ? (
+            <ScopeFilterBar items={scopeFilterItems} active={clusterFilter} onChange={setClusterFilter} />
+          ) : null}
+
           {tab === 'feed' ? (
             <>
               <FilterBar
@@ -389,7 +394,7 @@ export default function CommunityScreen() {
               ) : (
                 filteredPosts.map((post) => {
                   const typeTag = postTypeTag(post.post_type);
-                  const accent = postAccent(post.post_type, post.is_pinned);
+                  const accent = postAccentTone(post.post_type, post.is_pinned);
                   const totalVotes = post.pollOptions?.reduce((sum, o) => sum + o.votes, 0) ?? 0;
                   const pollClosed = post.post_type === 'poll' && isPollClosed(post);
                   const closeLabel = post.post_type === 'poll' ? pollCloseLabel(post) : null;
@@ -433,7 +438,7 @@ export default function CommunityScreen() {
                       </View>
 
                       <View style={styles.scopeRow}>
-                        <Tag label={formatClusterScopeLabel(post.clusters)} tone={scopeTagTone(post.clusters)} />
+                        <Tag label={formatClusterScopeLabel(post.clusters, condominiumName)} tone={scopeTagTone(post.clusters)} />
                       </View>
 
                       {post.is_pinned ? (
@@ -627,7 +632,7 @@ export default function CommunityScreen() {
             </>
           ) : tab === 'docs' ? (
             <GlassCard noPadding>
-              {documents.length === 0 ? (
+              {filteredDocuments.length === 0 ? (
                 <View style={{ padding: 16 }}>
                   <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin documentos</Text>
                   <Text style={[styles.emptyText, { color: theme.textMuted }]}>
@@ -635,28 +640,32 @@ export default function CommunityScreen() {
                   </Text>
                 </View>
               ) : (
-                documents.map((doc) => (
+                filteredDocuments.map((doc) => {
+                  const docTone = docAccentTone(doc.category);
+                  const docColor = accentColor(theme, docTone);
+                  return (
                   <GlassCard
                     key={doc.id}
                     variant="accent"
-                    accent={docAccent(doc.category)}
+                    accent={docTone}
                     style={styles.docCard}
                   >
                     <Pressable onPress={() => openInAppDocument(doc.file_url, doc.title)} style={styles.docRowInner}>
-                      <View style={[styles.docIcon, { backgroundColor: `${theme.accent3}22` }]}>
+                      <View style={[styles.docIcon, { backgroundColor: `${docColor}22` }]}>
                         <Text style={{ fontSize: 20 }}>📄</Text>
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.docTitle, { color: theme.text }]}>{doc.title}</Text>
                         <View style={styles.docMeta}>
                           <Text style={{ color: theme.textSubtle, fontSize: 10 }}>{doc.category}</Text>
-                          <Tag label={formatClusterScopeLabel(doc.clusters)} tone={scopeTagTone(doc.clusters)} />
+                          <Tag label={formatClusterScopeLabel(doc.clusters, condominiumName)} tone={scopeTagTone(doc.clusters)} />
                         </View>
                       </View>
-                      <Text style={{ color: theme.accent2, fontSize: 16 }}>›</Text>
+                      <Text style={{ color: theme.accent, fontSize: 16 }}>›</Text>
                     </Pressable>
                   </GlassCard>
-                ))
+                  );
+                })
               )}
             </GlassCard>
           ) : tab === 'directory' ? (
@@ -726,7 +735,7 @@ export default function CommunityScreen() {
               <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 4 }}>
                 Expedientes de asamblea: convocatoria, votaciones, documentos y acuerdos.
               </Text>
-              {assemblies.length === 0 ? (
+              {filteredAssemblies.length === 0 ? (
                 <GlassCard>
                   <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin asambleas</Text>
                   <Text style={[styles.emptyText, { color: theme.textMuted }]}>
@@ -734,18 +743,18 @@ export default function CommunityScreen() {
                   </Text>
                 </GlassCard>
               ) : (
-                assemblies.map((assembly) => (
-                  <GlassCard key={assembly.id}>
+                filteredAssemblies.map((assembly) => (
+                  <GlassCard key={assembly.id} variant="accent" accent={assemblyAccentTone(assembly.status)}>
                     <View style={styles.assemblyHeader}>
                       <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', flex: 1 }}>
                         {assembly.title}
                       </Text>
-                      <Tag label={assembly.statusLabel} tone="blue" />
+                      <Tag label={assembly.statusLabel} tone={assemblyTagTone(assembly.status)} />
                     </View>
                     <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4 }}>
                       {formatAssemblyDate(assembly.scheduledAt)}
                       {' · '}
-                      {formatClusterScopeLabel(assembly.clusters)}
+                      {formatClusterScopeLabel(assembly.clusters, condominiumName)}
                     </Text>
                     {assembly.notes ? (
                       <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 8, lineHeight: 19 }}>

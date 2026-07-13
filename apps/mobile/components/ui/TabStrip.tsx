@@ -51,12 +51,19 @@ export function FilterBar({ items, active, onChange }: FilterBarProps) {
             style={[
               styles.chip,
               {
-                backgroundColor: isActive ? `${theme.accent}18` : theme.surfaceMuted,
-                borderColor: isActive ? `${theme.accent}44` : theme.border,
+                backgroundColor: isActive ? theme.surface : 'transparent',
+                borderColor: isActive ? theme.accent : theme.border,
+                borderWidth: isActive ? 1.5 : 1,
               },
             ]}
           >
-            <Text style={{ color: isActive ? theme.accent : theme.textSubtle, fontSize: 11, fontWeight: '600' }}>
+            <Text
+              style={{
+                color: isActive ? theme.accent : theme.textMuted,
+                fontSize: 11,
+                fontWeight: isActive ? '700' : '600',
+              }}
+            >
               {item.label}
             </Text>
           </Pressable>

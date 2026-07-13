@@ -16,6 +16,7 @@ import { ScreenHeader } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { TabStrip } from '@/components/ui/TabStrip';
+import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
 import { useFinance } from '@/hooks/useFinance';
 import { useMembership } from '@/hooks/useMembership';
 import { useTheme } from '@/hooks/useTheme';
@@ -27,6 +28,7 @@ export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
   const { primary, loading: membershipLoading } = useMembership();
+  const { scopeFilterItems, hasClusters } = useCondominiumClusters(primary);
   const finance = useFinance(primary);
   const [tab, setTab] = useState<FinanceTab>('mi-cuenta');
   const [payAmountInput, setPayAmountInput] = useState('');
@@ -119,6 +121,8 @@ export default function FinanceScreen() {
             clusterName={primary.unit?.cluster?.name ?? null}
             myClusterId={primary.unit?.cluster?.id ?? null}
             unitIdentifier={primary.unit?.identifier ?? '—'}
+            scopeFilterItems={scopeFilterItems}
+            hasClusters={hasClusters}
             funds={finance.funds}
             visibleExpenses={finance.visibleExpenses}
             condoIncomeRows={finance.condoIncomeRows}

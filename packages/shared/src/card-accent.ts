@@ -1,3 +1,5 @@
+import type { AssemblyStatus } from './assemblies';
+import type { ClusterRef } from './community-scope';
 import type { ChargeStatus, ExpenseStatus, MaintenanceTicketStatus, PaymentStatus } from './constants';
 
 export type CardAccentTone = 'blue' | 'green' | 'orange' | 'purple' | 'danger';
@@ -147,6 +149,47 @@ export function paymentTagTone(status: PaymentStatus): CardTagTone {
   if (status === 'rejected') return 'red';
   if (status === 'pending_review' || status === 'pending_second_review') return 'orange';
   return 'blue';
+}
+
+export function postTypeTag(type: string): { label: string; tone: CardTagTone } {
+  if (type === 'poll') return { label: 'Encuesta', tone: 'purple' };
+  if (type === 'photo') return { label: 'Foto', tone: 'blue' };
+  if (type === 'announcement') return { label: 'Aviso', tone: 'green' };
+  return { label: 'Post', tone: 'gray' };
+}
+
+export function postAccentTone(type: string, pinned: boolean): CardAccentTone {
+  if (pinned) return 'green';
+  if (type === 'poll') return 'purple';
+  if (type === 'announcement') return 'green';
+  if (type === 'photo') return 'blue';
+  return 'orange';
+}
+
+export function docAccentTone(category: string): CardAccentTone {
+  const value = category.toLowerCase();
+  if (value.includes('reglamento')) return 'blue';
+  if (value.includes('minuta')) return 'purple';
+  if (value.includes('estado')) return 'green';
+  return 'orange';
+}
+
+export function scopeTagTone(clusters: ClusterRef[]): CardTagTone {
+  return clusters.length === 0 ? 'gray' : 'blue';
+}
+
+export function assemblyAccentTone(status: AssemblyStatus): CardAccentTone {
+  if (status === 'scheduled') return 'blue';
+  if (status === 'held') return 'green';
+  if (status === 'closed') return 'purple';
+  return 'orange';
+}
+
+export function assemblyTagTone(status: AssemblyStatus): CardTagTone {
+  if (status === 'scheduled') return 'blue';
+  if (status === 'held') return 'green';
+  if (status === 'closed') return 'gray';
+  return 'orange';
 }
 
 export function cardTagClass(tone: CardTagTone): string {
