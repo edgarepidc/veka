@@ -6,10 +6,10 @@ import type {
 import { MAINTENANCE_TICKET_BOARD_STATUSES } from './constants';
 
 export const TICKET_STATUS_LABELS: Record<MaintenanceTicketStatus, string> = {
-  open: 'Abierto',
+  open: 'Por iniciar',
   in_progress: 'En progreso',
-  resolved: 'Resuelto',
-  closed: 'Resuelto',
+  resolved: 'Hecho',
+  closed: 'Hecho',
 };
 
 export const TICKET_STATUS_TONES: Record<MaintenanceTicketStatus, 'default' | 'warning' | 'success' | 'muted'> = {

@@ -36,6 +36,7 @@ import { StatusTag } from '@/components/ui/StatusTag';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { createClient } from '@/lib/supabase/client';
 import { HELP } from '@/lib/help-content';
+import { IoChevronDown } from 'react-icons/io5';
 import type {
   AmenityOption,
   ClusterOption,
@@ -63,9 +64,9 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 const KANBAN_COLUMNS: { id: MaintenanceTicketBoardStatus; label: string }[] = [
-  { id: 'open', label: 'Abiertos' },
+  { id: 'open', label: 'Por iniciar' },
   { id: 'in_progress', label: 'En progreso' },
-  { id: 'resolved', label: 'Resueltos' },
+  { id: 'resolved', label: 'Hecho' },
 ];
 
 function formatDate(iso: string): string {
@@ -196,9 +197,14 @@ function TicketCard({
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="ml-auto text-[10px] font-semibold text-subtle hover:text-accent"
+          aria-expanded={expanded}
+          className="ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-muted)]/50 px-2 py-0.5 text-[10px] font-semibold text-muted transition hover:border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] hover:text-accent"
         >
-          {expanded ? 'Menos' : 'Notas / evidencia'}
+          Notas / evidencia
+          <IoChevronDown
+            className={`h-3 w-3 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            aria-hidden
+          />
         </button>
       </div>
 
