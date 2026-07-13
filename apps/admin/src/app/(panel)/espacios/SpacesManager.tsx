@@ -161,6 +161,16 @@ export function SpacesManager({
   const notifyReservationUpdates = spacesSettings.notify_reservation_updates !== false;
   const rulesFormKey = [blockIfOverdue, notifyReservationUpdates].join('|');
 
+  const scopeLabel = useMemo(() => {
+    if (!scopeFilter) return 'Todo el fraccionamiento';
+    return clusters.find((cluster) => cluster.id === scopeFilter)?.name ?? 'Torre';
+  }, [clusters, scopeFilter]);
+
+  const formClusterId = isNew ? scopeFilter : (editing?.cluster_id ?? '');
+  const formScopeLabel = isNew
+    ? scopeLabel
+    : amenityScopeLabel(editing?.cluster_id, editing?.cluster?.name);
+
   function run(
     action: (formData: FormData) => Promise<{ error?: string; success?: boolean; ok?: boolean }>,
     formData: FormData,
@@ -306,6 +316,13 @@ export function SpacesManager({
 
       {tab === 'amenidades' ? (
         <div className="space-y-4">
+          {clusters.length > 0 ? (
+            <p className="text-sm text-muted">
+              Alcance actual: <span className="font-medium text-[var(--text)]">{scopeLabel}</span>. Las
+              amenidades nuevas se crean en este ámbito.
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-end gap-3">
             <button
               type="button"
@@ -328,6 +345,10 @@ export function SpacesManager({
               <h3 className="text-lg font-semibold text-[var(--text)]">
                 {isNew ? 'Nueva amenidad' : `Editar ${editing.name}`}
               </h3>
+              <p className="mt-1 text-sm text-muted">
+                {isNew ? 'Se creará en' : 'Ámbito'}:{' '}
+                <span className="font-medium text-[var(--text)]">{formScopeLabel}</span>
+              </p>
               <form
                 className="mt-4 grid gap-3 sm:grid-cols-2"
                 action={(formData) => {
@@ -336,6 +357,7 @@ export function SpacesManager({
                 }}
               >
                 <input type="hidden" name="condominium_id" value={condominiumId} />
+                <input type="hidden" name="cluster_id" value={formClusterId} />
                 {!isNew ? <input type="hidden" name="amenity_id" value={editing.id} /> : null}
 
                 <label className="grid gap-1 text-sm sm:col-span-2">
@@ -346,22 +368,6 @@ export function SpacesManager({
                     defaultValue={draft.name}
                     className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
                   />
-                </label>
-
-                <label className="grid gap-1 text-sm sm:col-span-2">
-                  <span className="font-medium text-[var(--text)]">Ámbito</span>
-                  <select
-                    name="cluster_id"
-                    defaultValue={draft.cluster_id ?? ''}
-                    className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"
-                  >
-                    <option value="">Todo el fraccionamiento</option>
-                    {clusters.map((cluster) => (
-                      <option key={cluster.id} value={cluster.id}>
-                        {cluster.name}
-                      </option>
-                    ))}
-                  </select>
                 </label>
 
                 <div className="sm:col-span-2">
