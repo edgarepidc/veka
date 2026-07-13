@@ -19,6 +19,9 @@ import {
   groupEvidenceByDate,
   matchesClusterResourceScope,
   recurrenceLabel,
+  ticketAgeLabel,
+  ticketAgeUrgency,
+  ticketBoardStatus,
   ticketCategoryLabel,
   ticketStatusLabel,
   type MaintenancePeriodFilter,
@@ -43,6 +46,15 @@ import { useTheme } from '@/hooks/useTheme';
 import { ticketAccentTone, ticketTagTone, routineCardVariant } from '@/lib/card-accent';
 import { pickImageFromLibrary } from '@/lib/pick-image';
 
+type OwnershipFilter = 'all' | 'mine';
+
+function ageTagTone(urgency: ReturnType<typeof ticketAgeUrgency>): 'green' | 'blue' | 'orange' | 'red' | 'gray' {
+  if (urgency === 'done') return 'green';
+  if (urgency === 'late') return 'red';
+  if (urgency === 'watch') return 'orange';
+  return 'gray';
+}
+
 export default function MaintenanceScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -60,6 +72,7 @@ export default function MaintenanceScreen() {
 
   const [tab, setTab] = useState('tickets');
   const [scopeFilter, setScopeFilter] = useState('all');
+  const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [highlightTicketId, setHighlightTicketId] = useState<string | null>(null);
@@ -70,7 +83,9 @@ export default function MaintenanceScreen() {
   const [photo, setPhoto] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const visibleTickets = useMemo(
+  const myUnitId = primary?.unit_id ?? null;
+
+  const scopedTickets = useMemo(
     () =>
       tickets.filter((ticket) =>
         matchesClusterResourceScope(
@@ -80,6 +95,23 @@ export default function MaintenanceScreen() {
       ),
     [scopeFilter, tickets],
   );
+
+  const mineCount = useMemo(
+    () => scopedTickets.filter((ticket) => myUnitId && ticket.unit_id === myUnitId).length,
+    [myUnitId, scopedTickets],
+  );
+
+  const activeCount = useMemo(
+    () => scopedTickets.filter((ticket) => ticketBoardStatus(ticket.status) !== 'resolved').length,
+    [scopedTickets],
+  );
+
+  const visibleTickets = useMemo(() => {
+    if (ownershipFilter === 'mine') {
+      return scopedTickets.filter((ticket) => myUnitId && ticket.unit_id === myUnitId);
+    }
+    return scopedTickets;
+  }, [myUnitId, ownershipFilter, scopedTickets]);
 
   const visibleRoutines = useMemo(
     () =>
@@ -221,6 +253,30 @@ export default function MaintenanceScreen() {
 
         {tab === 'tickets' ? (
           <View style={styles.section}>
+            <View style={styles.statsRow}>
+              <GlassCard variant="muted" style={styles.statCard}>
+                <Text style={[styles.statValue, { color: theme.text }]}>{activeCount}</Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>Abiertos</Text>
+              </GlassCard>
+              <GlassCard variant="muted" style={styles.statCard}>
+                <Text style={[styles.statValue, { color: theme.text }]}>{mineCount}</Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>Míos</Text>
+              </GlassCard>
+              <GlassCard variant="muted" style={styles.statCard}>
+                <Text style={[styles.statValue, { color: theme.text }]}>{scopedTickets.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.textMuted }]}>En vista</Text>
+              </GlassCard>
+            </View>
+
+            <FilterBar
+              items={[
+                { key: 'all', label: 'Todo el condo' },
+                { key: 'mine', label: 'Mis reportes' },
+              ]}
+              active={ownershipFilter}
+              onChange={(key) => setOwnershipFilter(key as OwnershipFilter)}
+            />
+
             <GradientActionButton
               label="Nuevo reporte"
               icon="construct-outline"
@@ -233,7 +289,9 @@ export default function MaintenanceScreen() {
                 <Text style={{ color: theme.textMuted, fontSize: 14 }}>No hay tickets en este alcance.</Text>
               </GlassCard>
             ) : (
-              visibleTickets.map((ticket) => (
+              visibleTickets.map((ticket) => {
+                const isMine = Boolean(myUnitId && ticket.unit_id === myUnitId);
+                return (
                 <View
                   key={ticket.id}
                   ref={(node) => {
@@ -254,6 +312,13 @@ export default function MaintenanceScreen() {
                   <View style={styles.row}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{ticket.title}</Text>
                     <Tag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
+                  </View>
+                  <View style={styles.chipRow}>
+                    {isMine ? <Tag label="Mío" tone="purple" /> : null}
+                    <Tag
+                      label={ticketAgeLabel(ticket.created_at, ticket.status)}
+                      tone={ageTagTone(ticketAgeUrgency(ticket.created_at, ticket.status))}
+                    />
                   </View>
                   <Text style={[styles.meta, { color: theme.textSubtle }]}>
                     {ticket.unit?.identifier ? `${ticket.unit.identifier} · ` : ''}
@@ -280,7 +345,8 @@ export default function MaintenanceScreen() {
                   ) : null}
                 </GlassCard>
                 </View>
-              ))
+                );
+              })
             )}
           </View>
         ) : null}
@@ -426,9 +492,14 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 20 },
   section: { marginTop: 16 },
-  createAction: { marginBottom: 12 },
+  createAction: { marginTop: 12, marginBottom: 12 },
   mt: { marginTop: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  statCard: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  statValue: { fontSize: 20, fontWeight: '800' },
+  statLabel: { fontSize: 11, marginTop: 2, fontWeight: '600' },
   cardTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
   meta: { fontSize: 12, marginTop: 4 },
   body: { fontSize: 14, marginTop: 8, lineHeight: 20 },

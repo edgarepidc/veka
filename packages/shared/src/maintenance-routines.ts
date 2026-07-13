@@ -128,3 +128,56 @@ export function groupRoutinesByWeekday<
 
   return groups;
 }
+
+export interface MaintenanceRoutineTemplate {
+  id: string;
+  title: string;
+  description: string;
+  recurrence: MaintenanceRecurrence;
+  day_of_week: number | null;
+  monthly_day: number | null;
+}
+
+/** Starter calendar activities admins can seed in one click. */
+export const MAINTENANCE_ROUTINE_TEMPLATES: MaintenanceRoutineTemplate[] = [
+  {
+    id: 'pool',
+    title: 'Mantenimiento de alberca',
+    description: 'Químicos, filtro, nivel de agua y limpieza general.',
+    recurrence: 'weekly',
+    day_of_week: 2,
+    monthly_day: null,
+  },
+  {
+    id: 'garden',
+    title: 'Jardinería y áreas verdes',
+    description: 'Poda, riego, deshierbe y retiro de residuos.',
+    recurrence: 'weekly',
+    day_of_week: 4,
+    monthly_day: null,
+  },
+  {
+    id: 'pump',
+    title: 'Revisión de bombas e hidroneumático',
+    description: 'Presión, fugas, ruidos y operación de bombas.',
+    recurrence: 'biweekly',
+    day_of_week: 1,
+    monthly_day: null,
+  },
+  {
+    id: 'common-cleaning',
+    title: 'Limpieza de áreas comunes',
+    description: 'Pasillos, lobbies, basureros y zonas compartidas.',
+    recurrence: 'weekly',
+    day_of_week: 3,
+    monthly_day: null,
+  },
+  {
+    id: 'elevator',
+    title: 'Revisión de elevadores',
+    description: 'Funcionamiento, botonera, iluminación y reporte de fallas.',
+    recurrence: 'monthly',
+    day_of_week: 5,
+    monthly_day: 1,
+  },
+];

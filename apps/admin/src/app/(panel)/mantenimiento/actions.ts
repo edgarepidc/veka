@@ -4,10 +4,11 @@ import { revalidatePath } from 'next/cache';
 import type { MaintenanceTicketStatus } from '@veka/shared';
 import {
   MAINTENANCE_RECURRENCES,
+  MAINTENANCE_ROUTINE_TEMPLATES,
   MAINTENANCE_TICKET_BOARD_STATUSES,
+  maintenanceTicketPushCopy,
   parseRoutineImageUrlsFromForm,
   ticketBoardStatus,
-  ticketStatusLabel,
 } from '@veka/shared';
 import type { MaintenanceRecurrence } from '@veka/shared';
 
@@ -59,11 +60,12 @@ export async function updateTicketStatus(formData: FormData) {
   if (error) return { error: error.message };
 
   if (ticket.status !== status && ticket.unit_id) {
+    const copy = maintenanceTicketPushCopy(status, ticket.title);
     await deliverUnitPushNotification({
       unitId: ticket.unit_id,
-      title: 'Actualización de mantenimiento — Veka',
-      body: `Tu reporte «${ticket.title}» ahora está: ${ticketStatusLabel(status)}.`,
-      data: { screen: 'maintenance', ticketId },
+      title: copy.title,
+      body: copy.body,
+      data: { screen: 'maintenance', ticketId, ticket_id: ticketId },
     });
   }
 
@@ -211,6 +213,65 @@ export async function createMaintenanceRoutine(formData: FormData) {
 
   revalidatePath('/mantenimiento');
   return { success: true };
+}
+
+export async function createMaintenanceRoutinesFromTemplates(formData: FormData) {
+  const condoResult = await requireActiveCondominiumId();
+  if (typeof condoResult !== 'string') return { error: condoResult.error };
+  const condominiumId = condoResult;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'No autorizado' };
+
+  const selectedIds = [...new Set(formData.getAll('template_id').map((value) => String(value).trim()).filter(Boolean))];
+  if (selectedIds.length === 0) return { error: 'Selecciona al menos una plantilla.' };
+
+  const templates = MAINTENANCE_ROUTINE_TEMPLATES.filter((template) => selectedIds.includes(template.id));
+  if (templates.length === 0) return { error: 'Plantillas inválidas.' };
+
+  const { data: existing } = await supabase
+    .from('maintenance_routines')
+    .select('title')
+    .eq('condominium_id', condominiumId)
+    .eq('is_active', true);
+
+  const existingTitles = new Set((existing ?? []).map((row) => String(row.title).trim().toLowerCase()));
+  const toInsert = templates.filter((template) => !existingTitles.has(template.title.toLowerCase()));
+
+  if (toInsert.length === 0) {
+    return { error: 'Esas plantillas ya están en el calendario.' };
+  }
+
+  const { data: lastRoutine } = await supabase
+    .from('maintenance_routines')
+    .select('sort_order')
+    .eq('condominium_id', condominiumId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let sortOrder = (lastRoutine?.sort_order ?? 0) + 1;
+  const { error } = await supabase.from('maintenance_routines').insert(
+    toInsert.map((template) => ({
+      condominium_id: condominiumId,
+      amenity_id: null,
+      title: template.title,
+      description: template.description,
+      day_of_week: template.day_of_week,
+      recurrence: template.recurrence,
+      monthly_day: template.monthly_day,
+      sort_order: sortOrder++,
+      created_by: user.id,
+    })),
+  );
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/mantenimiento');
+  return { success: true, created: toInsert.length };
 }
 
 export async function createMaintenanceRoutineEvidence(formData: FormData) {

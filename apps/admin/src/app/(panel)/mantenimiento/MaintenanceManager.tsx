@@ -4,7 +4,9 @@ import { useMemo, useState, useTransition } from 'react';
 import {
   MAINTENANCE_PERIOD_LABELS,
   MAINTENANCE_RECURRENCES,
+  MAINTENANCE_ROUTINE_TEMPLATES,
   MAINTENANCE_TICKET_BOARD_STATUSES,
+  MAINTENANCE_TICKET_CATEGORIES,
   RECURRENCE_LABELS,
   STORAGE_BUCKETS,
   WEEKDAY_LABELS,
@@ -15,8 +17,11 @@ import {
   isImageStoragePath,
   maintenanceFilePath,
   matchesClusterResourceScope,
+  matchesMaintenanceTicketSearch,
   recurrenceLabel,
   resolveStorageImageUrl,
+  ticketAgeLabel,
+  ticketAgeUrgency,
   ticketBoardStatus,
   ticketCategoryLabel,
   ticketStatusLabel,
@@ -26,6 +31,7 @@ import {
   type MaintenancePeriodFilter,
   type MaintenanceRecurrence,
   type MaintenanceTicketBoardStatus,
+  type MaintenanceTicketCategory,
 } from '@veka/shared';
 
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
@@ -49,6 +55,7 @@ import {
   addTicketAttachment,
   createMaintenanceRoutine,
   createMaintenanceRoutineEvidence,
+  createMaintenanceRoutinesFromTemplates,
   deleteMaintenanceRoutine,
   deleteTicketAttachment,
   updateTicketStatus,
@@ -122,12 +129,21 @@ function RoutineEvidenceGallery({
   );
 }
 
+function ageChipClass(urgency: ReturnType<typeof ticketAgeUrgency>): string {
+  if (urgency === 'done') return 'glass-tag-green';
+  if (urgency === 'late') return 'glass-tag-red';
+  if (urgency === 'watch') return 'glass-tag-blue';
+  return 'glass-tag-gray';
+}
+
 function TicketCard({
   ticket,
   condominiumId,
   pending,
   onRun,
   onOpenFile,
+  onDragStart,
+  onDragEnd,
 }: {
   ticket: MaintenanceTicketRow;
   condominiumId: string;
@@ -138,13 +154,31 @@ function TicketCard({
     ok: string,
   ) => void;
   onOpenFile: (path: string) => void;
+  onDragStart: (ticket: MaintenanceTicketRow) => void;
+  onDragEnd: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const boardStatus = ticketBoardStatus(ticket.status);
   const evidenceCount = (ticket.photo_url ? 1 : 0) + ticket.attachments.length;
+  const urgency = ticketAgeUrgency(ticket.created_at, ticket.status);
 
   return (
-    <GlassCard variant="accent" accent={ticketAccentTone(ticket.status)} className="space-y-2 !p-2.5">
+    <div
+      draggable={!expanded && !pending}
+      onDragStart={(event) => {
+        event.dataTransfer.setData('application/veka-ticket-id', ticket.id);
+        event.dataTransfer.setData('text/plain', ticket.id);
+        event.dataTransfer.effectAllowed = 'move';
+        onDragStart(ticket);
+      }}
+      onDragEnd={onDragEnd}
+      className="cursor-grab active:cursor-grabbing"
+    >
+    <GlassCard
+      variant="accent"
+      accent={ticketAccentTone(ticket.status)}
+      className="space-y-2 !p-2.5"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold leading-snug text-[var(--text)]">{ticket.title}</p>
@@ -161,6 +195,9 @@ function TicketCard({
 
       <div className="flex flex-wrap items-center gap-1">
         <span className="glass-tag-blue px-1.5 py-0.5 text-[10px]">{ticketCategoryLabel(ticket.category)}</span>
+        <span className={`${ageChipClass(urgency)} px-1.5 py-0.5 text-[10px]`}>
+          {ticketAgeLabel(ticket.created_at, ticket.status)}
+        </span>
         {evidenceCount > 0 ? (
           <button
             type="button"
@@ -269,6 +306,7 @@ function TicketCard({
         </div>
       ) : null}
     </GlassCard>
+    </div>
   );
 }
 
@@ -294,13 +332,20 @@ export function MaintenanceManager({
   const [routineRecurrence, setRoutineRecurrence] = useState<MaintenanceRecurrence>('weekly');
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [ticketQuery, setTicketQuery] = useState('');
+  const [ticketCategory, setTicketCategory] = useState('');
+  const [dragTicketId, setDragTicketId] = useState<string | null>(null);
+  const [dropColumn, setDropColumn] = useState<MaintenanceTicketBoardStatus | null>(null);
+  const [dragTicket, setDragTicket] = useState<MaintenanceTicketRow | null>(null);
 
   const filteredTickets = useMemo(
     () =>
-      tickets.filter((ticket) =>
-        matchesClusterResourceScope(ticketClusterId(ticket), scopeFilter || 'all'),
+      tickets.filter(
+        (ticket) =>
+          matchesClusterResourceScope(ticketClusterId(ticket), scopeFilter || 'all') &&
+          matchesMaintenanceTicketSearch(ticket, ticketQuery, ticketCategory),
       ),
-    [scopeFilter, tickets],
+    [scopeFilter, ticketCategory, ticketQuery, tickets],
   );
 
   const filteredRoutines = useMemo(
@@ -342,14 +387,22 @@ export function MaintenanceManager({
   }, [filteredTickets]);
 
   function run(
-    action: (formData: FormData) => Promise<{ error?: string; success?: boolean }>,
+    action: (formData: FormData) => Promise<{ error?: string; success?: boolean; created?: number }>,
     formData: FormData,
     ok: string,
   ) {
     setMessage(null);
     start(async () => {
       const result = await action(formData);
-      setMessage(result.error ?? ok);
+      if (result.error) {
+        setMessage(result.error);
+        return;
+      }
+      if (typeof result.created === 'number') {
+        setMessage(`${result.created} actividad(es) agregadas.`);
+        return;
+      }
+      setMessage(ok);
     });
   }
 
@@ -360,6 +413,23 @@ export function MaintenanceManager({
     }
     const { data } = await supabase.storage.from(STORAGE_BUCKETS.MAINTENANCE_FILES).createSignedUrl(path, 3600);
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  }
+
+  function moveTicketToStatus(ticket: MaintenanceTicketRow, status: MaintenanceTicketBoardStatus) {
+    if (ticketBoardStatus(ticket.status) === status) return;
+    const formData = new FormData();
+    formData.set('ticket_id', ticket.id);
+    formData.set('status', status);
+    formData.set('admin_notes', ticket.admin_notes ?? '');
+    run(updateTicketStatus, formData, `Movido a ${ticketStatusLabel(status)}.`);
+  }
+
+  function handleColumnDrop(columnId: MaintenanceTicketBoardStatus) {
+    if (!dragTicket) return;
+    moveTicketToStatus(dragTicket, columnId);
+    setDragTicket(null);
+    setDragTicketId(null);
+    setDropColumn(null);
   }
 
   return (
@@ -403,12 +473,37 @@ export function MaintenanceManager({
       {tab === 'tickets' ? (
         <div className="space-y-4">
           <p className="text-sm text-muted">
-            Tablero de reportes. Mueve el estado con los atajos, deja notas y adjunta evidencias (imagen o PDF).
+            Arrastra tarjetas entre columnas o usa los atajos. Notas y evidencias se expanden en cada ticket.
           </p>
+
+          <GlassCard className="!p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                value={ticketQuery}
+                onChange={(event) => setTicketQuery(event.target.value)}
+                placeholder="Buscar por título, unidad, notas…"
+                className="glass-input min-w-0 flex-1"
+              />
+              <select
+                value={ticketCategory}
+                onChange={(event) => setTicketCategory(event.target.value)}
+                className="glass-input sm:max-w-[220px]"
+              >
+                <option value="" className="bg-slate-900">
+                  Todas las categorías
+                </option>
+                {MAINTENANCE_TICKET_CATEGORIES.map((category) => (
+                  <option key={category} value={category} className="bg-slate-900">
+                    {ticketCategoryLabel(category as MaintenanceTicketCategory)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </GlassCard>
 
           {filteredTickets.length === 0 ? (
             <GlassCard variant="muted">
-              <p className="text-sm text-subtle">No hay tickets en este alcance.</p>
+              <p className="text-sm text-subtle">No hay tickets en este alcance o búsqueda.</p>
             </GlassCard>
           ) : (
             <div className="grid gap-3 lg:grid-cols-3">
@@ -420,9 +515,28 @@ export function MaintenanceManager({
                       {ticketsByStatus[column.id].length}
                     </span>
                   </div>
-                  <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]/30 p-2 min-h-[120px]">
+                  <div
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDropColumn(column.id);
+                    }}
+                    onDragLeave={() => {
+                      setDropColumn((current) => (current === column.id ? null : current));
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      handleColumnDrop(column.id);
+                    }}
+                    className={`space-y-2 rounded-2xl border p-2 min-h-[120px] transition ${
+                      dropColumn === column.id && dragTicketId
+                        ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]'
+                        : 'border-[var(--border)] bg-[var(--surface-muted)]/30'
+                    }`}
+                  >
                     {ticketsByStatus[column.id].length === 0 ? (
-                      <p className="px-1 py-4 text-center text-xs text-subtle">Sin tickets</p>
+                      <p className="px-1 py-4 text-center text-xs text-subtle">
+                        {dragTicketId ? 'Suelta aquí' : 'Sin tickets'}
+                      </p>
                     ) : (
                       ticketsByStatus[column.id].map((ticket) => (
                         <TicketCard
@@ -432,6 +546,15 @@ export function MaintenanceManager({
                           pending={pending}
                           onRun={run}
                           onOpenFile={(path) => void openFile(path)}
+                          onDragStart={(row) => {
+                            setDragTicket(row);
+                            setDragTicketId(row.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragTicket(null);
+                            setDragTicketId(null);
+                            setDropColumn(null);
+                          }}
                         />
                       ))
                     )}
@@ -445,6 +568,40 @@ export function MaintenanceManager({
 
       {tab === 'mensual' ? (
         <div className="space-y-6">
+          <GlassCard>
+            <SectionHeading help={HELP.mantenimiento}>Plantillas rápidas</SectionHeading>
+            <p className="mt-1 text-sm text-muted">
+              Arma el calendario con actividades típicas (alberca, jardín, bombas…). No duplica títulos que ya existan.
+            </p>
+            <form
+              action={(fd) =>
+                run(createMaintenanceRoutinesFromTemplates, fd, 'Plantillas agregadas al calendario.')
+              }
+              className="mt-4 space-y-3"
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
+                {MAINTENANCE_ROUTINE_TEMPLATES.map((template) => (
+                  <label
+                    key={template.id}
+                    className="flex cursor-pointer items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/30 p-3 text-sm"
+                  >
+                    <input type="checkbox" name="template_id" value={template.id} defaultChecked className="mt-1" />
+                    <span>
+                      <span className="font-semibold text-[var(--text)]">{template.title}</span>
+                      <span className="mt-0.5 block text-xs text-subtle">
+                        {recurrenceLabel(template.recurrence)}
+                        {template.day_of_week ? ` · ${WEEKDAY_LABELS[template.day_of_week]}` : ''}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <button type="submit" disabled={pending} className="glass-btn-primary">
+                Agregar plantillas seleccionadas
+              </button>
+            </form>
+          </GlassCard>
+
           <div className="grid gap-6 lg:grid-cols-2">
             <GlassCard>
               <SectionHeading help={HELP.mantenimiento}>Nueva actividad</SectionHeading>
