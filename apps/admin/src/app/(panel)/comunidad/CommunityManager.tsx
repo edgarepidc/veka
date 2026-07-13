@@ -336,38 +336,42 @@ export function CommunityManager({
   return (
     <div className="space-y-3">
       <GlassCard className="!p-3">
-        <div className="flex items-start gap-2">
-          <div className="glass-tab-strip min-w-0 flex-1">
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setTab(item.id);
-                  setPublishOpen(false);
-                }}
-                className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <HelpHint label="Ayuda de esta pestaña" className="mt-1 shrink-0">
+        <div className="glass-tab-strip">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setTab(item.id);
+                setPublishOpen(false);
+              }}
+              className={`glass-tab ${tab === item.id ? 'glass-tab-active' : ''}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-2 flex justify-end">
+          <HelpHint label="Ayuda de esta pestaña">
             <p>{TAB_HELP[tab]}</p>
           </HelpHint>
         </div>
 
-        <div className="mt-3">
-          <FinanceScopeFilter
-            condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
-            clusters={clusters}
-            condominiumId={selectedCondoId}
-            clusterId={selectedClusterId}
-            onCondominiumChange={(id) => void handleCondoChange(id)}
-            onClusterChange={setSelectedClusterId}
-            align="end"
-          />
-        </div>
+        {clusters.length > 0 ? (
+          <div className="mt-3">
+            <FinanceScopeFilter
+              condominiums={condominiums.length > 0 ? condominiums : [{ id: selectedCondoId, name: 'Condominio' }]}
+              clusters={clusters}
+              condominiumId={selectedCondoId}
+              clusterId={selectedClusterId}
+              onCondominiumChange={(id) => void handleCondoChange(id)}
+              onClusterChange={setSelectedClusterId}
+              align="end"
+              allLabel="Todo"
+            />
+          </div>
+        ) : null}
       </GlassCard>
 
       {isPublishTab(tab) ? (

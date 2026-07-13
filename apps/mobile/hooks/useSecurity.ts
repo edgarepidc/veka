@@ -37,7 +37,10 @@ export interface PackageRow {
   tracking_number: string | null;
   status: 'received' | 'delivered' | 'returned';
   received_at: string;
+  delivered_at: string | null;
+  delivered_to: string | null;
   notes: string | null;
+  photo_url: string | null;
 }
 
 export function useSecurity(primary: ActiveMembership | null) {
@@ -71,7 +74,7 @@ export function useSecurity(primary: ActiveMembership | null) {
         .limit(20),
       supabase
         .from('packages')
-        .select('id, carrier, tracking_number, status, received_at, notes')
+        .select('id, carrier, tracking_number, status, received_at, delivered_at, delivered_to, notes, photo_url')
         .eq('unit_id', primary.unit_id)
         .order('received_at', { ascending: false })
         .limit(10),

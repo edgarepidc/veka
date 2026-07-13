@@ -5,6 +5,7 @@ import {
   ASSEMBLY_STATUSES,
   ASSEMBLY_STATUS_LABELS,
   STORAGE_BUCKETS,
+  matchesCommunityClusterScope,
   ticketStatusLabel,
   type AssemblyStatus,
   type MaintenanceTicketStatus,
@@ -108,14 +109,20 @@ export function AssembliesPanel({
           (post.post_type === 'announcement' ||
             post.post_type === 'poll' ||
             post.post_type === 'photo') &&
-          !linkedPostIds.has(post.id),
+          !linkedPostIds.has(post.id) &&
+          matchesCommunityClusterScope(post.clusters, clusterId || 'all'),
       ),
-    [linkedPostIds, posts],
+    [clusterId, linkedPostIds, posts],
   );
 
   const availableDocuments = useMemo(
-    () => documents.filter((doc) => !linkedDocumentIds.has(doc.id)),
-    [documents, linkedDocumentIds],
+    () =>
+      documents.filter(
+        (doc) =>
+          !linkedDocumentIds.has(doc.id) &&
+          matchesCommunityClusterScope(doc.clusters, clusterId || 'all'),
+      ),
+    [clusterId, documents, linkedDocumentIds],
   );
 
   const postsById = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);

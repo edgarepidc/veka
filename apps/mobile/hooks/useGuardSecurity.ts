@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { parseVisitQrPayload, visitTypeLabelEs } from '@veka/shared';
+import {
+  STORAGE_BUCKETS,
+  condominiumDayBoundsIso,
+  packagePhotoPath,
+  parseVisitQrPayload,
+  visitTypeLabelEs,
+} from '@veka/shared';
 
+import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { notifyNewPackage } from '@/lib/notify-new-package';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
+
+export interface GuardUnitRef {
+  identifier: string;
+  cluster_id: string | null;
+  cluster: { name: string } | null;
+}
 
 export interface GuardVisitRow {
   id: string;
@@ -18,7 +31,7 @@ export interface GuardVisitRow {
   notes: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
-  unit: { identifier: string } | null;
+  unit: GuardUnitRef | null;
 }
 
 export interface GuardPackageRow {
@@ -26,14 +39,17 @@ export interface GuardPackageRow {
   carrier: string | null;
   tracking_number: string | null;
   notes: string | null;
+  photo_url: string | null;
   status: 'received' | 'delivered' | 'returned';
   received_at: string;
-  unit: { identifier: string } | null;
+  unit: GuardUnitRef | null;
 }
 
 export interface GuardUnitOption {
   id: string;
   identifier: string;
+  cluster_id: string | null;
+  cluster: { name: string } | null;
 }
 
 export interface GuardCheckInResult {
@@ -44,11 +60,28 @@ export interface GuardCheckInResult {
   alreadyCheckedIn: boolean;
 }
 
+function asSingle<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function mapUnitRef(raw: unknown): GuardUnitRef | null {
+  const unitRaw = asSingle(raw as GuardUnitRef | GuardUnitRef[] | null);
+  if (!unitRaw) return null;
+  const cluster = asSingle(unitRaw.cluster);
+  return {
+    identifier: unitRaw.identifier,
+    cluster_id: unitRaw.cluster_id ?? null,
+    cluster,
+  };
+}
+
 export function useGuardSecurity(primary: ActiveMembership | null) {
   const { user } = useAuth();
   const [visits, setVisits] = useState<GuardVisitRow[]>([]);
   const [packages, setPackages] = useState<GuardPackageRow[]>([]);
   const [units, setUnits] = useState<GuardUnitOption[]>([]);
+  const [timezone, setTimezone] = useState('America/Mexico_City');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -62,47 +95,87 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
       return;
     }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    const { data: condo } = await supabase
+      .from('condominiums')
+      .select('timezone')
+      .eq('id', primary.condominium_id)
+      .maybeSingle();
+
+    const condoTimezone = condo?.timezone?.trim() || 'America/Mexico_City';
+    setTimezone(condoTimezone);
+    const { startIso, endIso } = condominiumDayBoundsIso(condoTimezone);
 
     const [visitsRes, packagesRes, unitsRes] = await Promise.all([
       supabase
         .from('visits')
         .select(
-          'id, visitor_name, visit_type, valid_from, valid_until, stay_days, vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at, unit:units(identifier)',
+          `
+          id, visitor_name, visit_type, valid_from, valid_until, stay_days,
+          vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at,
+          unit:units(identifier, cluster_id, cluster:clusters(name))
+        `,
         )
         .eq('condominium_id', primary.condominium_id)
-        .lte('valid_from', endOfDay.toISOString())
-        .gte('valid_until', startOfDay.toISOString())
+        .lte('valid_from', endIso)
+        .gte('valid_until', startIso)
         .order('valid_from'),
       supabase
         .from('packages')
-        .select('id, carrier, tracking_number, notes, status, received_at, unit:units(identifier)')
+        .select(
+          `
+          id, carrier, tracking_number, notes, photo_url, status, received_at,
+          unit:units(identifier, cluster_id, cluster:clusters(name))
+        `,
+        )
         .eq('condominium_id', primary.condominium_id)
         .eq('status', 'received')
         .order('received_at', { ascending: false })
         .limit(40),
       supabase
         .from('units')
-        .select('id, identifier')
+        .select('id, identifier, cluster_id, cluster:clusters(name)')
         .eq('condominium_id', primary.condominium_id)
         .order('identifier'),
     ]);
 
-    const mapUnit = <T extends { unit: { identifier: string } | { identifier: string }[] | null }>(row: T) => ({
-      ...row,
-      unit: Array.isArray(row.unit) ? (row.unit[0] ?? null) : row.unit,
-    });
-
     setVisits(
-      ((visitsRes.data ?? []) as unknown as GuardVisitRow[]).map((row) => mapUnit(row)),
+      ((visitsRes.data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        visitor_name: String(row.visitor_name),
+        visit_type: row.visit_type as GuardVisitRow['visit_type'],
+        valid_from: String(row.valid_from),
+        valid_until: String(row.valid_until),
+        stay_days: (row.stay_days as number | null) ?? null,
+        vehicle_plate: (row.vehicle_plate as string | null) ?? null,
+        vehicle_model: (row.vehicle_model as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        checked_in_at: (row.checked_in_at as string | null) ?? null,
+        checked_out_at: (row.checked_out_at as string | null) ?? null,
+        unit: mapUnitRef(row.unit),
+      })),
     );
+
     setPackages(
-      ((packagesRes.data ?? []) as unknown as GuardPackageRow[]).map((row) => mapUnit(row)),
+      ((packagesRes.data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        carrier: (row.carrier as string | null) ?? null,
+        tracking_number: (row.tracking_number as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        photo_url: (row.photo_url as string | null) ?? null,
+        status: row.status as GuardPackageRow['status'],
+        received_at: String(row.received_at),
+        unit: mapUnitRef(row.unit),
+      })),
     );
-    setUnits((unitsRes.data as GuardUnitOption[]) ?? []);
+
+    setUnits(
+      ((unitsRes.data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
+        id: String(row.id),
+        identifier: String(row.identifier),
+        cluster_id: (row.cluster_id as string | null) ?? null,
+        cluster: asSingle(row.cluster as { name: string } | { name: string }[] | null),
+      })),
+    );
     setLoading(false);
   }, [primary?.condominium_id]);
 
@@ -218,6 +291,9 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
       carrier?: string;
       trackingNumber?: string;
       notes?: string;
+      photoUri?: string;
+      photoMime?: string;
+      photoName?: string;
     }) => {
       if (!user || !primary?.condominium_id) {
         return { error: 'Sin condominio asignado.' };
@@ -225,6 +301,23 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
       if (!input.unitId) return { error: 'Selecciona la unidad.' };
 
       setActionError(null);
+      let photoUrl: string | null = null;
+
+      if (input.photoUri) {
+        const ext = input.photoName?.split('.').pop() ?? 'jpg';
+        const path = packagePhotoPath(primary.condominium_id, `${Date.now()}`, ext);
+        const bytes = await readUriAsArrayBuffer(input.photoUri);
+        const { error: uploadError } = await supabase.storage.from(STORAGE_BUCKETS.PACKAGES).upload(path, bytes, {
+          contentType: input.photoMime ?? 'image/jpeg',
+          upsert: false,
+        });
+        if (uploadError) {
+          setActionError(uploadError.message);
+          return { error: uploadError.message };
+        }
+        photoUrl = path;
+      }
+
       const { data, error } = await supabase
         .from('packages')
         .insert({
@@ -233,6 +326,7 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
           carrier: input.carrier?.trim() || null,
           tracking_number: input.trackingNumber?.trim() || null,
           notes: input.notes?.trim() || null,
+          photo_url: photoUrl,
           received_by: user.id,
           status: 'received',
         })
@@ -253,15 +347,18 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
   );
 
   const deliverPackage = useCallback(
-    async (packageId: string, deliveredTo?: string) => {
+    async (packageId: string, deliveredTo: string) => {
       if (!packageId) return { error: 'Paquete inválido.' };
+      const recipient = deliveredTo.trim();
+      if (!recipient) return { error: 'Indica quién recogió el paquete.' };
+
       setActionError(null);
       const { error } = await supabase
         .from('packages')
         .update({
           status: 'delivered',
           delivered_at: new Date().toISOString(),
-          delivered_to: deliveredTo?.trim() || null,
+          delivered_to: recipient,
         })
         .eq('id', packageId)
         .eq('status', 'received');
@@ -276,10 +373,17 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
     [refresh],
   );
 
+  const getPackagePhotoUrl = useCallback(async (path: string) => {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const { data } = await supabase.storage.from(STORAGE_BUCKETS.PACKAGES).createSignedUrl(path, 3600);
+    return data?.signedUrl ?? null;
+  }, []);
+
   return {
     visits,
     packages,
     units,
+    timezone,
     loading,
     refreshing,
     actionError,
@@ -288,5 +392,6 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
     checkOutVisit,
     registerPackage,
     deliverPackage,
+    getPackagePhotoUrl,
   };
 }

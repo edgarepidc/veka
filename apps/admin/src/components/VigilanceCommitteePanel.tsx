@@ -50,7 +50,10 @@ export function VigilanceCommitteePanel({
   }, [memberIds, query, residents]);
 
   const visibleMembers = useMemo(
-    () => (clusterId ? members.filter((row) => row.clusterId === clusterId) : members),
+    () =>
+      clusterId
+        ? members.filter((row) => !row.clusterId || row.clusterId === clusterId)
+        : members,
     [clusterId, members],
   );
 

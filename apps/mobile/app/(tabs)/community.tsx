@@ -70,7 +70,7 @@ export default function CommunityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { primary, loading: membershipLoading } = useMembership();
-  const { condominiumName, scopeFilterItems, hasClusters, loading: clustersLoading } =
+  const { condominiumName, clusters, scopeFilterItems, hasClusters, loading: clustersLoading } =
     useCondominiumClusters(primary);
   const { posts, documents, loading, refreshing, refresh, toggleReaction, votePoll, addComment, deleteComment, canVoteInPost, hasOutstandingDebt } =
     useCommunity(primary);
@@ -116,8 +116,7 @@ export default function CommunityScreen() {
     const post = posts.find((item) => item.id === postId);
     setTab('feed');
     if (post?.post_type === 'poll') setFilter('poll');
-    else if (post?.post_type === 'photo') setFilter('photo');
-    else if (post?.post_type === 'announcement') setFilter('announcement');
+    else if (post?.post_type === 'announcement' || post?.post_type === 'photo') setFilter('announcement');
     else setFilter('all');
     setShowInbox(false);
     setScrollTarget({ postId, commentId: commentId ?? null });
@@ -247,10 +246,13 @@ export default function CommunityScreen() {
     if (data?.signedUrl) openInAppDocument(data.signedUrl, title);
   }
 
-  const myClusterId = primary?.unit?.cluster?.id ?? null;
-
   const filteredPosts = useMemo(() => {
-    let list = filter === 'all' ? posts : posts.filter((p) => p.post_type === filter);
+    let list = posts;
+    if (filter === 'announcement') {
+      list = posts.filter((p) => p.post_type === 'announcement' || p.post_type === 'photo');
+    } else if (filter !== 'all') {
+      list = posts.filter((p) => p.post_type === filter);
+    }
     if (clusterFilter !== 'all') {
       list = list.filter((post) => matchesCommunityClusterScope(post.clusters, clusterFilter));
     }
@@ -266,6 +268,28 @@ export default function CommunityScreen() {
     () => assemblies.filter((assembly) => matchesCommunityClusterScope(assembly.clusters, clusterFilter)),
     [assemblies, clusterFilter],
   );
+
+  const activeClusterName = useMemo(
+    () => clusters.find((cluster) => cluster.id === clusterFilter)?.name ?? null,
+    [clusterFilter, clusters],
+  );
+
+  const scopedDirectorySections = useMemo(() => {
+    if (clusterFilter === 'all') return directorySections;
+    return directorySections.map((section) => ({
+      ...section,
+      members: section.members.filter(
+        (member) => !member.clusterName || member.clusterName === activeClusterName,
+      ),
+    }));
+  }, [activeClusterName, clusterFilter, directorySections]);
+
+  const scopedCommittee = useMemo(() => {
+    if (clusterFilter === 'all') return committee;
+    return committee.filter(
+      (member) => !member.clusterName || member.clusterName === activeClusterName,
+    );
+  }, [activeClusterName, clusterFilter, committee]);
 
   function formatAssemblyDate(iso: string | null): string {
     if (!iso) return 'Sin fecha';
@@ -358,8 +382,8 @@ export default function CommunityScreen() {
         <View style={styles.section}>
           <TabStrip
             tabs={[
-              { key: 'feed', label: 'Feed' },
-              { key: 'docs', label: 'Docs' },
+              { key: 'feed', label: 'Avisos' },
+              { key: 'docs', label: 'Documentos' },
               { key: 'directory', label: 'Mi comunidad' },
               { key: 'assemblies', label: 'Asambleas' },
             ]}
@@ -367,7 +391,7 @@ export default function CommunityScreen() {
             onChange={setTab}
           />
 
-          {tab !== 'directory' && hasClusters ? (
+          {hasClusters ? (
             <ScopeFilterBar items={scopeFilterItems} active={clusterFilter} onChange={setClusterFilter} />
           ) : null}
 
@@ -378,7 +402,6 @@ export default function CommunityScreen() {
                   { key: 'all', label: 'Todos' },
                   { key: 'announcement', label: 'Avisos' },
                   { key: 'poll', label: 'Encuestas' },
-                  { key: 'photo', label: 'Fotos' },
                 ]}
                 active={filter}
                 onChange={setFilter}
@@ -673,7 +696,7 @@ export default function CommunityScreen() {
               <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 4 }}>
                 Equipo de administración y comité de vigilancia de tu condominio.
               </Text>
-              {directorySections.map((section) => (
+              {scopedDirectorySections.map((section) => (
                 <GlassCard key={section.id}>
                   <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{section.title}</Text>
                   <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4, marginBottom: 10 }}>
@@ -709,10 +732,10 @@ export default function CommunityScreen() {
                 <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4, marginBottom: 10 }}>
                   Vecinos que vigilan el actuar de la administración.
                 </Text>
-                {committee.length === 0 ? (
+                {scopedCommittee.length === 0 ? (
                   <Text style={{ color: theme.textMuted, fontSize: 13 }}>Sin integrantes publicados.</Text>
                 ) : (
-                  committee.map((member) => (
+                  scopedCommittee.map((member) => (
                     <View
                       key={member.id}
                       style={[styles.directoryRow, { borderColor: theme.glassBorder }]}

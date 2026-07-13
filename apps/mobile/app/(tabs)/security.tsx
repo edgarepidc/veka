@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Keyboard,
   Pressable,
   RefreshControl,
@@ -12,6 +13,7 @@ import {
 import {
   DEFAULT_RENTAL_STAY_DAYS,
   RENTAL_OVERDUE_BLOCK_MESSAGE,
+  STORAGE_BUCKETS,
   endDateKeyFromStartAndStayDays,
   formatDateKey,
   formatVisitDateRangeLabel,
@@ -43,7 +45,7 @@ import {
   visitStatusLabel,
   visitTagTone,
 } from '@/lib/card-accent';
-
+import { supabase } from '@/lib/supabase';
 function formatVisitRange(from: string, until: string): string {
   const startKey = formatDateKey(new Date(from));
   const endKey = formatDateKey(new Date(until));
@@ -77,12 +79,37 @@ export default function SecurityScreen() {
   const [endDate, setEndDate] = useState(todayDateKey());
   const [submitting, setSubmitting] = useState(false);
   const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+  const [packagePhotoUrls, setPackagePhotoUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (params.tab === 'paquetes' || params.tab === 'visitas' || params.tab === 'qr') {
       setTab(params.tab);
     }
   }, [params.tab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, string> = {};
+      await Promise.all(
+        packages.map(async (pkg) => {
+          if (!pkg.photo_url) return;
+          if (pkg.photo_url.startsWith('http://') || pkg.photo_url.startsWith('https://')) {
+            next[pkg.id] = pkg.photo_url;
+            return;
+          }
+          const { data } = await supabase.storage
+            .from(STORAGE_BUCKETS.PACKAGES)
+            .createSignedUrl(pkg.photo_url, 3600);
+          if (data?.signedUrl) next[pkg.id] = data.signedUrl;
+        }),
+      );
+      if (!cancelled) setPackagePhotoUrls(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [packages]);
 
   useEffect(() => {
     if (visitType === 'rental') {
@@ -276,6 +303,22 @@ export default function SecurityScreen() {
                         new Date(pkg.received_at),
                       )}
                     </Text>
+                    {pkg.delivered_to ? (
+                      <Text style={{ color: theme.textSubtle, fontSize: 12, marginTop: 4 }}>
+                        Entregado a {pkg.delivered_to}
+                        {pkg.delivered_at
+                          ? ` · ${new Intl.DateTimeFormat('es-MX', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }).format(new Date(pkg.delivered_at))}`
+                          : ''}
+                      </Text>
+                    ) : null}
+                    {packagePhotoUrls[pkg.id] ? (
+                      <Image source={{ uri: packagePhotoUrls[pkg.id] }} style={styles.packagePhoto} />
+                    ) : null}
                   </GlassCard>
                 ))
             )
@@ -397,4 +440,5 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 13, marginTop: 6, lineHeight: 20 },
   typeRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   typeChip: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 10, alignItems: 'center' },
+  packagePhoto: { marginTop: 10, height: 96, width: 140, borderRadius: 12 },
 });
