@@ -615,9 +615,9 @@ export function SpacesManager({
                       </div>
                     </div>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        amenity.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-subtle'
-                      }`}
+                      className={
+                        amenity.is_active ? 'glass-tag-green px-2.5 py-1' : 'glass-tag-gray px-2.5 py-1'
+                      }
                     >
                       {amenity.is_active ? 'Activa' : 'Inactiva'}
                     </span>
