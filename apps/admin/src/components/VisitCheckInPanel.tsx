@@ -128,14 +128,14 @@ export function VisitCheckInPanel({ condominiumId }: VisitCheckInPanelProps) {
   return (
     <GlassCard>
       <h2 className="text-lg font-semibold text-[var(--text)]">Escanear pase de visita</h2>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">
+      <p className="mt-1 text-sm text-muted">
         Escanea el QR del residente o ingresa la referencia manualmente para registrar el ingreso.
       </p>
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)] bg-black/5">
         <div id={SCANNER_ID} className="min-h-[260px] w-full" />
         {!scanning ? (
-          <div className="flex items-center justify-center border-t border-[var(--border)] bg-[var(--surface-muted)] px-4 py-6 text-sm text-[var(--text-muted)]">
+          <div className="flex items-center justify-center border-t border-[var(--border)] bg-[var(--surface-muted)] px-4 py-6 text-sm text-muted">
             Toca «Iniciar cámara» para escanear el pase.
           </div>
         ) : null}
@@ -143,19 +143,11 @@ export function VisitCheckInPanel({ condominiumId }: VisitCheckInPanelProps) {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {!scanning ? (
-          <button
-            type="button"
-            onClick={() => void startScanner()}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white"
-          >
+          <button type="button" onClick={() => void startScanner()} className="glass-btn-primary">
             Iniciar cámara
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => void stopScanner()}
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--text)]"
-          >
+          <button type="button" onClick={() => void stopScanner()} className="glass-btn-secondary">
             Detener cámara
           </button>
         )}
@@ -175,31 +167,34 @@ export function VisitCheckInPanel({ condominiumId }: VisitCheckInPanelProps) {
             value={manualRef}
             onChange={(event) => setManualRef(event.target.value)}
             placeholder="Pega el JSON del QR o los 32 caracteres del token"
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
+            className="glass-input"
           />
         </label>
         <button
           type="submit"
           disabled={pending || !manualRef.trim()}
-          className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--text)] disabled:opacity-60"
+          className="glass-btn-secondary disabled:opacity-60"
         >
           {pending ? 'Validando…' : 'Validar referencia'}
         </button>
       </form>
 
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
 
       {result ? (
-        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <p className="font-semibold">
+        <div className="mt-4 rounded-2xl border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-4 py-3 text-sm">
+          <p className="font-semibold text-accent">
             {result.alreadyCheckedIn ? 'Visita ya registrada dentro' : 'Ingreso autorizado'}
           </p>
-          <p className="mt-1">
+          <p className="mt-1 text-[var(--text)]">
             {result.visitorName} · {visitTypeLabelEs(result.visitType as 'visit' | 'service' | 'rental')} · Unidad{' '}
             {result.unitIdentifier}
           </p>
-          <p className="mt-1 text-emerald-800">
-            Válido hasta {new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(result.validUntil))}
+          <p className="mt-1 text-muted">
+            Válido hasta{' '}
+            {new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(
+              new Date(result.validUntil),
+            )}
           </p>
         </div>
       ) : null}

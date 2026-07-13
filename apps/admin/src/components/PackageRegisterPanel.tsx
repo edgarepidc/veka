@@ -1,34 +1,39 @@
 'use client';
 
+import { packagePhotoPath, STORAGE_BUCKETS } from '@veka/shared';
 import { useState, useTransition } from 'react';
 
 import { registerPackage } from '@/app/(panel)/seguridad/actions';
+import { FileUpload } from '@/components/ui/FileUpload';
 import { GlassCard } from '@/components/ui/GlassCard';
-
-interface UnitOption {
-  id: string;
-  identifier: string;
-}
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { UnitScopeSelect, type UnitScopeOption } from '@/components/UnitScopeSelect';
+import { HELP } from '@/lib/help-content';
 
 export function PackageRegisterPanel({
   condominiumId,
   units,
+  scopeFilter,
 }: {
   condominiumId: string;
-  units: UnitOption[];
+  units: UnitScopeOption[];
+  scopeFilter: string;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [formKey, setFormKey] = useState(0);
 
   return (
     <GlassCard>
-      <h2 className="text-lg font-semibold text-[var(--text)]">Registrar paquete en caseta</h2>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Al guardar, los residentes de la unidad reciben una notificación push en la app.
+      <SectionHeading help={HELP.seguridad}>Registrar paquete en caseta</SectionHeading>
+      <p className="mt-1 text-sm text-muted">
+        Al guardar, los residentes de la unidad reciben una notificación push. Puedes adjuntar una foto
+        del paquete.
       </p>
 
       <form
+        key={formKey}
         className="mt-4 grid gap-3"
         action={(formData) => {
           setMessage(null);
@@ -40,6 +45,7 @@ export function PackageRegisterPanel({
               return;
             }
             setMessage('Paquete registrado y notificación enviada.');
+            setFormKey((value) => value + 1);
           });
         }}
       >
@@ -47,55 +53,40 @@ export function PackageRegisterPanel({
 
         <label className="grid gap-1 text-sm">
           <span className="font-medium text-[var(--text)]">Unidad</span>
-          <select
-            name="unit_id"
-            required
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
-            defaultValue=""
-          >
-            <option value="" disabled>
-              Selecciona unidad
-            </option>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.identifier}
-              </option>
-            ))}
-          </select>
+          <UnitScopeSelect units={units} scopeFilter={scopeFilter} />
         </label>
 
         <label className="grid gap-1 text-sm">
           <span className="font-medium text-[var(--text)]">Paquetería / carrier</span>
-          <input
-            name="carrier"
-            placeholder="Amazon, DHL, Estafeta…"
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
-          />
+          <input name="carrier" placeholder="Amazon, DHL, Estafeta…" className="glass-input" />
         </label>
 
         <label className="grid gap-1 text-sm">
           <span className="font-medium text-[var(--text)]">Número de guía (opcional)</span>
-          <input
-            name="tracking_number"
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
-          />
+          <input name="tracking_number" className="glass-input" />
         </label>
 
         <label className="grid gap-1 text-sm">
           <span className="font-medium text-[var(--text)]">Notas (opcional)</span>
-          <input
-            name="notes"
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[var(--text)]"
-          />
+          <input name="notes" className="glass-input" />
         </label>
 
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
+        <FileUpload
+          bucket={STORAGE_BUCKETS.PACKAGES}
+          inputName="photo_url"
+          label="Foto del paquete (opcional)"
+          hint="Imagen del paquete en caseta (máx. 2 MB)."
+          uploadButtonLabel="Subir foto"
+          buildPath={(ext) => packagePhotoPath(condominiumId, crypto.randomUUID(), ext)}
+        />
+
+        {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        {message ? <p className="text-sm text-accent">{message}</p> : null}
 
         <button
           type="submit"
           disabled={pending || units.length === 0}
-          className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          className="glass-btn-primary disabled:opacity-60"
         >
           {pending ? 'Guardando…' : 'Registrar y notificar'}
         </button>

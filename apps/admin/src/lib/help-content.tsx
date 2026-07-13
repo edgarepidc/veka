@@ -76,6 +76,8 @@ export const HELP = {
   },
   mantenimiento:
     'Programa actividades por día (semanal, quincenal, mensual o a demanda) y registra evidencia fotográfica por fecha. Los residentes consultan el programa y filtran evidencia por mes.',
+  seguridad:
+    'Caseta: valida pases QR, registra paquetes (con foto) y opera visitas/entregas del día. Los chips Todo/torre filtran unidades y la bitácora. Las políticas de rentas con adeudo las edita administración.',
   unidades:
     'Torres (clusters) y unidades con coeficiente de participación. Desde aquí envías invitaciones a residentes.',
   equipo:

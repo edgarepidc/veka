@@ -137,6 +137,7 @@ export async function registerPackage(formData: FormData) {
   const carrier = String(formData.get('carrier') ?? '').trim();
   const trackingNumber = String(formData.get('tracking_number') ?? '').trim();
   const notes = String(formData.get('notes') ?? '').trim();
+  const photoUrl = String(formData.get('photo_url') ?? '').trim();
 
   if (!condominiumId || !unitId) {
     return { error: 'Selecciona unidad y condominio.' };
@@ -150,6 +151,7 @@ export async function registerPackage(formData: FormData) {
       carrier: carrier || null,
       tracking_number: trackingNumber || null,
       notes: notes || null,
+      photo_url: photoUrl || null,
       received_by: user.id,
       status: 'received',
     })
@@ -184,13 +186,14 @@ export async function deliverPackage(formData: FormData) {
   const deliveredTo = String(formData.get('delivered_to') ?? '').trim();
 
   if (!packageId) return { error: 'Paquete inválido.' };
+  if (!deliveredTo) return { error: 'Indica quién recogió el paquete.' };
 
   const { error } = await supabase
     .from('packages')
     .update({
       status: 'delivered',
       delivered_at: new Date().toISOString(),
-      delivered_to: deliveredTo || null,
+      delivered_to: deliveredTo,
     })
     .eq('id', packageId)
     .eq('status', 'received');

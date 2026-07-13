@@ -5,6 +5,7 @@ export const STORAGE_BUCKETS = {
   DOCUMENTS: 'documents',
   EXPENSE_EVIDENCE: 'expense-evidence',
   MAINTENANCE_FILES: 'maintenance-files',
+  PACKAGES: 'packages',
   POSTS: 'posts',
 } as const;
 
@@ -34,6 +35,10 @@ export function maintenanceFilePath(
   ext: string,
 ): string {
   return `${condominiumId}/${folder}/${fileId}.${ext}`;
+}
+
+export function packagePhotoPath(condominiumId: string, fileId: string, ext: string): string {
+  return `${condominiumId}/packages/${fileId}.${ext}`;
 }
 
 export function documentStoragePath(condominiumId: string, fileId: string, ext: string): string {

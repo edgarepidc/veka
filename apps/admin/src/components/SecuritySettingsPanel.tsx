@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 
 import { updateSecuritySettings } from '@/app/(panel)/seguridad/actions';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HELP } from '@/lib/help-content';
 import type { SecuritySettings } from '@veka/shared';
 
 export function SecuritySettingsPanel({
@@ -22,9 +24,10 @@ export function SecuritySettingsPanel({
   if (!canEdit) {
     return (
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Políticas de acceso</h2>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Rentas con adeudos: {blockRental ? 'bloqueadas' : 'permitidas'}.
+        <SectionHeading help={HELP.seguridad}>Políticas de acceso</SectionHeading>
+        <p className="mt-2 text-sm text-muted">
+          Rentas con adeudos: {blockRental ? 'bloqueadas' : 'permitidas'}. Solo administración puede cambiar esta
+          política.
         </p>
       </GlassCard>
     );
@@ -32,8 +35,8 @@ export function SecuritySettingsPanel({
 
   return (
     <GlassCard>
-      <h2 className="text-lg font-semibold text-[var(--text)]">Políticas de acceso</h2>
-      <p className="mt-1 text-sm text-[var(--text-muted)]">
+      <SectionHeading help={HELP.seguridad}>Políticas de acceso</SectionHeading>
+      <p className="mt-1 text-sm text-muted">
         Configura restricciones para pases de renta generados por residentes.
       </p>
 
@@ -57,7 +60,7 @@ export function SecuritySettingsPanel({
           />
           <span>
             <span className="font-medium">Restringir rentas con adeudos de mantenimiento</span>
-            <span className="mt-1 block text-[var(--text-muted)]">
+            <span className="mt-1 block text-muted">
               Si la unidad tiene cuotas vencidas o pendientes después de la fecha de pago, no podrá generar
               pases de renta en la app.
             </span>
@@ -65,16 +68,18 @@ export function SecuritySettingsPanel({
         </label>
 
         {message ? (
-          <p className={`text-sm ${message.includes('Error') || message.includes('error') ? 'text-red-600' : 'text-emerald-600'}`}>
+          <p
+            className={`text-sm ${
+              message.includes('Error') || message.toLowerCase().includes('error')
+                ? 'text-red-300'
+                : 'text-accent'
+            }`}
+          >
             {message}
           </p>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-        >
+        <button type="submit" disabled={pending} className="glass-btn-primary disabled:opacity-60">
           {pending ? 'Guardando…' : 'Guardar políticas'}
         </button>
       </form>
