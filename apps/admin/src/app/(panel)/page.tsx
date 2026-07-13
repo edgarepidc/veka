@@ -22,7 +22,7 @@ const modules = [
   },
   {
     title: 'Configuración',
-    description: 'Perfil, condominio, unidades y equipo.',
+    description: 'Perfil, unidades, invitaciones y equipo.',
     href: '/configuracion',
     icon: '⚙️',
   },
