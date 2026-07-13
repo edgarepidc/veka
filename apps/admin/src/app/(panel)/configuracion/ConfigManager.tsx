@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { TeamManager } from '@/app/(panel)/configuracion/equipo/TeamManager';
-import { InvitationsPanel } from '@/app/(panel)/configuracion/invitaciones/InvitationsPanel';
 import { ProfileForm } from '@/app/(panel)/configuracion/perfil/ProfileForm';
 import { UnitsManager } from '@/app/(panel)/configuracion/unidades/UnitsManager';
 import { FinanceScopeFilter } from '@/components/FinanceScopeFilter';
@@ -14,14 +13,13 @@ import { HelpHint } from '@/components/ui/HelpHint';
 import type { AdminSession } from '@/lib/load-admin-session';
 import type { ClusterRow, UnitRow } from '@/lib/load-condominium';
 import type { ManualDirectoryEntry } from '@/lib/load-manual-directory';
-import type { StaffInvitation, TeamMember } from '@/lib/load-team';
+import type { TeamMember } from '@/lib/load-team';
 import { HELP } from '@/lib/help-content';
 
-type ConfigTab = 'unidades' | 'invitaciones' | 'equipo' | 'perfil';
+type ConfigTab = 'unidades' | 'equipo' | 'perfil';
 
 const ADMIN_TABS: { id: ConfigTab; label: string }[] = [
   { id: 'unidades', label: 'Unidades' },
-  { id: 'invitaciones', label: 'Invitaciones' },
   { id: 'equipo', label: 'Equipo' },
   { id: 'perfil', label: 'Mi perfil' },
 ];
@@ -30,27 +28,24 @@ const RESIDENT_TABS: { id: ConfigTab; label: string }[] = [{ id: 'perfil', label
 
 const TAB_HELP: Record<ConfigTab, string> = {
   unidades: HELP.unidades,
-  invitaciones: HELP.invitaciones,
   equipo: HELP.equipo,
   perfil: 'Tu nombre, foto, teléfono y preferencia de apariencia en el panel.',
 };
 
 const TAB_FOOTER: Record<ConfigTab, string> = {
   unidades:
-    'Crea torres/clusters y unidades. Desde cada unidad puedes invitar propietario o inquilino. La marca y datos generales del condominio se editan en Platform (super admin).',
-  invitaciones:
-    'Invita por correo con rol y unidad. Las invitaciones de staff también se pueden enviar desde Equipo; las de residentes conviene darlas desde Unidades o aquí.',
+    'Crea torres/clusters y unidades. Registra propietario o inquilino con correo y contraseña para que entren a la app. La marca del condominio se edita en Platform.',
   equipo:
-    'Gestiona roles de app (admin, mantenimiento, caseta) y el directorio manual. El comité de vigilancia vive en Comunidad → Mi comunidad.',
-  perfil: 'Tu perfil personal no cambia la configuración del condominio; solo afecta cómo te ven en el panel y el directorio.',
+    'Registra admin, mantenimiento o caseta con acceso directo. El directorio manual es solo para quien no usará la app. El comité vive en Comunidad → Mi comunidad.',
+  perfil:
+    'Tu perfil personal no cambia la configuración del condominio; solo afecta cómo te ven en el panel y el directorio. Aquí también cambias tu contraseña.',
 };
 
 function normalizeTab(raw: string | null, isAdmin: boolean): ConfigTab {
   const value = (raw ?? '').toLowerCase();
   if (!isAdmin) return 'perfil';
-  if (value === 'unidades' || value === 'invitaciones' || value === 'equipo' || value === 'perfil') {
-    return value;
-  }
+  if (value === 'unidades' || value === 'equipo' || value === 'perfil') return value;
+  if (value === 'invitaciones') return 'unidades';
   return 'unidades';
 }
 
@@ -60,7 +55,6 @@ export function ConfigManager({
   clusters,
   units,
   teamMembers,
-  teamInvitations,
   manualStaff,
 }: {
   session: AdminSession;
@@ -68,7 +62,6 @@ export function ConfigManager({
   clusters: ClusterRow[];
   units: UnitRow[];
   teamMembers: TeamMember[];
-  teamInvitations: StaffInvitation[];
   manualStaff: ManualDirectoryEntry[];
 }) {
   const router = useRouter();
@@ -81,7 +74,7 @@ export function ConfigManager({
     [isAdmin, searchParams],
   );
 
-  const showScope = isAdmin && clusters.length > 0 && (tab === 'unidades' || tab === 'invitaciones');
+  const showScope = isAdmin && clusters.length > 0 && tab === 'unidades';
 
   const scopedClusters = useMemo(() => {
     if (!scopeFilter) return clusters;
@@ -142,31 +135,8 @@ export function ConfigManager({
 
       {tab === 'unidades' && isAdmin ? <UnitsManager clusters={scopedClusters} units={scopedUnits} /> : null}
 
-      {tab === 'invitaciones' && isAdmin ? (
-        condominiumId ? (
-          <InvitationsPanel
-            condominiumId={condominiumId}
-            condominiumName={condominiumName}
-            units={scopedUnits.map((unit) => ({
-              id: unit.id,
-              identifier: unit.identifier,
-              clusterName: unit.cluster?.name ?? null,
-            }))}
-          />
-        ) : (
-          <GlassCard>
-            <p className="text-sm text-muted">Sin condominio activo para enviar invitaciones.</p>
-          </GlassCard>
-        )
-      ) : null}
-
       {tab === 'equipo' && isAdmin ? (
-        <TeamManager
-          members={teamMembers}
-          invitations={teamInvitations}
-          currentUserId={session.userId}
-          manualStaff={manualStaff}
-        />
+        <TeamManager members={teamMembers} currentUserId={session.userId} manualStaff={manualStaff} />
       ) : null}
 
       {tab === 'perfil' ? <ProfileForm session={session} /> : null}

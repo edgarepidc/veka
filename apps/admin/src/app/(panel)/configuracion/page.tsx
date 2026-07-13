@@ -32,13 +32,13 @@ export default async function ConfiguracionPage() {
         highlight={isAdmin ? 'administrativa' : 'personal'}
         subtitle={
           isAdmin
-            ? 'Unidades, invitaciones y equipo del condominio activo.'
+            ? 'Unidades, equipo y perfil del condominio activo.'
             : 'Tu perfil y preferencias de acceso.'
         }
         help={
           <p>
             {isAdmin
-              ? 'Organiza torres y vecinos, invita accesos y define el equipo operativo. La marca del condominio se edita en Platform.'
+              ? 'Registra viviendas y accesos con correo y contraseña. La marca del condominio se edita en Platform.'
               : 'Actualiza tu perfil, apariencia y contraseña de acceso.'}
           </p>
         }
@@ -56,7 +56,6 @@ export default async function ConfiguracionPage() {
           clusters={unitsBundle.clusters}
           units={unitsBundle.units}
           teamMembers={team.members}
-          teamInvitations={team.invitations}
           manualStaff={manualStaff}
         />
       </Suspense>

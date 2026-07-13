@@ -1,7 +1,13 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { formatUnitLabel, UNIT_KIND_LABELS, UNIT_RELATIONSHIP_CHIP_LABELS, UNIT_RELATIONSHIP_LABELS, type UnitKind } from '@veka/shared';
+import {
+  formatUnitLabel,
+  UNIT_KIND_LABELS,
+  UNIT_RELATIONSHIP_CHIP_LABELS,
+  UNIT_RELATIONSHIP_LABELS,
+  type UnitKind,
+} from '@veka/shared';
 
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatChip } from '@/components/ui/StatChip';
@@ -9,7 +15,7 @@ import { SectionHeading } from '@/components/ui/SectionHeading';
 import { HELP } from '@/lib/help-content';
 import type { ClusterRow, UnitOccupant, UnitRow as UnitData } from '@/lib/load-condominium';
 
-import { createCluster, createUnit, deleteCluster, deleteUnit, inviteUnitOccupant } from './actions';
+import { createCluster, createUnit, deleteCluster, deleteUnit, registerUnitOccupant } from './actions';
 
 export interface ClusterStats {
   total: number;
@@ -55,9 +61,7 @@ export function computeClusterStats(units: UnitData[]): ClusterStats {
 }
 
 function hasRegisteredOwner(unit: UnitData): boolean {
-  return Boolean(
-    (unit.owner && !unit.owner.pending) || (unit.resident && !unit.resident.pending),
-  );
+  return Boolean((unit.owner && !unit.owner.pending) || (unit.resident && !unit.resident.pending));
 }
 
 function hasRegisteredTenant(unit: UnitData): boolean {
@@ -73,6 +77,15 @@ function missingPeopleForUnit(unit: UnitData): number {
   if (!hasRegisteredOwner(unit)) count++;
   if (unit.unit_kind === 'casa' && !hasRegisteredTenant(unit)) count++;
   return count;
+}
+
+function isSuccessMessage(message: string): boolean {
+  return (
+    message.includes('guardados') ||
+    message.includes('agregada') ||
+    message.includes('registrad') ||
+    message.includes('creada')
+  );
 }
 
 export function UnitsManager({
@@ -125,7 +138,8 @@ export function UnitsManager({
       <GlassCard>
         <SectionHeading help={HELP.unidades}>Nuevo cluster / torre / villa</SectionHeading>
         <p className="mt-1 text-sm text-muted">
-          Ej. Torre A, Marbella, Sector Norte. Dentro de cada cluster agregas casas o deptos.
+          Ej. Torre A, Marbella, Sector Norte. Dentro de cada cluster agregas casas o deptos y registras
+          residentes.
         </p>
         <form action={(fd) => run(createCluster, fd)} className="mt-4 flex flex-col gap-3 sm:flex-row">
           <input name="name" placeholder="Ej. Marbella" required className="glass-input flex-1" />
@@ -139,29 +153,19 @@ export function UnitsManager({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() =>
-              setExpanded(Object.fromEntries(clusters.map((c) => [c.id, true])))
-            }
+            onClick={() => setExpanded(Object.fromEntries(clusters.map((c) => [c.id, true])))}
             className="glass-btn-secondary text-xs"
           >
             Expandir todos
           </button>
-          <button
-            type="button"
-            onClick={() => setExpanded({})}
-            className="glass-btn-secondary text-xs"
-          >
+          <button type="button" onClick={() => setExpanded({})} className="glass-btn-secondary text-xs">
             Compactar todos
           </button>
         </div>
       ) : null}
 
       {message ? (
-        <p
-          className={`text-sm ${message.includes('guardados') || message.includes('Invitación') || message.includes('agregada') ? 'text-accent' : 'text-red-300'}`}
-        >
-          {message}
-        </p>
+        <p className={`text-sm ${isSuccessMessage(message) ? 'text-accent' : 'text-red-300'}`}>{message}</p>
       ) : null}
 
       {unitsByCluster.map(({ cluster, units: clusterUnits, stats }) => (
@@ -176,7 +180,7 @@ export function UnitsManager({
           onDeleteCluster={(fd) => run(deleteCluster, fd)}
           onCreateUnit={(fd) => run(createUnit, fd, 'Unidad agregada.')}
           onDeleteUnit={(fd) => run(deleteUnit, fd)}
-          onInvite={(fd) => run(inviteUnitOccupant, fd, 'Invitación enviada.')}
+          onRegister={(fd) => run(registerUnitOccupant, fd, 'Persona registrada.')}
         />
       ))}
 
@@ -205,7 +209,7 @@ export function UnitsManager({
                   clusterName={unit.cluster?.name ?? 'Sin cluster'}
                   pending={pending}
                   onDelete={(fd) => run(deleteUnit, fd)}
-                  onInvite={(fd) => run(inviteUnitOccupant, fd, 'Invitación enviada.')}
+                  onRegister={(fd) => run(registerUnitOccupant, fd, 'Persona registrada.')}
                 />
               ))}
             </ul>
@@ -215,7 +219,9 @@ export function UnitsManager({
 
       {clusters.length === 0 ? (
         <GlassCard deep>
-          <p className="text-sm text-muted">Crea un cluster (torre, villa o sector) para empezar a agregar unidades.</p>
+          <p className="text-sm text-muted">
+            Crea un cluster (torre, villa o sector) para empezar a agregar unidades.
+          </p>
         </GlassCard>
       ) : null}
     </div>
@@ -232,7 +238,7 @@ function ClusterSection({
   onDeleteCluster,
   onCreateUnit,
   onDeleteUnit,
-  onInvite,
+  onRegister,
 }: {
   cluster: ClusterRow;
   units: UnitData[];
@@ -243,8 +249,10 @@ function ClusterSection({
   onDeleteCluster: (formData: FormData) => void;
   onCreateUnit: (formData: FormData) => void;
   onDeleteUnit: (formData: FormData) => void;
-  onInvite: (formData: FormData) => void;
+  onRegister: (formData: FormData) => void;
 }) {
+  const [showTenantOnCreate, setShowTenantOnCreate] = useState(false);
+
   return (
     <GlassCard className="overflow-hidden p-0">
       <div className="flex items-start gap-2 p-4 sm:gap-3">
@@ -276,28 +284,49 @@ function ClusterSection({
         <div className="border-t border-white/10 px-4 pb-4">
           <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <h3 className="text-sm font-semibold text-[var(--text)]">Agregar unidad en {cluster.name}</h3>
-            <form action={onCreateUnit} className="mt-3 grid gap-3 sm:grid-cols-3">
+            <form
+              action={(fd) => {
+                onCreateUnit(fd);
+                setShowTenantOnCreate(false);
+              }}
+              className="mt-3 space-y-4"
+            >
               <input type="hidden" name="cluster_id" value={cluster.id} />
-              <label className="block text-sm text-muted sm:col-span-1">
-                Tipo
-                <select name="unit_kind" required defaultValue="casa" className="glass-input mt-1">
-                  <option value="casa" className="bg-slate-900">
-                    Casa
-                  </option>
-                  <option value="depto" className="bg-slate-900">
-                    Depto
-                  </option>
-                </select>
-              </label>
-              <label className="block text-sm text-muted sm:col-span-1">
-                Número
-                <input name="unit_number" required placeholder="Ej. 284" className="glass-input mt-1" />
-              </label>
-              <div className="flex items-end sm:col-span-1">
-                <button type="submit" disabled={pending} className="glass-btn-primary w-full">
-                  Agregar
-                </button>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm text-muted">
+                  Tipo
+                  <select name="unit_kind" required defaultValue="casa" className="glass-input mt-1">
+                    <option value="casa" className="bg-slate-900">
+                      Casa
+                    </option>
+                    <option value="depto" className="bg-slate-900">
+                      Depto
+                    </option>
+                  </select>
+                </label>
+                <label className="block text-sm text-muted">
+                  Número
+                  <input name="unit_number" required placeholder="Ej. 284" className="glass-input mt-1" />
+                </label>
               </div>
+
+              <PersonFields prefix="owner" title="Propietario (opcional)" />
+
+              {showTenantOnCreate ? (
+                <PersonFields prefix="tenant" title="Inquilino (opcional)" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowTenantOnCreate(true)}
+                  className="glass-btn-secondary text-xs"
+                >
+                  Agregar inquilino
+                </button>
+              )}
+
+              <button type="submit" disabled={pending} className="glass-btn-primary">
+                Agregar unidad
+              </button>
             </form>
           </div>
 
@@ -314,7 +343,7 @@ function ClusterSection({
                   clusterName={cluster.name}
                   pending={pending}
                   onDelete={onDeleteUnit}
-                  onInvite={onInvite}
+                  onRegister={onRegister}
                 />
               ))
             )}
@@ -369,16 +398,20 @@ function UnitCard({
   clusterName,
   pending,
   onDelete,
-  onInvite,
+  onRegister,
 }: {
   unit: UnitData;
   clusterName: string;
   pending: boolean;
   onDelete: (formData: FormData) => void;
-  onInvite: (formData: FormData) => void;
+  onRegister: (formData: FormData) => void;
 }) {
   const label = formatUnitLabel(clusterName, unit);
   const vacant = !hasRegisteredPerson(unit);
+  const ownerReady = hasRegisteredOwner(unit);
+  const tenantReady = hasRegisteredTenant(unit);
+  const [showOwnerForm, setShowOwnerForm] = useState(false);
+  const [showTenantForm, setShowTenantForm] = useState(false);
 
   return (
     <li className="glass-card-deep px-4 py-4">
@@ -390,16 +423,14 @@ function UnitCard({
           ) : null}
 
           <div className="mt-3 space-y-1.5 text-sm">
-            <OccupantLine
-              label={UNIT_RELATIONSHIP_LABELS.owner}
-              occupant={unit.owner ?? unit.resident}
-            />
+            <OccupantLine label={UNIT_RELATIONSHIP_LABELS.owner} occupant={unit.owner ?? unit.resident} />
             <OccupantLine label={UNIT_RELATIONSHIP_LABELS.tenant} occupant={unit.tenant} optional />
           </div>
 
           {vacant ? (
             <div className="glass-notice-amber mt-3 px-3 py-2 text-xs">
-              Sin persona registrada. Invita al residente propietario o inquilino para que acceda a la app.
+              Sin persona registrada. Puedes dejar la vivienda vacía o registrar propietario / inquilino con
+              acceso a la app.
             </div>
           ) : null}
         </div>
@@ -415,24 +446,52 @@ function UnitCard({
       <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
         <p className="text-xs text-subtle">
           Ambos perfiles tienen permisos de residente. Solo las votaciones formales en Comunidad están
-          reservadas al residente propietario.
+          reservadas al propietario. La persona cambia su contraseña después en su perfil.
         </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <InviteForm
-            unitId={unit.id}
-            relationship="owner"
-            label={`Invitar ${UNIT_RELATIONSHIP_LABELS.owner.toLowerCase()}`}
-            disabled={pending || Boolean(unit.owner && !unit.owner.pending)}
-            onInvite={onInvite}
-          />
-          <InviteForm
-            unitId={unit.id}
-            relationship="tenant"
-            label={`Invitar ${UNIT_RELATIONSHIP_LABELS.tenant.toLowerCase()}`}
-            disabled={pending || Boolean(unit.tenant && !unit.tenant.pending)}
-            onInvite={onInvite}
-          />
-        </div>
+
+        {!ownerReady ? (
+          showOwnerForm ? (
+            <RegisterOccupantForm
+              unitId={unit.id}
+              relationship="owner"
+              title={`Registrar ${UNIT_RELATIONSHIP_LABELS.owner.toLowerCase()}`}
+              pending={pending}
+              onRegister={onRegister}
+              onCancel={() => setShowOwnerForm(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setShowOwnerForm(true)}
+              className="glass-btn-secondary text-xs"
+            >
+              Registrar propietario
+            </button>
+          )
+        ) : null}
+
+        {!tenantReady ? (
+          showTenantForm ? (
+            <RegisterOccupantForm
+              unitId={unit.id}
+              relationship="tenant"
+              title={`Registrar ${UNIT_RELATIONSHIP_LABELS.tenant.toLowerCase()}`}
+              pending={pending}
+              onRegister={onRegister}
+              onCancel={() => setShowTenantForm(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setShowTenantForm(true)}
+              className="glass-btn-secondary text-xs"
+            >
+              Agregar inquilino
+            </button>
+          )
+        ) : null}
       </div>
     </li>
   );
@@ -458,43 +517,113 @@ function OccupantLine({
   return (
     <p className="text-[var(--text)]">
       <span className="text-muted">{label}:</span> {occupant.name}
+      {occupant.email ? <span className="text-subtle"> · {occupant.email}</span> : null}
       {occupant.pending ? (
-        <span className="glass-tag-amber ml-2 px-2 py-0.5 text-xs">
-          Invitación pendiente{occupant.email ? ` · ${occupant.email}` : ''}
-        </span>
+        <span className="glass-tag-amber ml-2 px-2 py-0.5 text-xs">Invitación pendiente</span>
       ) : null}
     </p>
   );
 }
 
-function InviteForm({
+function PersonFields({ prefix, title }: { prefix: string; title: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/10 p-3">
+      <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
+      <p className="mt-1 text-xs text-subtle">Déjalo en blanco si lo registrarás después.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <input
+          name={`${prefix}_full_name`}
+          placeholder="Nombre completo"
+          className="glass-input sm:col-span-2"
+          autoComplete="off"
+        />
+        <input
+          type="email"
+          name={`${prefix}_email`}
+          placeholder="correo@ejemplo.com"
+          className="glass-input"
+          autoComplete="off"
+        />
+        <input
+          type="tel"
+          name={`${prefix}_phone`}
+          placeholder="Teléfono"
+          className="glass-input"
+          autoComplete="off"
+        />
+        <input
+          type="password"
+          name={`${prefix}_password`}
+          placeholder="Contraseña (mín. 8)"
+          className="glass-input sm:col-span-2"
+          autoComplete="new-password"
+        />
+      </div>
+    </div>
+  );
+}
+
+function RegisterOccupantForm({
   unitId,
   relationship,
-  label,
-  disabled,
-  onInvite,
+  title,
+  pending,
+  onRegister,
+  onCancel,
 }: {
   unitId: string;
   relationship: 'owner' | 'tenant';
-  label: string;
-  disabled?: boolean;
-  onInvite: (formData: FormData) => void;
+  title: string;
+  pending: boolean;
+  onRegister: (formData: FormData) => void;
+  onCancel: () => void;
 }) {
   return (
-    <form action={onInvite} className="flex min-w-0 flex-1 gap-2">
+    <form
+      action={(fd) => {
+        onRegister(fd);
+        onCancel();
+      }}
+      className="rounded-xl border border-white/10 bg-white/5 p-3"
+    >
       <input type="hidden" name="unit_id" value={unitId} />
       <input type="hidden" name="unit_relationship" value={relationship} />
-      <input
-        type="email"
-        name="email"
-        required
-        disabled={disabled}
-        placeholder="correo@ejemplo.com"
-        className="glass-input min-w-0 flex-1"
-      />
-      <button type="submit" disabled={disabled} className="glass-btn-secondary shrink-0 text-xs">
-        {label}
-      </button>
+      <p className="text-sm font-semibold text-[var(--text)]">{title}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <input
+          name="full_name"
+          required
+          placeholder="Nombre completo"
+          className="glass-input sm:col-span-2"
+          autoComplete="off"
+        />
+        <input
+          type="email"
+          name="email"
+          required
+          placeholder="correo@ejemplo.com"
+          className="glass-input"
+          autoComplete="off"
+        />
+        <input type="tel" name="phone" placeholder="Teléfono" className="glass-input" autoComplete="off" />
+        <input
+          type="password"
+          name="password"
+          required
+          minLength={8}
+          placeholder="Contraseña (mín. 8)"
+          className="glass-input sm:col-span-2"
+          autoComplete="new-password"
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="submit" disabled={pending} className="glass-btn-primary text-xs">
+          Guardar acceso
+        </button>
+        <button type="button" disabled={pending} onClick={onCancel} className="glass-btn-secondary text-xs">
+          Cancelar
+        </button>
+      </div>
     </form>
   );
 }

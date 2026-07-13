@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function InvitacionesConfigRedirectPage() {
-  redirect('/configuracion?tab=invitaciones');
+  redirect('/configuracion?tab=unidades');
 }

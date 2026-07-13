@@ -4,16 +4,19 @@ import { revalidatePath } from 'next/cache';
 import { buildUnitIdentifier, type UnitKind, type UnitRelationship } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
-import { sendInvitationEmail } from '@/lib/invitation-email';
+import { parsePersonFields, provisionUserWithMembership } from '@/lib/provision-user';
+import { assertAdminAction } from '@/lib/require-admin';
 import { createClient } from '@/lib/supabase/server';
 
 function revalidateUnits() {
   revalidatePath('/configuracion');
   revalidatePath('/configuracion/unidades');
-  revalidatePath('/configuracion/invitaciones');
 }
 
 export async function createCluster(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
@@ -33,6 +36,9 @@ export async function createCluster(formData: FormData) {
 }
 
 export async function deleteCluster(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
@@ -52,6 +58,9 @@ export async function deleteCluster(formData: FormData) {
 }
 
 export async function createUnit(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
@@ -67,6 +76,11 @@ export async function createUnit(formData: FormData) {
   }
   if (!unitNumber) return { error: 'Número de unidad requerido.' };
 
+  const ownerParsed = parsePersonFields(formData, 'owner');
+  if ('error' in ownerParsed) return { error: ownerParsed.error };
+  const tenantParsed = parsePersonFields(formData, 'tenant');
+  if ('error' in tenantParsed) return { error: tenantParsed.error };
+
   const { data: cluster } = await supabase
     .from('clusters')
     .select('name')
@@ -78,21 +92,56 @@ export async function createUnit(formData: FormData) {
 
   const identifier = buildUnitIdentifier(cluster.name, unitKind, unitNumber);
 
-  const { error } = await supabase.from('units').insert({
-    condominium_id: condominiumId,
-    cluster_id: clusterId,
-    identifier,
-    unit_kind: unitKind,
-    unit_number: unitNumber,
-    coefficient: 1,
-  });
+  const { data: unit, error } = await supabase
+    .from('units')
+    .insert({
+      condominium_id: condominiumId,
+      cluster_id: clusterId,
+      identifier,
+      unit_kind: unitKind,
+      unit_number: unitNumber,
+      coefficient: 1,
+    })
+    .select('id')
+    .single();
 
-  if (error) return { error: error.message };
+  if (error || !unit) return { error: error?.message ?? 'No se pudo crear la unidad.' };
+
+  if (!('empty' in ownerParsed)) {
+    const result = await provisionUserWithMembership(ownerParsed, {
+      condominiumId,
+      role: 'resident',
+      unitId: unit.id,
+      unitRelationship: 'owner',
+    });
+    if ('error' in result) {
+      await supabase.from('units').delete().eq('id', unit.id);
+      return { error: result.error };
+    }
+  }
+
+  if (!('empty' in tenantParsed)) {
+    const result = await provisionUserWithMembership(tenantParsed, {
+      condominiumId,
+      role: 'resident',
+      unitId: unit.id,
+      unitRelationship: 'tenant',
+    });
+    if ('error' in result) {
+      return {
+        error: `Unidad creada, pero el inquilino falló: ${result.error}`,
+      };
+    }
+  }
+
   revalidateUnits();
   return { success: true };
 }
 
 export async function deleteUnit(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
@@ -107,64 +156,46 @@ export async function deleteUnit(formData: FormData) {
   return { success: true };
 }
 
-export async function inviteUnitOccupant(formData: FormData) {
+export async function registerUnitOccupant(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: 'No autorizado' };
-
   const unitId = String(formData.get('unit_id') ?? '').trim();
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const relationship = String(formData.get('unit_relationship') ?? 'owner') as UnitRelationship;
 
-  if (!unitId || !email) {
-    return { error: 'Unidad y correo son obligatorios.' };
-  }
-
+  if (!unitId) return { error: 'Unidad requerida.' };
   if (relationship !== 'owner' && relationship !== 'tenant') {
     return { error: 'Rol de ocupación inválido.' };
   }
 
-  const { data: membership } = await supabase
-    .from('memberships')
-    .select('role')
-    .eq('user_id', user.id)
+  const person = parsePersonFields(formData);
+  if ('empty' in person) {
+    return { error: 'Nombre, correo y contraseña son obligatorios.' };
+  }
+  if ('error' in person) return { error: person.error };
+
+  const supabase = await createClient();
+  const { data: unit } = await supabase
+    .from('units')
+    .select('id')
+    .eq('id', unitId)
     .eq('condominium_id', condominiumId)
-    .eq('status', 'active')
     .maybeSingle();
 
-  if (!membership || !['admin', 'super_admin'].includes(membership.role as string)) {
-    return { error: 'Sin permisos de administrador' };
-  }
+  if (!unit) return { error: 'Unidad no encontrada.' };
 
-  const [{ data: condo }, { data: unit }] = await Promise.all([
-    supabase.from('condominiums').select('name').eq('id', condominiumId).maybeSingle(),
-    supabase.from('units').select('identifier').eq('id', unitId).maybeSingle(),
-  ]);
-
-  const { error } = await supabase.from('invitations').insert({
-    email,
-    condominium_id: condominiumId,
-    unit_id: unitId,
+  const result = await provisionUserWithMembership(person, {
+    condominiumId,
     role: 'resident',
-    unit_relationship: relationship,
-    invited_by: user.id,
+    unitId,
+    unitRelationship: relationship,
   });
 
-  if (error) return { error: error.message };
-
-  await sendInvitationEmail({
-    to: email,
-    condominiumName: condo?.name ?? 'tu condominio',
-    unitLabel: unit?.identifier,
-    roleLabel: relationship === 'tenant' ? 'inquilino' : 'propietario',
-  });
+  if ('error' in result) return { error: result.error };
 
   revalidateUnits();
   return { success: true };

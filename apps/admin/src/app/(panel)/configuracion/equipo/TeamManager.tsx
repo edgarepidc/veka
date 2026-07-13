@@ -10,10 +10,10 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import { SectionHeading } from '@/components/ui/SectionHeading';
 import { StatChip } from '@/components/ui/StatChip';
-import type { StaffInvitation, TeamMember } from '@/lib/load-team';
+import type { TeamMember } from '@/lib/load-team';
 import { HELP } from '@/lib/help-content';
 
-import { inviteStaffMember, setStaffPhoneVisibility, updateMemberRole } from './actions';
+import { registerStaffMember, setStaffPhoneVisibility, updateMemberRole } from './actions';
 import { addManualStaffEntry, removeManualDirectoryEntry } from './manual-directory-actions';
 import type { ManualDirectoryEntry } from '@/lib/load-manual-directory';
 
@@ -25,12 +25,10 @@ const SECTION_ASSIGNABLE_ROLES: Record<string, MembershipRole[]> = {
 
 export function TeamManager({
   members,
-  invitations,
   currentUserId,
   manualStaff = [],
 }: {
   members: TeamMember[];
-  invitations: StaffInvitation[];
   currentUserId: string;
   manualStaff?: ManualDirectoryEntry[];
 }) {
@@ -60,10 +58,9 @@ export function TeamManager({
       STAFF_SECTIONS.map((section) => ({
         section,
         members: members.filter((m) => section.roles.includes(m.role)),
-        invitations: invitations.filter((i) => section.roles.includes(i.role)),
         manualEntries: manualStaff.filter((entry) => entry.staffSectionId === section.id),
       })),
-    [invitations, manualStaff, members],
+    [manualStaff, members],
   );
 
   function isOpen(sectionId: string) {
@@ -74,11 +71,11 @@ export function TeamManager({
     setExpanded((prev) => ({ ...prev, [sectionId]: !isOpen(sectionId) }));
   }
 
-  function runInvite(formData: FormData) {
+  function runRegister(formData: FormData) {
     setMessage(null);
     start(async () => {
-      const result = await inviteStaffMember(formData);
-      setMessage(result.error ?? 'Invitación enviada.');
+      const result = await registerStaffMember(formData);
+      setMessage('error' in result ? result.error : 'Persona registrada con acceso a la app.');
     });
   }
 
@@ -86,7 +83,7 @@ export function TeamManager({
     setMessage(null);
     start(async () => {
       const result = await updateMemberRole(membershipId, role);
-      setMessage(result.error ?? 'Rol actualizado.');
+      setMessage('error' in result ? result.error : 'Rol actualizado.');
     });
   }
 
@@ -94,7 +91,13 @@ export function TeamManager({
     setMessage(null);
     start(async () => {
       const result = await setStaffPhoneVisibility(membershipId, showPhone);
-      setMessage(result.error ?? (showPhone ? 'Teléfono visible en Mi comunidad.' : 'Teléfono oculto en Mi comunidad.'));
+      setMessage(
+        'error' in result
+          ? result.error
+          : showPhone
+            ? 'Teléfono visible en Mi comunidad.'
+            : 'Teléfono oculto en Mi comunidad.',
+      );
     });
   }
 
@@ -103,15 +106,15 @@ export function TeamManager({
       <GlassCard>
         <SectionHeading help={HELP.equipo}>Equipo del condominio</SectionHeading>
         <p className="mt-1 text-sm text-muted">
-          Usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se invitan desde
-          Unidades; el comité de vigilancia se arma en Comunidad → Mi comunidad.
+          Registra usuarios con rol en la app (acceso al panel o apps de campo). Los residentes se dan de
+          alta en Unidades; el comité de vigilancia se arma en Comunidad → Mi comunidad.
         </p>
       </GlassCard>
 
       {message ? (
         <p
           className={`text-sm ${
-            message.includes('Invitación') ||
+            message.includes('registrad') ||
             message.includes('actualizado') ||
             message.includes('Teléfono') ||
             message.includes('agregada') ||
@@ -124,9 +127,8 @@ export function TeamManager({
         </p>
       ) : null}
 
-      {sections.map(({ section, members: sectionMembers, invitations: sectionInvites, manualEntries }) => {
+      {sections.map(({ section, members: sectionMembers, manualEntries }) => {
         const open = isOpen(section.id);
-        const pendingCount = sectionInvites.length;
         const registeredCount = sectionMembers.length;
 
         return (
@@ -142,55 +144,56 @@ export function TeamManager({
                 <p className="mt-1 text-xs text-subtle">{section.description}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <StatChip label="Registrados" value={registeredCount} tone="green" />
-                  {pendingCount > 0 ? (
-                    <StatChip label="Invitaciones" value={pendingCount} tone="amber" />
-                  ) : null}
                 </div>
               </div>
             </button>
 
             {open ? (
               <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4">
-                <form action={runInvite} className="flex flex-col gap-2 sm:flex-row">
+                <form action={runRegister} className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <input type="hidden" name="role" value={section.defaultInviteRole} />
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    placeholder="correo@staff.com"
-                    className="glass-input min-w-0 flex-1"
-                  />
-                  <button type="submit" disabled={pending} className="glass-btn-primary shrink-0">
-                    Invitar a {section.title.toLowerCase()}
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    Registrar en {section.title.toLowerCase()}
+                  </p>
+                  <p className="mt-1 text-xs text-subtle">
+                    Crea la cuenta con contraseña; la persona puede cambiarla después en su perfil.
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      type="text"
+                      name="full_name"
+                      required
+                      placeholder="Nombre completo"
+                      className="glass-input sm:col-span-2"
+                      autoComplete="off"
+                    />
+                    <input
+                      type="email"
+                      name="email"
+                      required
+                      placeholder="correo@staff.com"
+                      className="glass-input"
+                      autoComplete="off"
+                    />
+                    <input type="tel" name="phone" placeholder="Teléfono" className="glass-input" autoComplete="off" />
+                    <input
+                      type="password"
+                      name="password"
+                      required
+                      minLength={8}
+                      placeholder="Contraseña (mín. 8)"
+                      className="glass-input sm:col-span-2"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <button type="submit" disabled={pending} className="glass-btn-primary mt-3">
+                    Registrar acceso
                   </button>
                 </form>
 
-                {sectionInvites.length > 0 ? (
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">
-                      Invitaciones pendientes
-                    </p>
-                    <ul className="space-y-2">
-                      {sectionInvites.map((invite) => (
-                        <li
-                          key={invite.id}
-                          className="glass-card-deep flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                        >
-                          <span className="text-[var(--text)]">{invite.email}</span>
-                          <span className="glass-tag-amber px-2 py-0.5 text-xs capitalize">
-                            Pendiente
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
                 <ul className="space-y-2">
                   {sectionMembers.length === 0 ? (
-                    <li className="glass-notice-amber text-sm">
-                      Sin personal registrado en esta área.
-                    </li>
+                    <li className="glass-notice-amber text-sm">Sin personal registrado en esta área.</li>
                   ) : (
                     sectionMembers.map((member) => {
                       const isSelf = member.user_id === currentUserId;
@@ -198,10 +201,7 @@ export function TeamManager({
                       const assignable = SECTION_ASSIGNABLE_ROLES[section.id] ?? [];
 
                       return (
-                        <li
-                          key={member.id}
-                          className="glass-card-deep flex flex-col gap-3 px-4 py-3"
-                        >
+                        <li key={member.id} className="glass-card-deep flex flex-col gap-3 px-4 py-3">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="text-sm font-medium text-[var(--text)]">
@@ -237,9 +237,7 @@ export function TeamManager({
                               type="checkbox"
                               checked={member.show_phone_in_directory}
                               disabled={pending || !member.phone}
-                              onChange={(event) =>
-                                handlePhoneVisibility(member.id, event.target.checked)
-                              }
+                              onChange={(event) => handlePhoneVisibility(member.id, event.target.checked)}
                               className="mt-0.5 h-4 w-4 rounded border-white/20"
                             />
                             <span>
@@ -280,7 +278,12 @@ export function TeamManager({
                       className="glass-input sm:col-span-2"
                     />
                     <label className="flex items-center gap-2 text-xs text-muted sm:col-span-2">
-                      <input type="checkbox" name="show_phone" defaultChecked className="h-4 w-4 rounded border-white/20" />
+                      <input
+                        type="checkbox"
+                        name="show_phone"
+                        defaultChecked
+                        className="h-4 w-4 rounded border-white/20"
+                      />
                       Mostrar teléfono en Mi comunidad
                     </label>
                     <button type="submit" disabled={pending} className="glass-btn-primary sm:col-span-2">

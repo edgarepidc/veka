@@ -2,19 +2,29 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { isStaffRole, STAFF_ROLE_LABELS, STAFF_SECTIONS, type MembershipRole } from '@veka/shared';
+import { isStaffRole, STAFF_SECTIONS, type MembershipRole } from '@veka/shared';
 
 import { requireActiveCondominiumId } from '@/lib/condominium-context';
-import { sendInvitationEmail } from '@/lib/invitation-email';
+import { parsePersonFields, provisionUserWithMembership } from '@/lib/provision-user';
+import { assertAdminAction } from '@/lib/require-admin';
 import { createClient } from '@/lib/supabase/server';
 
 const STAFF_ASSIGNABLE: MembershipRole[] = ['admin', 'guard', 'staff'];
 const CONFIG_TEAM_ROLES = STAFF_SECTIONS.flatMap((section) => section.roles);
 
+function revalidateTeam() {
+  revalidatePath('/configuracion');
+  revalidatePath('/configuracion/equipo');
+  revalidatePath('/comunidad');
+}
+
 export async function updateMemberRole(membershipId: string, role: MembershipRole) {
   if (!STAFF_ASSIGNABLE.includes(role)) {
     return { error: 'Rol no permitido para equipo operativo.' };
   }
+
+  const denied = await assertAdminAction();
+  if (denied) return denied;
 
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
@@ -49,23 +59,19 @@ export async function updateMemberRole(membershipId: string, role: MembershipRol
 
   if (error) return { error: error.message };
 
-  revalidatePath('/configuracion');
-  revalidatePath('/configuracion/equipo');
-  revalidatePath('/comunidad');
+  revalidateTeam();
   return { success: true };
 }
 
 export async function setStaffPhoneVisibility(membershipId: string, showPhone: boolean) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: 'No autorizado' };
-
   const id = membershipId.trim();
   if (!id) return { error: 'Miembro no válido.' };
 
@@ -89,69 +95,38 @@ export async function setStaffPhoneVisibility(membershipId: string, showPhone: b
 
   if (error) return { error: error.message };
 
-  revalidatePath('/configuracion');
-  revalidatePath('/configuracion/equipo');
-  revalidatePath('/comunidad');
+  revalidateTeam();
   return { success: true };
 }
 
-export async function inviteStaffMember(formData: FormData) {
+export async function registerStaffMember(formData: FormData) {
+  const denied = await assertAdminAction();
+  if (denied) return denied;
+
   const condoResult = await requireActiveCondominiumId();
   if (typeof condoResult !== 'string') return { error: condoResult.error };
   const condominiumId = condoResult;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: 'No autorizado' };
-
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const role = String(formData.get('role') ?? '') as MembershipRole;
-
-  if (!email) return { error: 'Correo obligatorio.' };
   if (!CONFIG_TEAM_ROLES.includes(role) || role === 'super_admin') {
     return { error: 'Rol de staff inválido.' };
   }
 
-  const { data: membership } = await supabase
-    .from('memberships')
-    .select('role')
-    .eq('user_id', user.id)
-    .eq('condominium_id', condominiumId)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  if (!membership || !['admin', 'super_admin'].includes(membership.role as string)) {
-    return { error: 'Sin permisos de administrador' };
+  const person = parsePersonFields(formData);
+  if ('empty' in person) {
+    return { error: 'Nombre, correo y contraseña son obligatorios.' };
   }
+  if ('error' in person) return { error: person.error };
 
-  const { data: condo } = await supabase
-    .from('condominiums')
-    .select('name')
-    .eq('id', condominiumId)
-    .maybeSingle();
-
-  const { error } = await supabase.from('invitations').insert({
-    email,
-    condominium_id: condominiumId,
-    unit_id: null,
+  const result = await provisionUserWithMembership(person, {
+    condominiumId,
     role,
-    unit_relationship: null,
-    invited_by: user.id,
+    unitId: null,
+    unitRelationship: null,
   });
 
-  if (error) return { error: error.message };
+  if ('error' in result) return { error: result.error };
 
-  await sendInvitationEmail({
-    to: email,
-    condominiumName: condo?.name ?? 'tu condominio',
-    roleLabel: STAFF_ROLE_LABELS[role] ?? role,
-  });
-
-  revalidatePath('/configuracion');
-  revalidatePath('/configuracion/equipo');
-  revalidatePath('/comunidad');
+  revalidateTeam();
   return { success: true };
 }

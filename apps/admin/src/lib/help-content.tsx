@@ -70,7 +70,7 @@ export const HELP = {
     encuestas: 'Crea votaciones formales o consultas informales. Las formales pueden requerir quórum según configuración.',
     documentos: 'Reglamento, minutas y archivos del condominio visibles en la app (pestaña Documentos).',
     miComunidad:
-      'Directorio público del equipo (solo lectura): staff admin, mantenimiento y seguridad. El comité de vigilancia se agrega desde residentes del directorio. Las invitaciones de roles de app viven en Configuración → Equipo.',
+      'Directorio público del equipo (solo lectura): staff admin, mantenimiento y seguridad. El comité de vigilancia se agrega desde residentes del directorio. Los roles de app se dan de alta en Configuración → Equipo.',
     asambleas:
       'Expediente de cada asamblea: vincula avisos, encuestas y documentos ya publicados, y da seguimiento a acuerdos con checklist (opcionalmente ligados a tickets de mantenimiento).',
   },
@@ -79,11 +79,11 @@ export const HELP = {
   seguridad:
     'Caseta: valida pases QR, registra paquetes (con foto) y opera visitas/entregas del día. Los chips Todo/torre filtran unidades y la bitácora. Las políticas de rentas con adeudo las edita administración.',
   unidades:
-    'Torres (clusters) y unidades con coeficiente de participación. Desde aquí envías invitaciones a residentes.',
+    'Torres (clusters) y unidades. Registra propietario o inquilino con nombre, correo, contraseña y teléfono para que entren a la app; puedes dejarlos en blanco y completar después.',
   invitaciones:
-    'Invita por correo a propietarios, inquilinos o personal. Cada invitación se canjea al registrarse en la app.',
+    'Las altas nuevas se hacen en Unidades y Equipo. Esta ruta redirige ahí por compatibilidad.',
   equipo:
-    'Invita y gestiona usuarios con rol en la app: staff admin, mantenimiento y seguridad. Desde aquí decides si el teléfono del staff se muestra en Comunidad → Mi comunidad.',
+    'Registra staff admin, mantenimiento y seguridad con acceso a la app. Desde aquí decides si el teléfono se muestra en Comunidad → Mi comunidad. El directorio manual es para personas sin cuenta.',
   condominio:
     'Datos generales, zona horaria y branding (logo/colores) que ven residentes en la app y en correos. Se edita desde Platform (super admin).',
   residente:
