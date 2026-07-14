@@ -13,6 +13,7 @@ import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { HomeEnter } from '@/components/home/HomeEnter';
 import { HomeInsightBanner } from '@/components/home/HomeInsightBanner';
+import { HomeSpacesCard } from '@/components/home/HomeSpacesCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PressableScale } from '@/components/ui/PressableScale';
@@ -90,13 +91,13 @@ export default function DashboardScreen() {
       ? 'Por pagar'
       : null;
 
-  const firstReservation = data.upcomingReservations[0] ?? null;
-  const spacesSubtitle =
-    !firstReservation
-      ? 'Sin reservas próximas. Reserva un espacio cuando lo necesites.'
-      : data.upcomingReservations.length === 1
-        ? `${firstReservation.amenity_name} · ${formatDateTime(firstReservation.starts_at)}`
-        : `${firstReservation.amenity_name} · ${formatDateTime(firstReservation.starts_at)} · +${data.upcomingReservations.length - 1}`;
+  const spaceItems = data.upcomingReservations.slice(0, 2).map((reservation) => ({
+    id: reservation.id,
+    name: reservation.amenity_name,
+    when: formatDateTime(reservation.starts_at),
+    imageUrl: reservation.amenity_image_url,
+    status: reservation.status,
+  }));
 
   return (
     <ScreenBackground>
@@ -261,14 +262,7 @@ export default function DashboardScreen() {
                   </HomeEnter>
 
                   <HomeEnter delay={160}>
-                    <HomeInsightBanner
-                      kind="spaces"
-                      tone={data.upcomingReservations.length > 0 ? 'info' : 'neutral'}
-                      title="Espacios"
-                      subtitle={spacesSubtitle}
-                      trailingImageUri={firstReservation?.amenity_image_url}
-                      onPress={() => router.push('/spaces')}
-                    />
+                    <HomeSpacesCard items={spaceItems} onPress={() => router.push('/spaces')} />
                   </HomeEnter>
 
                   {data.pendingPackage ? (
