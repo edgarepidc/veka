@@ -15,6 +15,22 @@ export interface HomeReservationPreview {
   status: string;
 }
 
+export interface HomeVisitPreview {
+  id: string;
+  visitor_name: string;
+  unit_identifier: string;
+  valid_from: string;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+}
+
+export interface HomePackagePreview {
+  id: string;
+  carrier: string | null;
+  unit_identifier: string;
+  received_at: string;
+}
+
 export interface HomeStats {
   operatingBalance: number;
   reserveBalance: number;
@@ -31,6 +47,8 @@ export interface HomeStats {
   reservationsThisWeek: number;
   activeAmenities: number;
   upcomingReservations: HomeReservationPreview[];
+  todayVisits: HomeVisitPreview[];
+  waitingPackages: HomePackagePreview[];
 }
 
 function monthBoundsIso(timeZone: string, reference = new Date()) {
@@ -77,7 +95,9 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     chargesRes,
     ticketsRes,
     visitsRes,
+    visitsPreviewRes,
     packagesRes,
+    packagesPreviewRes,
     paymentsRes,
     expensesRes,
     incomeRes,
@@ -104,10 +124,27 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
       .lte('valid_from', endIso)
       .gte('valid_until', startIso),
     supabase
+      .from('visits')
+      .select(
+        'id, visitor_name, valid_from, checked_in_at, checked_out_at, unit:units(identifier)',
+      )
+      .eq('condominium_id', condominiumId)
+      .lte('valid_from', endIso)
+      .gte('valid_until', startIso)
+      .order('valid_from', { ascending: true })
+      .limit(4),
+    supabase
       .from('packages')
       .select('id', { count: 'exact', head: true })
       .eq('condominium_id', condominiumId)
       .eq('status', 'received'),
+    supabase
+      .from('packages')
+      .select('id, carrier, received_at, unit:units(identifier)')
+      .eq('condominium_id', condominiumId)
+      .eq('status', 'received')
+      .order('received_at', { ascending: false })
+      .limit(3),
     supabase
       .from('payments')
       .select('amount, status, paid_at, created_at')
@@ -199,6 +236,28 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     };
   });
 
+  const todayVisits: HomeVisitPreview[] = (visitsPreviewRes.data ?? []).map((row) => {
+    const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+    return {
+      id: String(row.id),
+      visitor_name: String(row.visitor_name),
+      unit_identifier: unit?.identifier ?? '—',
+      valid_from: String(row.valid_from),
+      checked_in_at: row.checked_in_at ? String(row.checked_in_at) : null,
+      checked_out_at: row.checked_out_at ? String(row.checked_out_at) : null,
+    };
+  });
+
+  const waitingPackages: HomePackagePreview[] = (packagesPreviewRes.data ?? []).map((row) => {
+    const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+    return {
+      id: String(row.id),
+      carrier: row.carrier ? String(row.carrier) : null,
+      unit_identifier: unit?.identifier ?? '—',
+      received_at: String(row.received_at),
+    };
+  });
+
   return {
     operatingBalance: operating,
     reserveBalance: reserve,
@@ -215,6 +274,8 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     reservationsThisWeek: weekReservationsRes.count ?? 0,
     activeAmenities: amenitiesRes.count ?? 0,
     upcomingReservations,
+    todayVisits,
+    waitingPackages,
   };
 }
 

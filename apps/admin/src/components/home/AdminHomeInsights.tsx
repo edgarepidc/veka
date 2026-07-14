@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatCurrency } from '@veka/shared';
 
+import { HOME_ILLUSTRATIONS } from '@/components/home/home-illustrations';
 import type { HomeStats } from '@/lib/load-home-stats';
 
 function formatWhen(iso: string) {
@@ -13,6 +14,50 @@ function formatWhen(iso: string) {
   }).format(new Date(iso));
 }
 
+function formatTime(iso: string) {
+  return new Intl.DateTimeFormat('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+}
+
+function visitStatus(row: {
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+}): { label: string; pill: string } {
+  if (row.checked_out_at) return { label: 'Salió', pill: 'home-status-pill' };
+  if (row.checked_in_at) return { label: 'En caseta', pill: 'home-status-pill home-status-pill-green' };
+  return { label: 'Esperada', pill: 'home-status-pill home-status-pill-blue' };
+}
+
+function PanelHeader({
+  eyebrow,
+  title,
+  illustration,
+  href,
+  linkLabel,
+}: {
+  eyebrow: string;
+  title: string;
+  illustration: string;
+  href: string;
+  linkLabel: string;
+}) {
+  return (
+    <div className="home-panel-header">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={illustration} alt="" className="home-illust home-illust-lg" />
+      <div className="home-panel-header-text">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{eyebrow}</p>
+        <h2 className="mt-0.5 text-lg font-semibold text-[var(--text)]">{title}</h2>
+      </div>
+      <Link href={href} className="shrink-0 text-sm font-semibold text-[var(--accent-2)] hover:underline">
+        {linkLabel}
+      </Link>
+    </div>
+  );
+}
+
 export function AdminHomeFinancePanel({ stats }: { stats: HomeStats | null }) {
   const income = stats?.monthIncome ?? 0;
   const expense = stats?.monthExpense ?? 0;
@@ -20,18 +65,21 @@ export function AdminHomeFinancePanel({ stats }: { stats: HomeStats | null }) {
   const maxFlow = Math.max(income, expense, 1);
   const aging = stats?.agingBars ?? [];
   const maxAging = Math.max(...aging.map((bar) => bar.value), 1);
+  const hasOverdue = (stats?.overdueBalance ?? 0) > 0;
 
   return (
-    <section className="home-enter home-enter-delay-2 home-panel home-tone-neutral mb-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">Finanzas del mes</p>
-          <h2 className="mt-1 text-lg font-semibold text-[var(--text)]">Flujo y cobranza</h2>
-        </div>
-        <Link href="/finanzas" className="text-sm font-semibold text-[var(--accent-2)] hover:underline">
-          Ver finanzas →
-        </Link>
-      </div>
+    <section
+      className={`home-enter home-enter-delay-2 home-panel mb-6 ${
+        hasOverdue ? 'home-tone-warn' : 'home-tone-success'
+      }`}
+    >
+      <PanelHeader
+        eyebrow="Finanzas del mes"
+        title="Flujo y cobranza"
+        illustration={hasOverdue ? HOME_ILLUSTRATIONS.due : HOME_ILLUSTRATIONS.paid}
+        href="/finanzas"
+        linkLabel="Ver finanzas →"
+      />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Metric label="Ingresos" value={formatCurrency(income)} tone="info" />
@@ -93,18 +141,21 @@ export function AdminHomeFinancePanel({ stats }: { stats: HomeStats | null }) {
 
 export function AdminHomeSpacesPanel({ stats }: { stats: HomeStats | null }) {
   const reservations = stats?.upcomingReservations ?? [];
+  const hasItems = reservations.length > 0;
 
   return (
-    <section className="home-enter home-enter-delay-3 home-panel home-tone-info mb-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">Espacios</p>
-          <h2 className="mt-1 text-lg font-semibold text-[var(--text)]">Agenda próxima</h2>
-        </div>
-        <Link href="/espacios" className="text-sm font-semibold text-[var(--accent-2)] hover:underline">
-          Ver espacios →
-        </Link>
-      </div>
+    <section
+      className={`home-enter home-enter-delay-3 home-panel mb-6 ${
+        hasItems ? 'home-tone-info' : 'home-tone-neutral'
+      }`}
+    >
+      <PanelHeader
+        eyebrow="Espacios"
+        title="Agenda próxima"
+        illustration={HOME_ILLUSTRATIONS.calendar}
+        href="/espacios"
+        linkLabel="Ver espacios →"
+      />
 
       <div className="mb-4 grid grid-cols-2 gap-3">
         <Metric
@@ -131,13 +182,103 @@ export function AdminHomeSpacesPanel({ stats }: { stats: HomeStats | null }) {
                   Unidad {row.unit_identifier} · {formatWhen(row.starts_at)}
                 </p>
               </div>
-              <span className="shrink-0 rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              <span
+                className={
+                  row.status === 'pending'
+                    ? 'home-status-pill home-status-pill-orange'
+                    : 'home-status-pill home-status-pill-blue'
+                }
+              >
                 {row.status === 'pending' ? 'Pendiente' : 'Confirmada'}
               </span>
             </li>
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+export function AdminHomeSecurityPanel({ stats }: { stats: HomeStats | null }) {
+  const visits = stats?.todayVisits ?? [];
+  const packages = stats?.waitingPackages ?? [];
+  const hasActivity = visits.length > 0 || packages.length > 0;
+
+  return (
+    <section
+      className={`home-enter home-enter-delay-4 home-panel mb-6 ${
+        hasActivity ? 'home-tone-accent' : 'home-tone-neutral'
+      }`}
+    >
+      <PanelHeader
+        eyebrow="Seguridad"
+        title="Visitas y recepción"
+        illustration={
+          (stats?.packagesWaitingCount ?? 0) > 0
+            ? HOME_ILLUSTRATIONS.package
+            : HOME_ILLUSTRATIONS.visit
+        }
+        href="/seguridad"
+        linkLabel="Ver seguridad →"
+      />
+
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <Metric label="Visitas hoy" value={String(stats?.visitsTodayCount ?? 0)} tone="accent" />
+        <Metric
+          label="Paquetes en caseta"
+          value={String(stats?.packagesWaitingCount ?? 0)}
+          tone={(stats?.packagesWaitingCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-sm font-semibold text-[var(--text)]">Visitas de hoy</p>
+          {visits.length === 0 ? (
+            <p className="text-sm text-muted">Nadie programado para hoy.</p>
+          ) : (
+            <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
+              {visits.map((visit) => {
+                const status = visitStatus(visit);
+                return (
+                  <li key={visit.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-[var(--text)]">{visit.visitor_name}</p>
+                      <p className="text-xs text-muted">
+                        Unidad {visit.unit_identifier} · {formatTime(visit.valid_from)}
+                      </p>
+                    </div>
+                    <span className={status.pill}>{status.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-semibold text-[var(--text)]">Paquetes pendientes</p>
+          {packages.length === 0 ? (
+            <p className="text-sm text-muted">Sin paquetes en caseta.</p>
+          ) : (
+            <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
+              {packages.map((pkg) => (
+                <li key={pkg.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-[var(--text)]">
+                      {pkg.carrier ?? 'Paquete'}
+                    </p>
+                    <p className="text-xs text-muted">
+                      Unidad {pkg.unit_identifier} · {formatWhen(pkg.received_at)}
+                    </p>
+                  </div>
+                  <span className="home-status-pill home-status-pill-orange">En caseta</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,7 +1,11 @@
 import { redirect } from 'next/navigation';
 
 import { AdminHomeHero, timeOfDayGreeting } from '@/components/home/AdminHomeHero';
-import { AdminHomeFinancePanel, AdminHomeSpacesPanel } from '@/components/home/AdminHomeInsights';
+import {
+  AdminHomeFinancePanel,
+  AdminHomeSecurityPanel,
+  AdminHomeSpacesPanel,
+} from '@/components/home/AdminHomeInsights';
 import { AdminHomeFundRow, AdminHomePulseStrip } from '@/components/home/AdminHomePulseStrip';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadCondominium } from '@/lib/load-condominium';
@@ -42,6 +46,7 @@ export default async function AdminHomePage() {
         <AdminHomeFinancePanel stats={stats} />
         <AdminHomeSpacesPanel stats={stats} />
       </div>
+      <AdminHomeSecurityPanel stats={stats} />
     </div>
   );
 }

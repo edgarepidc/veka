@@ -76,23 +76,6 @@ export default function DashboardScreen() {
   const initials = displayName.slice(0, 2).toUpperCase();
   const greeting = timeOfDayGreeting();
 
-  const accountSubtitle =
-    data.balanceDue > 0
-      ? `Saldo pendiente ${formatCurrency(data.balanceDue)} · Pagado mes ${formatCurrency(data.paidThisMonth)}`
-      : `Al día · Pagado este mes ${formatCurrency(data.paidThisMonth)}`;
-
-  const accountHighlight = data.nextPayment
-    ? formatCurrency(data.nextPayment.amount)
-    : data.balanceDue > 0
-      ? formatCurrency(data.balanceDue)
-      : null;
-
-  const accountHighlightLabel = data.nextPayment
-    ? 'Próxima cuota'
-    : data.balanceDue > 0
-      ? 'Por pagar'
-      : null;
-
   const spaceItems = data.upcomingReservations.slice(0, 2).map((reservation) => ({
     id: reservation.id,
     name: reservation.amenity_name,
@@ -184,6 +167,13 @@ export default function DashboardScreen() {
                       shadow="subtle"
                     />
                     <StatPill
+                      label="Visitas"
+                      value={String(data.todayVisits.length)}
+                      sub={data.todayVisits.length ? 'hoy' : 'ninguna'}
+                      valueColor={data.todayVisits.length > 0 ? theme.accent : theme.textMuted}
+                      shadow="subtle"
+                    />
+                    <StatPill
                       label="Tickets"
                       value={String(data.openTicketCount)}
                       sub="abiertos"
@@ -261,22 +251,10 @@ export default function DashboardScreen() {
                   </HomeEnter>
 
                   <HomeEnter delay={120}>
-                    <HomeInsightBanner
-                      kind="account"
-                      tone={data.balanceDue > 0 || data.nextPayment ? 'warning' : 'info'}
-                      title="Tu cuenta"
-                      subtitle={accountSubtitle}
-                      highlight={accountHighlight}
-                      highlightLabel={accountHighlightLabel}
-                      onPress={() => router.push('/finance')}
-                    />
-                  </HomeEnter>
-
-                  <HomeEnter delay={160}>
                     <HomeSpacesCard items={spaceItems} onPress={() => router.push('/spaces')} />
                   </HomeEnter>
 
-                  <HomeEnter delay={180}>
+                  <HomeEnter delay={160}>
                     <HomeVisitsCard items={visitItems} onPress={() => router.push('/security')} />
                   </HomeEnter>
 

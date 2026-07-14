@@ -618,12 +618,40 @@ body {
   padding: 1rem 1.1rem;
   transition:
     border-color 0.2s ease,
-    transform 0.2s ease;
+    transform 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .home-pulse-pill:hover {
   border-color: color-mix(in srgb, var(--text-muted) 35%, var(--border));
   transform: translateY(-1px);
+}
+
+.home-illust {
+  height: 3.25rem;
+  width: 3.25rem;
+  flex-shrink: 0;
+  border-radius: 0.9rem;
+  object-fit: cover;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.home-illust-lg {
+  height: 3.5rem;
+  width: 3.5rem;
+  border-radius: 1rem;
+}
+
+.home-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.home-panel-header-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .home-tone-neutral {
@@ -632,14 +660,26 @@ body {
 
 .home-tone-warn {
   border-left: 3px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
 }
 
 .home-tone-info {
   border-left: 3px solid var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent-2) 28%, var(--border));
 }
 
 .home-tone-accent {
   border-left: 3px solid var(--accent-3);
+  background: color-mix(in srgb, var(--accent-3) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent-3) 28%, var(--border));
+}
+
+.home-tone-success {
+  border-left: 3px solid var(--success, var(--accent));
+  background: color-mix(in srgb, var(--success, var(--accent)) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--success, var(--accent)) 28%, var(--border));
 }
 
 .home-icon-chip {
@@ -676,6 +716,38 @@ body {
 
 .home-bar-slate {
   background: color-mix(in srgb, var(--text-muted) 70%, var(--accent-2));
+}
+
+.home-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.home-status-pill-green {
+  border-color: color-mix(in srgb, var(--success, var(--accent)) 35%, var(--border));
+  background: color-mix(in srgb, var(--success, var(--accent)) 12%, var(--surface));
+  color: color-mix(in srgb, var(--success, var(--accent)) 80%, var(--text));
+}
+
+.home-status-pill-blue {
+  border-color: color-mix(in srgb, var(--accent-2) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent-2) 12%, var(--surface));
+  color: color-mix(in srgb, var(--accent-2) 80%, var(--text));
+}
+
+.home-status-pill-orange {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: color-mix(in srgb, var(--warning) 80%, var(--text));
 }
 
 @media (prefers-reduced-motion: reduce) {

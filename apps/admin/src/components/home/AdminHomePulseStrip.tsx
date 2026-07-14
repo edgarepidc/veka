@@ -1,23 +1,17 @@
 import Link from 'next/link';
-import type { IconType } from 'react-icons';
-import {
-  IoCardOutline,
-  IoConstructOutline,
-  IoCubeOutline,
-  IoPeopleOutline,
-} from 'react-icons/io5';
 
+import { HOME_ILLUSTRATIONS } from '@/components/home/home-illustrations';
 import { formatHomeStatMoney, type HomeStats } from '@/lib/load-home-stats';
 
-type PulseTone = 'neutral' | 'warn' | 'info' | 'accent';
+type PulseTone = 'neutral' | 'warn' | 'info' | 'accent' | 'success';
 
 type PulseItem = {
   label: string;
   value: number;
   href: string;
-  icon: IconType;
   hint: string;
   tone: PulseTone;
+  illustration: string;
 };
 
 const TONE_CLASS: Record<PulseTone, string> = {
@@ -25,67 +19,73 @@ const TONE_CLASS: Record<PulseTone, string> = {
   warn: 'home-tone-warn',
   info: 'home-tone-info',
   accent: 'home-tone-accent',
+  success: 'home-tone-success',
 };
 
 export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
+  const overdue = stats?.overdueUnitCount ?? 0;
+  const tickets = stats?.openTicketCount ?? 0;
+  const visits = stats?.visitsTodayCount ?? 0;
+  const packages = stats?.packagesWaitingCount ?? 0;
+
   const items: PulseItem[] = [
     {
       label: 'Con adeudo',
-      value: stats?.overdueUnitCount ?? 0,
+      value: overdue,
       href: '/finanzas',
-      icon: IoCardOutline,
       hint: 'unidades',
-      tone: (stats?.overdueUnitCount ?? 0) > 0 ? 'warn' : 'neutral',
+      tone: overdue > 0 ? 'warn' : 'success',
+      illustration: overdue > 0 ? HOME_ILLUSTRATIONS.due : HOME_ILLUSTRATIONS.paid,
     },
     {
       label: 'Tickets abiertos',
-      value: stats?.openTicketCount ?? 0,
+      value: tickets,
       href: '/mantenimiento',
-      icon: IoConstructOutline,
       hint: 'mantenimiento',
-      tone: (stats?.openTicketCount ?? 0) > 0 ? 'info' : 'neutral',
+      tone: tickets > 0 ? 'info' : 'neutral',
+      illustration: HOME_ILLUSTRATIONS.maintenance,
     },
     {
       label: 'Visitas hoy',
-      value: stats?.visitsTodayCount ?? 0,
+      value: visits,
       href: '/seguridad',
-      icon: IoPeopleOutline,
       hint: 'programadas',
-      tone: 'accent',
+      tone: visits > 0 ? 'accent' : 'neutral',
+      illustration: HOME_ILLUSTRATIONS.visit,
     },
     {
       label: 'Paquetes',
-      value: stats?.packagesWaitingCount ?? 0,
+      value: packages,
       href: '/seguridad',
-      icon: IoCubeOutline,
       hint: 'en caseta',
-      tone: (stats?.packagesWaitingCount ?? 0) > 0 ? 'warn' : 'neutral',
+      tone: packages > 0 ? 'warn' : 'neutral',
+      illustration: HOME_ILLUSTRATIONS.package,
     },
   ];
 
   return (
     <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {items.map((item, index) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`home-enter home-enter-delay-${index + 1} group home-pulse-pill ${TONE_CLASS[item.tone]}`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{item.label}</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--text)]">{item.value}</p>
-                <p className="mt-0.5 text-xs text-muted">{item.hint}</p>
-              </div>
-              <span className="home-icon-chip shrink-0 transition group-hover:scale-105">
-                <Icon className="h-5 w-5" aria-hidden />
-              </span>
+      {items.map((item, index) => (
+        <Link
+          key={item.label}
+          href={item.href}
+          className={`home-enter home-enter-delay-${index + 1} group home-pulse-pill ${TONE_CLASS[item.tone]}`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{item.label}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--text)]">{item.value}</p>
+              <p className="mt-0.5 text-xs text-muted">{item.hint}</p>
             </div>
-          </Link>
-        );
-      })}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={item.illustration}
+              alt=""
+              className="home-illust transition duration-200 group-hover:scale-105"
+            />
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }
