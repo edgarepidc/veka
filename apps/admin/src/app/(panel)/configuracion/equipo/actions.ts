@@ -118,11 +118,14 @@ export async function registerStaffMember(formData: FormData) {
   }
   if ('error' in person) return { error: person.error };
 
+  const showPhoneInDirectory = formData.get('show_phone_in_directory') === 'true';
+
   const result = await provisionUserWithMembership(person, {
     condominiumId,
     role,
     unitId: null,
     unitRelationship: null,
+    showPhoneInDirectory,
   });
 
   if ('error' in result) return { error: result.error };

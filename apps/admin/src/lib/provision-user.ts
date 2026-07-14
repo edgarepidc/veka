@@ -14,6 +14,7 @@ export type ProvisionMembershipInput = {
   role: MembershipRole;
   unitId?: string | null;
   unitRelationship?: UnitRelationship | null;
+  showPhoneInDirectory?: boolean;
 };
 
 function normalizeEmail(email: string): string {
@@ -100,6 +101,7 @@ export async function provisionUserWithMembership(
 
   const unitId = membership.unitId ?? null;
   const unitRelationship = membership.unitRelationship ?? null;
+  const showPhoneInDirectory = membership.showPhoneInDirectory ?? false;
 
   if (unitId && (unitRelationship === 'owner' || unitRelationship === 'tenant')) {
     const { data: slotTaken } = await admin
@@ -137,6 +139,9 @@ export async function provisionUserWithMembership(
         role: membership.role,
         status: 'active',
         unit_relationship: unitRelationship,
+        ...(membership.showPhoneInDirectory !== undefined
+          ? { show_phone_in_directory: showPhoneInDirectory }
+          : {}),
       })
       .eq('id', existing.id);
     if (error) return { error: error.message };
@@ -148,6 +153,7 @@ export async function provisionUserWithMembership(
       status: 'active',
       unit_id: unitId,
       unit_relationship: unitRelationship,
+      show_phone_in_directory: showPhoneInDirectory,
     });
     if (error) {
       // Roll back brand-new auth user if membership fails

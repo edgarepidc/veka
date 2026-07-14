@@ -75,7 +75,7 @@ export function TeamManager({
     setMessage(null);
     start(async () => {
       const result = await registerStaffMember(formData);
-      setMessage('error' in result ? result.error : 'Persona registrada con acceso a la app.');
+      setMessage('error' in result ? (result.error ?? 'No se pudo registrar.') : 'Persona registrada con acceso a la app.');
     });
   }
 
@@ -83,7 +83,7 @@ export function TeamManager({
     setMessage(null);
     start(async () => {
       const result = await updateMemberRole(membershipId, role);
-      setMessage('error' in result ? result.error : 'Rol actualizado.');
+      setMessage('error' in result ? (result.error ?? 'No se pudo actualizar.') : 'Rol actualizado.');
     });
   }
 
@@ -93,7 +93,7 @@ export function TeamManager({
       const result = await setStaffPhoneVisibility(membershipId, showPhone);
       setMessage(
         'error' in result
-          ? result.error
+          ? (result.error ?? 'No se pudo actualizar.')
           : showPhone
             ? 'Teléfono visible en Mi comunidad.'
             : 'Teléfono oculto en Mi comunidad.',
@@ -185,6 +185,21 @@ export function TeamManager({
                       className="glass-input sm:col-span-2"
                       autoComplete="new-password"
                     />
+                    <label className="flex items-start gap-2 text-xs text-muted sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        name="show_phone_in_directory"
+                        value="true"
+                        defaultChecked
+                        className="mt-0.5 h-4 w-4 rounded border-white/20"
+                      />
+                      <span>
+                        Mostrar teléfono en Comunidad → Mi comunidad
+                        <span className="mt-0.5 block text-subtle">
+                          Solo aplica si capturas un teléfono. Se puede cambiar después.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                   <button type="submit" disabled={pending} className="glass-btn-primary mt-3">
                     Registrar acceso
