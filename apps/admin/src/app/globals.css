@@ -560,3 +560,125 @@ body {
 .action-link-danger:hover {
   filter: brightness(0.92);
 }
+
+/* —— Inicio: entrada y atmósfera —— */
+@keyframes home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-enter {
+  animation: home-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-enter-delay-1 {
+  animation-delay: 0.04s;
+}
+.home-enter-delay-2 {
+  animation-delay: 0.1s;
+}
+.home-enter-delay-3 {
+  animation-delay: 0.16s;
+}
+.home-enter-delay-4 {
+  animation-delay: 0.22s;
+}
+.home-enter-delay-5 {
+  animation-delay: 0.28s;
+}
+.home-enter-delay-6 {
+  animation-delay: 0.34s;
+}
+
+.home-hero {
+  background:
+    radial-gradient(
+      120% 80% at 0% 0%,
+      color-mix(in srgb, var(--accent) 18%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 70% at 100% 20%,
+      color-mix(in srgb, var(--accent-2) 14%, transparent),
+      transparent 50%
+    ),
+    color-mix(in srgb, var(--glass) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.home-pulse-pill {
+  display: block;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  background: color-mix(in srgb, var(--glass) 92%, transparent);
+  padding: 1rem 1.1rem;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.home-pulse-pill:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--glass));
+  transform: translateY(-1px);
+}
+
+.home-fund-pill {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 100%, transparent);
+  background: color-mix(in srgb, var(--surface-muted, var(--glass)) 70%, transparent);
+}
+
+.home-module-tile {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  border-radius: 1.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 42%
+    ),
+    color-mix(in srgb, var(--glass) 94%, transparent);
+  padding: 1.15rem 1.25rem;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.home-module-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.home-module-icon {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-enter,
+  .home-pulse-pill,
+  .home-module-tile {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
