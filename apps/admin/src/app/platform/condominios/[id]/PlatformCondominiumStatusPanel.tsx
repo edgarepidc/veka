@@ -53,7 +53,7 @@ export function PlatformCondominiumStatusPanel({
               onClick={() => setStatus(option)}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                 option === status
-                  ? 'border-violet-400/50 bg-violet-500/20 text-violet-200'
+                  ? 'border-violet-600 bg-violet-100 font-semibold text-violet-900'
                   : 'border-white/10 text-muted hover:border-white/20 hover:text-[var(--text)]'
               }`}
             >

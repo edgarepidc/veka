@@ -67,7 +67,7 @@ export function AdminTopBar({
           {isPlatformAdmin ? (
             <Link
               href="/platform"
-              className="hidden rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-200 sm:inline-block"
+              className="hidden rounded-lg border border-violet-700/40 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-900 sm:inline-block"
             >
               Veka Platform
             </Link>

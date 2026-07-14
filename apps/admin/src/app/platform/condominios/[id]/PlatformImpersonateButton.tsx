@@ -27,7 +27,7 @@ export function PlatformImpersonateButton({
       }}
       className={
         compact
-          ? 'text-xs text-violet-300 hover:underline disabled:opacity-50'
+          ? 'text-xs font-medium text-violet-700 hover:underline disabled:opacity-50'
           : 'glass-btn-primary text-sm disabled:opacity-50'
       }
     >

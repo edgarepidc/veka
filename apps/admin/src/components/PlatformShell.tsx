@@ -23,16 +23,17 @@ export function PlatformShell({
     <GlassBackground
       style={
         {
-          '--accent': '#a78bfa',
-          '--accent-2': '#6366f1',
+          '--accent': '#7c3aed',
+          '--accent-2': '#4f46e5',
+          '--accent-strong': '#6d28d9',
         } as CSSProperties
       }
     >
       <div className="flex min-h-screen">
-        <aside className="glass-sidebar hidden w-60 shrink-0 border-r border-violet-400/20 lg:flex lg:flex-col">
+        <aside className="glass-sidebar hidden w-60 shrink-0 border-r border-violet-500/30 lg:flex lg:flex-col">
           <div className="border-b border-white/10 px-5 py-6">
             <VekaLogo variant="mark" className="mb-3 w-14" />
-            <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">Veka Platform</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-violet-700">Veka Platform</p>
             <h1 className="serif-title mt-2 text-xl text-[var(--text)]">Administración</h1>
             <p className="mt-1 text-xs text-subtle">Dueños de la app</p>
           </div>
@@ -41,7 +42,7 @@ export function PlatformShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className="block rounded-lg px-3 py-2 text-sm text-[var(--text)] transition hover:bg-violet-500/10"
+                className="block rounded-lg px-3 py-2 text-sm text-[var(--text)] transition hover:bg-violet-500/15"
               >
                 {item.label}
               </Link>
@@ -49,7 +50,7 @@ export function PlatformShell({
           </nav>
           <div className="border-t border-white/10 px-5 py-4 text-xs text-subtle">
             <p className="truncate">{session.email}</p>
-            <Link href="/" className="mt-2 inline-block text-violet-300 hover:underline">
+            <Link href="/" className="mt-2 inline-block font-medium text-violet-700 hover:underline">
               Ir al panel condo
             </Link>
           </div>
@@ -62,7 +63,7 @@ export function PlatformShell({
               <p className="text-xs text-subtle lg:hidden">{session.email}</p>
             </div>
             <div className="flex items-center gap-3">
-              <Link href="/" className="text-xs text-violet-300 hover:underline">
+              <Link href="/" className="text-xs font-medium text-violet-700 hover:underline">
                 Panel condo
               </Link>
               <SignOutButton />

@@ -10,7 +10,6 @@ export function PlatformCondoNav({ condominiumId }: { condominiumId: string }) {
   const tabs = [
     { href: base, label: 'Configuración', exact: true },
     { href: `${base}/unidades`, label: 'Unidades' },
-    { href: `${base}/invitaciones`, label: 'Invitaciones' },
     { href: `${base}/equipo`, label: 'Equipo' },
   ];
 

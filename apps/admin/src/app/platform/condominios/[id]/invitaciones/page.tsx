@@ -25,8 +25,10 @@ export default async function PlatformCondominioInvitacionesPage({
   return (
     <GlassCard className="overflow-hidden p-0">
       <div className="border-b border-white/10 px-4 py-3">
-        <h2 className="font-semibold text-[var(--text)]">Invitaciones</h2>
-        <p className="text-xs text-subtle">Pendientes y procesadas para este condominio</p>
+        <h2 className="font-semibold text-[var(--text)]">Invitaciones (legado)</h2>
+        <p className="text-xs text-subtle">
+          Solo lectura de invitaciones antiguas. Los accesos nuevos se registran en Equipo.
+        </p>
       </div>
       <table className="w-full text-left text-sm">
         <thead className="text-xs uppercase tracking-wide text-subtle">

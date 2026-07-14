@@ -9,6 +9,7 @@ import {
   parseCondominiumSettings,
   type CondominiumSettings,
 } from '@/lib/condominium-settings';
+import { ensureAuthUserAndProfile, parsePersonFields, provisionUserWithMembership } from '@/lib/provision-user';
 import { sendInvitationEmail } from '@/lib/invitation-email';
 import { assertPlatformAdminAction } from '@/lib/require-platform-admin';
 import { createClient } from '@/lib/supabase/server';
@@ -24,43 +25,6 @@ const ROLE_LABELS: Record<MembershipRole, string> = {
   guard: 'Guardia',
   staff: 'Personal',
 };
-
-async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, email: string) {
-  const { data, error } = await admin.rpc('get_user_id_by_email', { p_email: email });
-  if (error) return null;
-  return (data as string | null) ?? null;
-}
-
-async function upsertStaffMembership(
-  admin: ReturnType<typeof createAdminClient>,
-  input: { userId: string; condominiumId: string; role: MembershipRole },
-) {
-  const { data: existing } = await admin
-    .from('memberships')
-    .select('id')
-    .eq('user_id', input.userId)
-    .eq('condominium_id', input.condominiumId)
-    .is('unit_id', null)
-    .maybeSingle();
-
-  if (existing?.id) {
-    const { error } = await admin
-      .from('memberships')
-      .update({ role: input.role, status: 'active' })
-      .eq('id', existing.id);
-    return error;
-  }
-
-  const { error } = await admin.from('memberships').insert({
-    user_id: input.userId,
-    condominium_id: input.condominiumId,
-    role: input.role,
-    status: 'active',
-    unit_id: null,
-  });
-
-  return error;
-}
 
 export async function platformUpdateCondominium(formData: FormData) {
   const denied = await assertPlatformAdminAction();
@@ -131,15 +95,14 @@ export async function platformCreateCondominium(formData: FormData) {
 
   if ('error' in result) return result;
 
-  const adminEmail = String(formData.get('admin_email') ?? '').trim().toLowerCase();
   const adminRole = String(formData.get('admin_role') ?? 'super_admin') as MembershipRole;
+  const person = parsePersonFields(formData, 'admin');
+  if ('error' in person) return person;
 
-  if (adminEmail) {
-    const assignResult = await platformAssignMembershipInternal(admin, {
+  if (!('empty' in person)) {
+    const assignResult = await provisionUserWithMembership(person, {
       condominiumId: result.condominiumId,
-      email: adminEmail,
       role: ASSIGNABLE_ROLES.includes(adminRole) ? adminRole : 'super_admin',
-      condominiumName: result.condominiumName,
     });
     if ('error' in assignResult) return assignResult;
   }
@@ -149,86 +112,39 @@ export async function platformCreateCondominium(formData: FormData) {
   return { success: true, condominiumId: result.condominiumId };
 }
 
-async function platformAssignMembershipInternal(
-  admin: ReturnType<typeof createAdminClient>,
-  input: {
-    condominiumId: string;
-    email: string;
-    role: MembershipRole;
-    condominiumName: string;
-    invitedBy?: string | null;
-  },
-) {
-  if (!input.email) return { error: 'Correo obligatorio.' };
-  if (!ASSIGNABLE_ROLES.includes(input.role)) return { error: 'Rol no permitido.' };
-
-  const userId = await findUserIdByEmail(admin, input.email);
-
-  if (userId) {
-    const error = await upsertStaffMembership(admin, {
-      userId,
-      condominiumId: input.condominiumId,
-      role: input.role,
-    });
-    if (error) return { error: error.message };
-    return { success: true, mode: 'membership' as const };
-  }
-
-  const { error: inviteError } = await admin.from('invitations').insert({
-    email: input.email,
-    condominium_id: input.condominiumId,
-    unit_id: null,
-    role: input.role,
-    unit_relationship: null,
-    invited_by: input.invitedBy ?? null,
-  });
-
-  if (inviteError) return { error: inviteError.message };
-
-  await sendInvitationEmail({
-    to: input.email,
-    condominiumName: input.condominiumName,
-    roleLabel: ROLE_LABELS[input.role],
-  });
-
-  return { success: true, mode: 'invitation' as const };
-}
-
 export async function platformAssignMembership(formData: FormData) {
   const denied = await assertPlatformAdminAction();
   if (denied) return denied;
 
   const condominiumId = String(formData.get('condominium_id') ?? '').trim();
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const role = String(formData.get('role') ?? 'admin') as MembershipRole;
 
   if (!condominiumId) return { error: 'Condominio inválido.' };
+  if (!ASSIGNABLE_ROLES.includes(role)) return { error: 'Rol no permitido.' };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const person = parsePersonFields(formData);
+  if ('error' in person) return person;
+  if ('empty' in person) return { error: 'Nombre, correo y contraseña son obligatorios.' };
 
   const admin = createAdminClient();
   const { data: condo } = await admin
     .from('condominiums')
-    .select('name')
+    .select('id')
     .eq('id', condominiumId)
     .maybeSingle();
 
   if (!condo) return { error: 'Condominio no encontrado.' };
 
-  const result = await platformAssignMembershipInternal(admin, {
+  const provisioned = await provisionUserWithMembership(person, {
     condominiumId,
-    email,
     role,
-    condominiumName: condo.name,
-    invitedBy: user?.id ?? null,
   });
+  if ('error' in provisioned) return provisioned;
 
   revalidatePath(`/platform/condominios/${condominiumId}`);
+  revalidatePath(`/platform/condominios/${condominiumId}/equipo`);
   revalidatePath('/platform/condominios');
-  return result;
+  return { success: true };
 }
 
 export async function platformRevokeMembership(membershipId: string, condominiumId: string) {
@@ -326,20 +242,18 @@ export async function platformAddPlatformAdmin(formData: FormData) {
   const denied = await assertPlatformAdminAction();
   if (denied) return denied;
 
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const notes = String(formData.get('notes') ?? '').trim();
+  const person = parsePersonFields(formData);
+  if ('error' in person) return person;
+  if ('empty' in person) return { error: 'Nombre, correo y contraseña son obligatorios.' };
 
-  if (!email) return { error: 'Correo obligatorio.' };
+  const ensured = await ensureAuthUserAndProfile(person);
+  if ('error' in ensured) return ensured;
 
   const admin = createAdminClient();
-  const userId = await findUserIdByEmail(admin, email);
-  if (!userId) {
-    return { error: 'No hay usuario registrado con ese correo. Debe crear cuenta primero.' };
-  }
-
   const { error } = await admin
     .from('platform_admins')
-    .upsert({ user_id: userId, notes: notes || null }, { onConflict: 'user_id' });
+    .upsert({ user_id: ensured.userId, notes: notes || null }, { onConflict: 'user_id' });
 
   if (error) return { error: error.message };
 

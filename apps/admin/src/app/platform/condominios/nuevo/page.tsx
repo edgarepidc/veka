@@ -14,7 +14,7 @@ export default function PlatformNuevoCondominioPage() {
         subtitle="Alta comercial: crea el tenant y asigna al administrador del cliente."
       />
       <p className="mb-4 text-sm text-muted">
-        <Link href="/platform/condominios" className="text-violet-300 hover:underline">
+        <Link href="/platform/condominios" className="font-medium text-violet-700 hover:underline">
           ← Volver a condominios
         </Link>
       </p>

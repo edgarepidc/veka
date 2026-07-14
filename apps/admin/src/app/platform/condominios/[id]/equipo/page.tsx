@@ -91,9 +91,9 @@ export default async function PlatformCondominioEquipoPage({
       </div>
 
       <GlassCard>
-        <h2 className="text-lg font-semibold text-[var(--text)]">Asignar administrador</h2>
+        <h2 className="text-lg font-semibold text-[var(--text)]">Registrar acceso</h2>
         <p className="mt-1 text-sm text-muted">
-          Agrega otro correo como admin, guardia o staff de este condominio.
+          Crea la cuenta y asigna rol de admin, guardia o staff en este condominio.
         </p>
         <div className="mt-4">
           <PlatformAssignMemberForm condominiumId={id} />

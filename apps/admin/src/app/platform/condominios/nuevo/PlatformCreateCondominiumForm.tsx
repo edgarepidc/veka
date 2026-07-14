@@ -48,8 +48,23 @@ export function PlatformCreateCondominiumForm() {
         </select>
       </label>
       <hr className="border-white/10" />
-      <p className="text-sm text-muted">Administrador inicial del condominio (opcional pero recomendado)</p>
-      <Field label="Correo del administrador" name="admin_email" type="email" placeholder="admin@cliente.com" />
+      <p className="text-sm text-muted">
+        Administrador inicial (opcional). Si lo completas, se crea la cuenta y el acceso de inmediato.
+      </p>
+      <Field label="Nombre del administrador" name="admin_full_name" placeholder="Ana López" />
+      <Field
+        label="Correo del administrador"
+        name="admin_email"
+        type="email"
+        placeholder="admin@cliente.com"
+      />
+      <Field
+        label="Contraseña inicial"
+        name="admin_password"
+        type="password"
+        placeholder="Mínimo 8 caracteres"
+      />
+      <Field label="Teléfono (opcional)" name="admin_phone" type="tel" placeholder="55 1234 5678" />
       <label className="block text-sm">
         <span className="mb-1 block text-subtle">Rol inicial</span>
         <select name="admin_role" className="glass-input w-full" defaultValue="super_admin">

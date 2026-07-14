@@ -21,7 +21,10 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function parsePersonFields(formData: FormData, prefix = ''): ProvisionPersonInput | { empty: true } | { error: string } {
+export function parsePersonFields(
+  formData: FormData,
+  prefix = '',
+): ProvisionPersonInput | { empty: true } | { error: string } {
   const p = prefix ? `${prefix}_` : '';
   const email = String(formData.get(`${p}email`) ?? '').trim();
   const password = String(formData.get(`${p}password`) ?? '');
@@ -59,13 +62,12 @@ async function findUserIdByEmail(
 }
 
 /**
- * Create Auth user (or reuse existing), upsert profile, ensure membership.
+ * Create Auth user (or reuse existing) and upsert profile.
  * Existing users: profile updated; password is NOT changed.
  */
-export async function provisionUserWithMembership(
+export async function ensureAuthUserAndProfile(
   person: ProvisionPersonInput,
-  membership: ProvisionMembershipInput,
-): Promise<{ userId: string } | { error: string }> {
+): Promise<{ userId: string; created: boolean } | { error: string }> {
   const admin = createAdminClient();
   const email = normalizeEmail(person.email);
 
@@ -96,8 +98,26 @@ export async function provisionUserWithMembership(
     { onConflict: 'id' },
   );
   if (profileError) {
+    if (created) await admin.auth.admin.deleteUser(userId);
     return { error: profileError.message };
   }
+
+  return { userId, created };
+}
+
+/**
+ * Create Auth user (or reuse existing), upsert profile, ensure membership.
+ * Existing users: profile updated; password is NOT changed.
+ */
+export async function provisionUserWithMembership(
+  person: ProvisionPersonInput,
+  membership: ProvisionMembershipInput,
+): Promise<{ userId: string } | { error: string }> {
+  const ensured = await ensureAuthUserAndProfile(person);
+  if ('error' in ensured) return ensured;
+
+  const { userId, created } = ensured;
+  const admin = createAdminClient();
 
   const unitId = membership.unitId ?? null;
   const unitRelationship = membership.unitRelationship ?? null;
@@ -156,7 +176,6 @@ export async function provisionUserWithMembership(
       show_phone_in_directory: showPhoneInDirectory,
     });
     if (error) {
-      // Roll back brand-new auth user if membership fails
       if (created) {
         await admin.auth.admin.deleteUser(userId);
       }

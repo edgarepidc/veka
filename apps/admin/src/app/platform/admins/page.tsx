@@ -22,8 +22,9 @@ export default async function PlatformAdminsPage() {
       </GlassCard>
 
       <p className="mt-4 text-xs text-subtle">
-        El correo debe pertenecer a un usuario ya registrado en Veka. También puedes usar la variable{' '}
-        <code className="text-violet-300">PLATFORM_ADMIN_EMAILS</code> como respaldo de acceso.
+        Registra cuentas nuevas o otorga acceso a usuarios existentes. También puedes usar{' '}
+        <code className="font-medium text-violet-700">PLATFORM_ADMIN_EMAILS</code> como respaldo de
+        acceso.
       </p>
     </div>
   );

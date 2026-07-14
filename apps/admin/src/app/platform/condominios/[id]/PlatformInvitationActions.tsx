@@ -32,7 +32,7 @@ export function PlatformInvitationActions({
             router.refresh();
           });
         }}
-        className="text-xs text-violet-300 hover:underline disabled:opacity-50"
+        className="text-xs font-medium text-violet-700 hover:underline disabled:opacity-50"
       >
         Reenviar
       </button>

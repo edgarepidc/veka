@@ -82,7 +82,7 @@ export default async function PlatformCondominiosPage() {
                       <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
                         <Link
                           href={`/platform/condominios/${condo.id}`}
-                          className="text-violet-300 hover:underline"
+                          className="font-medium text-violet-700 hover:underline"
                         >
                           Gestionar
                         </Link>

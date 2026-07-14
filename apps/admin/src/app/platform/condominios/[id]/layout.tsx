@@ -22,7 +22,7 @@ export default async function PlatformCondominioLayout({
   return (
     <div className="mx-auto max-w-5xl">
       <p className="mb-4 text-sm text-muted">
-        <Link href="/platform/condominios" className="text-violet-300 hover:underline">
+        <Link href="/platform/condominios" className="font-medium text-violet-700 hover:underline">
           ← Condominios
         </Link>
       </p>

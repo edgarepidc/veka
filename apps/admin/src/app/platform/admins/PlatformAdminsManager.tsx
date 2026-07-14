@@ -30,6 +30,16 @@ export function PlatformAdminsManager({
         }}
       >
         <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-subtle">Nombre</label>
+          <input
+            name="full_name"
+            required
+            className="glass-input mt-1 w-full"
+            placeholder="Nombre completo"
+            autoComplete="name"
+          />
+        </div>
+        <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-subtle">Correo</label>
           <input
             name="email"
@@ -37,15 +47,35 @@ export function PlatformAdminsManager({
             required
             className="glass-input mt-1 w-full"
             placeholder="admin@vekacondo.com"
+            autoComplete="email"
           />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-subtle">Contraseña</label>
+          <input
+            name="password"
+            type="password"
+            required
+            minLength={8}
+            className="glass-input mt-1 w-full"
+            placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-subtle">Teléfono</label>
+          <input name="phone" type="tel" className="glass-input mt-1 w-full" placeholder="Opcional" />
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-subtle">Notas</label>
           <input name="notes" className="glass-input mt-1 w-full" placeholder="Opcional" />
         </div>
         <button type="submit" disabled={pending} className="glass-btn-primary text-sm disabled:opacity-50">
-          Agregar platform admin
+          Registrar platform admin
         </button>
+        <p className="text-xs text-subtle">
+          Si el correo ya existe, se actualiza el perfil y se otorga acceso (sin cambiar la contraseña).
+        </p>
         {message ? <p className="text-sm text-muted">{message}</p> : null}
       </form>
 

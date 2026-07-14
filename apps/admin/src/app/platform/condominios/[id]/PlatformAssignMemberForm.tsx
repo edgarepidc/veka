@@ -31,8 +31,7 @@ export function PlatformAssignMemberForm({ condominiumId }: { condominiumId: str
         setMessage(result.error);
         return;
       }
-      const mode = 'mode' in result && result.mode === 'invitation' ? 'invitación enviada' : 'acceso asignado';
-      setMessage(`Listo: ${mode}.`);
+      setMessage('Acceso registrado. La persona ya puede iniciar sesión.');
       event.currentTarget.reset();
       router.refresh();
     });
@@ -42,10 +41,34 @@ export function PlatformAssignMemberForm({ condominiumId }: { condominiumId: str
     <form onSubmit={handleSubmit} className="space-y-3">
       <input
         required
+        name="full_name"
+        placeholder="Nombre completo"
+        className="glass-input w-full"
+        autoComplete="name"
+      />
+      <input
+        required
         type="email"
         name="email"
         placeholder="correo@administrador.com"
         className="glass-input w-full"
+        autoComplete="email"
+      />
+      <input
+        required
+        type="password"
+        name="password"
+        placeholder="Contraseña (mín. 8)"
+        minLength={8}
+        className="glass-input w-full"
+        autoComplete="new-password"
+      />
+      <input
+        name="phone"
+        type="tel"
+        placeholder="Teléfono (opcional)"
+        className="glass-input w-full"
+        autoComplete="tel"
       />
       <select name="role" defaultValue="admin" className="glass-input w-full">
         {ROLES.map((role) => (
@@ -55,10 +78,11 @@ export function PlatformAssignMemberForm({ condominiumId }: { condominiumId: str
         ))}
       </select>
       <button type="submit" disabled={pending} className="glass-btn-primary w-full text-sm">
-        {pending ? 'Asignando…' : 'Asignar administrador'}
+        {pending ? 'Registrando…' : 'Registrar acceso'}
       </button>
       <p className="text-xs text-subtle">
-        Si el correo ya tiene cuenta en Veka se asigna de inmediato; si no, se crea una invitación con email.
+        Crea la cuenta y el acceso de inmediato. Si el correo ya existe, se actualiza el perfil y la
+        membresía (sin cambiar la contraseña).
       </p>
       {message ? <p className="text-sm text-muted">{message}</p> : null}
     </form>
