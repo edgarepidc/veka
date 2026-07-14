@@ -28,6 +28,7 @@ import {
 } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
+import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
@@ -412,12 +413,11 @@ export default function CommunityScreen() {
               />
 
               {filteredPosts.length === 0 ? (
-                <GlassCard>
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin publicaciones</Text>
-                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                    Los avisos y encuestas de administración aparecerán aquí.
-                  </Text>
-                </GlassCard>
+                <EmptyStateCard
+                  kind="notice"
+                  title="Sin publicaciones"
+                  subtitle="Los avisos y encuestas de administración aparecerán aquí."
+                />
               ) : (
                 filteredPosts.map((post) => {
                   const typeTag = postTypeTag(post.post_type);
@@ -658,16 +658,15 @@ export default function CommunityScreen() {
               )}
             </>
           ) : tab === 'docs' ? (
+            filteredDocuments.length === 0 ? (
+              <EmptyStateCard
+                kind="units"
+                title="Sin documentos"
+                subtitle="Reglamentos, minutas y estados de cuenta aparecerán aquí."
+              />
+            ) : (
             <GlassCard noPadding>
-              {filteredDocuments.length === 0 ? (
-                <View style={{ padding: 16 }}>
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin documentos</Text>
-                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                    Reglamentos, minutas y estados de cuenta aparecerán aquí.
-                  </Text>
-                </View>
-              ) : (
-                filteredDocuments.map((doc) => {
+                {filteredDocuments.map((doc) => {
                   const docTone = docAccentTone(doc.category);
                   const docColor = accentColor(theme, docTone);
                   return (
@@ -692,9 +691,9 @@ export default function CommunityScreen() {
                     </Pressable>
                   </GlassCard>
                   );
-                })
-              )}
+                })}
             </GlassCard>
+            )
           ) : tab === 'directory' ? (
             <View style={{ gap: 12 }}>
               <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 4 }}>
@@ -763,12 +762,11 @@ export default function CommunityScreen() {
                 Expedientes de asamblea: convocatoria, votaciones, documentos y acuerdos.
               </Text>
               {filteredAssemblies.length === 0 ? (
-                <GlassCard>
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin asambleas</Text>
-                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                    Cuando la administración publique una asamblea, aparecerá aquí.
-                  </Text>
-                </GlassCard>
+                <EmptyStateCard
+                  kind="notice"
+                  title="Sin asambleas"
+                  subtitle="Cuando la administración publique una asamblea, aparecerá aquí."
+                />
               ) : (
                 filteredAssemblies.map((assembly) => (
                   <GlassCard key={assembly.id} variant="accent" accent={assemblyAccentTone(assembly.status)}>
@@ -1002,8 +1000,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 5,
   },
-  emptyTitle: { fontSize: 15, fontWeight: '700' },
-  emptyText: { fontSize: 13, marginTop: 6, lineHeight: 20 },
   docCard: { marginBottom: 10 },
   docRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   docIcon: { width: 42, height: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

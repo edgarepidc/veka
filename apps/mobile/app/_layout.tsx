@@ -59,7 +59,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
-  usePushNotifications(user?.id);
+  usePushNotifications(user?.id, primary?.role);
 
   const isMaintenanceApp = Boolean(primary && isMaintenanceFieldRole(primary.role));
   const isGuardApp = Boolean(primary && isGuardFieldRole(primary.role));

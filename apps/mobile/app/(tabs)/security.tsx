@@ -24,6 +24,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@/components/ui/Avatar';
+import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
@@ -224,12 +225,11 @@ export default function SecurityScreen() {
               />
               {actionError ? <Text style={{ color: theme.danger, marginBottom: 8 }}>{actionError}</Text> : null}
               {visits.length === 0 ? (
-                <GlassCard variant="muted">
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin visitas registradas</Text>
-                  <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                    Pre-autoriza visitas, servicios o rentas. El guardia escanea el QR al ingreso.
-                  </Text>
-                </GlassCard>
+                <EmptyStateCard
+                  kind="visit"
+                  title="Sin visitas registradas"
+                  subtitle="Pre-autoriza visitas, servicios o rentas. El guardia escanea el QR al ingreso."
+                />
               ) : (
                 visits.map((visit) => (
                     <Pressable key={visit.id} onPress={() => { setSelectedVisitId(visit.id); setTab('qr'); }}>
@@ -268,23 +268,21 @@ export default function SecurityScreen() {
                 unitIdentifier={primary.unit?.identifier ?? '—'}
               />
             ) : (
-              <GlassCard variant="muted">
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin QR activo</Text>
-                <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                  Registra una visita para generar un código de acceso.
-                </Text>
-              </GlassCard>
+              <EmptyStateCard
+                kind="visit"
+                title="Sin QR activo"
+                subtitle="Registra una visita para generar un código de acceso."
+              />
             )
           ) : null}
 
           {tab === 'paquetes' ? (
             packages.length === 0 ? (
-              <GlassCard variant="muted">
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin paquetes</Text>
-                <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                  Cuando recepción registre un paquete para tu unidad, aparecerá aquí.
-                </Text>
-              </GlassCard>
+              <EmptyStateCard
+                kind="package"
+                title="Sin paquetes"
+                subtitle="Cuando recepción registre un paquete para tu unidad, aparecerá aquí."
+              />
             ) : (
               packages.map((pkg) => (
                   <GlassCard key={pkg.id} variant="accent" accent={packageAccentTone(pkg.status)} style={styles.cardGap}>

@@ -64,7 +64,8 @@ export function useMembership() {
       `,
       )
       .eq('user_id', user.id)
-      .eq('status', 'active');
+      .eq('status', 'active')
+      .order('created_at', { ascending: true });
 
     if (!error && data) {
       const normalized = data.map((row) => {

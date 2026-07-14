@@ -1,8 +1,10 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import { isGuardFieldRole, isMaintenanceFieldRole } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 
@@ -15,6 +17,13 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+function resolveExpoProjectId(): string | undefined {
+  const fromExtra = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  const fromEas = Constants.easConfig?.projectId as string | undefined;
+  const fromEnv = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+  return fromExtra || fromEas || fromEnv || undefined;
+}
 
 async function registerForPushNotifications(): Promise<string | null> {
   if (!Device.isDevice) return null;
@@ -36,7 +45,10 @@ async function registerForPushNotifications(): Promise<string | null> {
     });
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const projectId = resolveExpoProjectId();
+  const tokenData = projectId
+    ? await Notifications.getExpoPushTokenAsync({ projectId })
+    : await Notifications.getExpoPushTokenAsync();
   return tokenData.data;
 }
 
@@ -56,7 +68,10 @@ async function savePushToken(userId: string, token: string): Promise<void> {
   );
 }
 
-export function openNotificationTarget(data: Record<string, unknown> | undefined) {
+export function openNotificationTarget(
+  data: Record<string, unknown> | undefined,
+  role?: string | null,
+) {
   const screen = typeof data?.screen === 'string' ? data.screen : null;
   const tab = typeof data?.tab === 'string' ? data.tab : undefined;
   const reservationId = typeof data?.reservationId === 'string' ? data.reservationId : undefined;
@@ -67,6 +82,9 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
       : typeof data?.ticket_id === 'string'
         ? data.ticket_id
         : undefined;
+
+  const isGuard = role ? isGuardFieldRole(role) : false;
+  const isStaff = role ? isMaintenanceFieldRole(role) : false;
 
   if (screen === 'finance') {
     if (tab) {
@@ -85,6 +103,13 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
     return;
   }
   if (screen === 'security') {
+    if (isGuard) {
+      router.push({
+        pathname: '/(guard)/security',
+        params: tab ? { tab } : undefined,
+      });
+      return;
+    }
     if (tab) {
       router.push({ pathname: '/security', params: { tab } });
     } else {
@@ -93,6 +118,13 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
     return;
   }
   if (screen === 'maintenance') {
+    if (isStaff) {
+      router.push({
+        pathname: '/(staff)/maintenance',
+        params: ticketId ? { ticketId, tab: 'tickets' } : { tab: 'tickets' },
+      });
+      return;
+    }
     if (ticketId) {
       router.push({ pathname: '/maintenance', params: { ticketId } });
     } else {
@@ -109,8 +141,10 @@ export function openNotificationTarget(data: Record<string, unknown> | undefined
   }
 }
 
-export function usePushNotifications(userId: string | null | undefined) {
+export function usePushNotifications(userId: string | null | undefined, role?: string | null) {
   const registeredRef = useRef<string | null>(null);
+  const roleRef = useRef(role);
+  roleRef.current = role;
 
   useEffect(() => {
     if (!userId) return;
@@ -138,12 +172,12 @@ export function usePushNotifications(userId: string | null | undefined) {
     void Notifications.getLastNotificationResponseAsync().then((response) => {
       if (!response) return;
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
-      openNotificationTarget(data);
+      openNotificationTarget(data, roleRef.current);
     });
 
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
-      openNotificationTarget(data);
+      openNotificationTarget(data, roleRef.current);
     });
 
     return () => subscription.remove();

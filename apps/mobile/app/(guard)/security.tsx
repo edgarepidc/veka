@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   STAFF_ROLE_LABELS,
@@ -21,6 +21,7 @@ import {
 import type { MembershipRole } from '@veka/shared';
 
 import { Avatar, ScreenHeader, SectionLabel } from '@/components/ui/Avatar';
+import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
@@ -51,6 +52,8 @@ function formatTime(iso: string): string {
 export default function GuardSecurityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const { user } = useAuth();
   const { profile } = useProfile();
   const { primary, loading: membershipLoading } = useMembership();
@@ -70,7 +73,13 @@ export default function GuardSecurityScreen() {
     getPackagePhotoUrl,
   } = useGuardSecurity(primary);
 
-  const [tab, setTab] = useState('scan');
+  const initialTab =
+    tabParam === 'paquetes' || tabParam === 'packages'
+      ? 'packages'
+      : tabParam === 'ops' || tabParam === 'visitas'
+        ? 'ops'
+        : 'scan';
+  const [tab, setTab] = useState(initialTab);
   const [scopeFilter, setScopeFilter] = useState('all');
   const [manualRef, setManualRef] = useState('');
   const [checkInResult, setCheckInResult] = useState<string | null>(null);
@@ -319,9 +328,11 @@ export default function GuardSecurityScreen() {
           <View style={styles.section}>
             <SectionLabel title="Visitas vigentes hoy" />
             {visibleVisits.length === 0 ? (
-              <GlassCard variant="muted">
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin visitas en este alcance para hoy.</Text>
-              </GlassCard>
+              <EmptyStateCard
+                kind="visit"
+                title="Sin visitas hoy"
+                subtitle="No hay visitas vigentes en este alcance para hoy."
+              />
             ) : (
               visibleVisits.map((visit) => (
                 <GlassCard key={visit.id} variant="accent" accent={visitAccentTone(visit)} style={styles.cardGap}>
@@ -360,9 +371,11 @@ export default function GuardSecurityScreen() {
               <SectionLabel title="Paquetes en caseta" />
             </View>
             {visiblePackages.length === 0 ? (
-              <GlassCard variant="muted">
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>Sin paquetes pendientes en este alcance.</Text>
-              </GlassCard>
+              <EmptyStateCard
+                kind="package"
+                title="Sin paquetes"
+                subtitle="No hay paquetes pendientes en este alcance."
+              />
             ) : (
               visiblePackages.map((pkg) => (
                 <GlassCard key={pkg.id} variant="accent" accent={packageAccentTone('received')} style={styles.cardGap}>

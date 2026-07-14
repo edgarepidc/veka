@@ -9,6 +9,7 @@ import {
 
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { notifyNewPackage } from '@/lib/notify-new-package';
+import { notifyVisitEvent } from '@/lib/notify-visit-event';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
@@ -251,6 +252,11 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
         return { error: updateError.message };
       }
 
+      const notify = await notifyVisitEvent(visit.id, 'check_in');
+      if (!notify.ok) {
+        setActionError('Entrada registrada. No se pudo enviar la notificación push.');
+      }
+
       await refresh();
       return {
         result: {
@@ -278,6 +284,10 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
       if (error) {
         setActionError(error.message);
         return { error: error.message };
+      }
+      const notify = await notifyVisitEvent(visitId, 'check_out');
+      if (!notify.ok) {
+        setActionError('Salida registrada. No se pudo enviar la notificación push.');
       }
       await refresh();
       return { error: null };
@@ -339,7 +349,11 @@ export function useGuardSecurity(primary: ActiveMembership | null) {
         return { error: message };
       }
 
-      void notifyNewPackage(data.id);
+      void notifyNewPackage(data.id).then((notify) => {
+        if (!notify.ok) {
+          setActionError('Paquete registrado. No se pudo enviar la notificación push.');
+        }
+      });
       await refresh();
       return { error: null };
     },

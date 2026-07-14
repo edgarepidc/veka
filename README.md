@@ -71,6 +71,8 @@ npm run dev:admin
 
 Guía del piloto demo: [docs/PILOTO_LAS_PALMAS.md](docs/PILOTO_LAS_PALMAS.md)
 
+Checklist de lanzamiento (TestFlight / Play / push / RLS): [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md)
+
 ## CI
 
 GitHub Actions ejecuta `typecheck` y `test:shared` en cada push/PR a `main` (ver `.github/workflows/ci.yml`).

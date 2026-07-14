@@ -51,9 +51,12 @@ export function VisitQrScanner({
 
   if (!permission.granted) {
     return (
-      <View style={styles.block}>
+      <View style={[styles.block, styles.denied, { borderColor: theme.danger }]}>
+        <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', marginBottom: 6 }}>
+          Cámara bloqueada
+        </Text>
         <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 18, marginBottom: 10 }}>
-          Necesitamos la cámara para escanear el pase QR del visitante.
+          Necesitamos la cámara para escanear el pase QR. Actívala en Ajustes del teléfono si ya la denegaste.
         </Text>
         <PrimaryButton label="Permitir cámara" variant="secondary" onPress={() => void requestPermission()} />
       </View>
@@ -98,6 +101,11 @@ export function VisitQrScanner({
 
 const styles = StyleSheet.create({
   block: { marginBottom: 12 },
+  denied: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
   cameraWrap: {
     height: 280,
     borderRadius: 16,

@@ -274,7 +274,9 @@ export default function DashboardScreen() {
                             : 'Tienes un paquete pendiente de recoger en caseta.'
                         }
                         trailingImageUri={data.pendingPackage.photo_url}
-                        onPress={() => router.push('/security')}
+                        onPress={() =>
+                          router.push({ pathname: '/security', params: { tab: 'paquetes' } })
+                        }
                       />
                     </HomeEnter>
                   ) : null}
@@ -302,7 +304,12 @@ export default function DashboardScreen() {
                         pollBars={
                           data.latestPost.post_type === 'poll' ? data.latestPost.pollOptions : null
                         }
-                        onPress={() => router.push('/community')}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/community',
+                            params: { postId: data.latestPost!.id },
+                          })
+                        }
                       />
                     </HomeEnter>
                   ) : null}

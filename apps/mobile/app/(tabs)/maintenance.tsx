@@ -28,6 +28,7 @@ import {
 import type { MaintenanceTicketCategory } from '@veka/shared';
 
 import { ScreenHeader } from '@/components/ui/Avatar';
+import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
@@ -259,9 +260,12 @@ export default function MaintenanceScreen() {
               style={styles.createAction}
             />
             {visibleTickets.length === 0 ? (
-              <GlassCard variant="muted" style={styles.mt}>
-                <Text style={{ color: theme.textMuted, fontSize: 14 }}>No hay tickets en este alcance.</Text>
-              </GlassCard>
+              <EmptyStateCard
+                kind="maintenance"
+                title="Sin tickets"
+                subtitle="No hay reportes en este alcance. Crea uno con Nuevo reporte."
+                style={styles.mt}
+              />
             ) : (
               visibleTickets.map((ticket) => {
                 const isMine = Boolean(myUnitId && ticket.unit_id === myUnitId);
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: {},
   section: { paddingHorizontal: 20 },
-  createAction: { marginTop: 12, marginBottom: 12 },
+  createAction: { marginTop: 12, marginBottom: 20 },
   mt: { marginTop: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },

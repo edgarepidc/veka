@@ -64,7 +64,7 @@ export async function checkInVisit(input: { condominiumId: string; payload: stri
   const { data: visit, error } = await supabase
     .from('visits')
     .select(
-      'id, visitor_name, visit_type, valid_from, valid_until, stay_days, vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at, unit:units (identifier)',
+      'id, unit_id, visitor_name, visit_type, valid_from, valid_until, stay_days, vehicle_plate, vehicle_model, notes, checked_in_at, checked_out_at, unit:units (identifier)',
     )
     .eq('condominium_id', input.condominiumId)
     .eq('qr_token', parsed.token)
@@ -109,6 +109,15 @@ export async function checkInVisit(input: { condominiumId: string; payload: stri
     .eq('id', visit.id);
 
   if (updateError) return { error: updateError.message };
+
+  if (visit.unit_id) {
+    await deliverUnitPushNotification({
+      unitId: visit.unit_id,
+      title: 'Visita en caseta — Veka',
+      body: `${visit.visitor_name} acaba de ingresar.`,
+      data: { screen: 'security', tab: 'visitas', visitId: visit.id },
+    });
+  }
 
   revalidatePath('/seguridad');
 
@@ -215,6 +224,14 @@ export async function checkOutVisit(formData: FormData) {
   const visitId = String(formData.get('visit_id') ?? '').trim();
   if (!visitId) return { error: 'Visita inválida.' };
 
+  const { data: visit } = await supabase
+    .from('visits')
+    .select('id, unit_id, visitor_name')
+    .eq('id', visitId)
+    .maybeSingle();
+
+  if (!visit) return { error: 'Visita no encontrada.' };
+
   const { error } = await supabase
     .from('visits')
     .update({ checked_out_at: new Date().toISOString() })
@@ -223,6 +240,15 @@ export async function checkOutVisit(formData: FormData) {
     .not('checked_in_at', 'is', null);
 
   if (error) return { error: error.message };
+
+  if (visit.unit_id) {
+    await deliverUnitPushNotification({
+      unitId: visit.unit_id,
+      title: 'Visita salió de caseta — Veka',
+      body: `${visit.visitor_name || 'Tu visita'} registró salida en recepción.`,
+      data: { screen: 'security', tab: 'visitas', visitId: visit.id },
+    });
+  }
 
   revalidatePath('/seguridad');
   return { ok: true };

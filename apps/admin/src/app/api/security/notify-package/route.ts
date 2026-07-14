@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { deliverUnitPushNotification } from '@/lib/unit-push';
-import { createClient } from '@/lib/supabase/server';
+import { createClientFromRequest } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
+  const supabase = await createClientFromRequest(request);
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -1,6 +1,9 @@
 import { supabase } from '@/lib/supabase';
 
-export async function notifyNewPackage(packageId: string): Promise<{ ok: boolean }> {
+export async function notifyVisitEvent(
+  visitId: string,
+  event: 'check_in' | 'check_out',
+): Promise<{ ok: boolean }> {
   const adminUrl = process.env.EXPO_PUBLIC_ADMIN_URL?.replace(/\/$/, '');
   if (!adminUrl) return { ok: false };
 
@@ -9,13 +12,13 @@ export async function notifyNewPackage(packageId: string): Promise<{ ok: boolean
   if (!token) return { ok: false };
 
   try {
-    const response = await fetch(`${adminUrl}/api/security/notify-package`, {
+    const response = await fetch(`${adminUrl}/api/security/notify-visit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ packageId }),
+      body: JSON.stringify({ visitId, event }),
     });
     return { ok: response.ok };
   } catch {

@@ -8,6 +8,7 @@ import {
 
 import { readUriAsArrayBuffer } from '@/lib/storage-upload';
 import { notifyNewMaintenanceTicket } from '@/lib/notify-new-maintenance-ticket';
+import { updateTicketStatusRemote } from '@/lib/update-ticket-status';
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
 import { useAuth } from '@/providers/AuthProvider';
@@ -436,6 +437,21 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
     [primary?.condominium_id, refresh, user],
   );
 
+  const updateTicketStatus = useCallback(
+    async (ticketId: string, status: MaintenanceTicketStatus, adminNotes?: string) => {
+      if (!ticketId) return { error: 'Ticket inválido.' };
+      setActionError(null);
+      const result = await updateTicketStatusRemote({ ticketId, status, adminNotes });
+      if (result.error) {
+        setActionError(result.error);
+        return { error: result.error };
+      }
+      await refresh();
+      return { error: null };
+    },
+    [refresh],
+  );
+
   const getSignedUrl = useCallback(async (path: string) => resolveMaintenanceFileUrl(path), []);
 
   const routineGroups = groupRoutinesByWeekday(routines);
@@ -452,6 +468,7 @@ export function useMaintenance(primary: ActiveMembership | null, mode: Maintenan
     createTicket,
     createOnDemandRoutine,
     updateOnDemandRoutine,
+    updateTicketStatus,
     uploadEvidence,
     getSignedUrl,
   };

@@ -41,12 +41,20 @@ Tras `npm run db:reset` o `npm run seed:pilot-demo` en producción:
 
 | Evento | Pantalla destino |
 |--------|------------------|
+| Visita ingreso / salida | Seguridad → Visitas |
 | Paquete en caseta | Seguridad → Paquetes |
 | Reserva aprobada/rechazada | Espacios (+ `reservationId`) |
 | Nueva reserva pendiente | Admin (email/push staff) |
-| Ticket mantenimiento | Mantenimiento (+ `ticketId`) |
-| Nuevo ticket (staff) | Email/push al admin |
+| Ticket mantenimiento | Mantenimiento (+ `ticketId`) · Staff → Tickets |
+| Nuevo ticket (staff) | Email/push al admin + app staff |
 | Recordatorio de pago | Finanzas |
+
+Checklist completo de dispositivo / TestFlight: [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md).
+
+### App field (dispositivo real)
+
+1. **Guardia** — escanear QR de visita (push al residente); registrar paquete; operaciones del día
+2. **Staff** — tab Tickets (cambiar estado + push); evidencia mensual
 
 ## Scripts útiles
 

@@ -11,19 +11,25 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MAINTENANCE_PERIOD_LABELS,
+  MAINTENANCE_TICKET_BOARD_STATUSES,
   STAFF_ROLE_LABELS,
   groupEvidenceByDate,
   matchesClusterResourceScope,
   recurrenceLabel,
+  ticketBoardStatus,
+  ticketCategoryLabel,
+  ticketStatusLabel,
   type MaintenancePeriodFilter,
+  type MaintenanceTicketStatus,
 } from '@veka/shared';
 import type { MembershipRole } from '@veka/shared';
 
 import { Avatar, ScreenHeader } from '@/components/ui/Avatar';
+import { EmptyStateCard } from '@/components/ui/EmptyStateCard';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { KeyboardFormSheet, keyboardFormSheetStyles } from '@/components/ui/KeyboardFormSheet';
@@ -31,7 +37,7 @@ import { GradientActionButton } from '@/components/ui/GradientActionButton';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { ScreenBackground } from '@/components/ui/ScreenBackground';
 import { ScopeFilterBar } from '@/components/ui/ScopeFilterBar';
-import { FilterBar } from '@/components/ui/TabStrip';
+import { FilterBar, TabStrip } from '@/components/ui/TabStrip';
 import { ImageCarousel } from '@/components/ui/ImageCarousel';
 import { Tag } from '@/components/ui/Tag';
 import { useCondominiumClusters } from '@/hooks/useCondominiumClusters';
@@ -41,22 +47,31 @@ import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { pickImagesFromLibrary } from '@/lib/pick-image';
 import { useAuth } from '@/providers/AuthProvider';
-import { routineCardVariant } from '@/lib/card-accent';
+import { ticketAccentTone, ticketTagTone, routineCardVariant } from '@/lib/card-accent';
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatTicketDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-MX');
+}
+
 type StaffSheet = 'evidence' | 'create' | 'edit' | null;
+type StaffTab = 'tickets' | 'mensual';
 
 export default function StaffMaintenanceScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ tab?: string | string[]; ticketId?: string | string[] }>();
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const ticketIdParam = Array.isArray(params.ticketId) ? params.ticketId[0] : params.ticketId;
   const { user } = useAuth();
   const { profile } = useProfile();
   const { primary, loading: membershipLoading } = useMembership();
   const { scopeFilterItems, hasClusters, loading: clustersLoading } = useCondominiumClusters(primary);
   const {
+    tickets,
     routines,
     amenities,
     routineGroups,
@@ -67,8 +82,10 @@ export default function StaffMaintenanceScreen() {
     uploadEvidence,
     createOnDemandRoutine,
     updateOnDemandRoutine,
+    updateTicketStatus,
   } = useMaintenance(primary, 'staff');
 
+  const [tab, setTab] = useState<StaffTab>(tabParam === 'tickets' ? 'tickets' : 'mensual');
   const [periodFilter, setPeriodFilter] = useState<MaintenancePeriodFilter>('month');
   const [scopeFilter, setScopeFilter] = useState('all');
   const [activeSheet, setActiveSheet] = useState<StaffSheet>(null);
@@ -79,6 +96,7 @@ export default function StaffMaintenanceScreen() {
   const [description, setDescription] = useState('');
   const [amenityId, setAmenityId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [updatingTicketId, setUpdatingTicketId] = useState<string | null>(null);
 
   const displayName =
     profile?.full_name ??
@@ -94,6 +112,17 @@ export default function StaffMaintenanceScreen() {
         matchesClusterResourceScope(amenity.cluster_id, scopeFilter),
       ),
     [amenities, scopeFilter],
+  );
+
+  const visibleTickets = useMemo(
+    () =>
+      tickets.filter((ticket) =>
+        matchesClusterResourceScope(
+          ticket.unit?.cluster_id ?? ticket.unit?.cluster?.id ?? ticket.amenity?.cluster_id ?? null,
+          scopeFilter,
+        ),
+      ),
+    [scopeFilter, tickets],
   );
 
   const visibleRoutines = useMemo(
@@ -116,6 +145,12 @@ export default function StaffMaintenanceScreen() {
         .filter((group) => group.items.length > 0),
     [routineGroups, scopeFilter],
   );
+
+  async function handleUpdateTicket(ticketId: string, status: MaintenanceTicketStatus) {
+    setUpdatingTicketId(ticketId);
+    await updateTicketStatus(ticketId, ticketBoardStatus(status));
+    setUpdatingTicketId(null);
+  }
 
   function closeSheet() {
     setActiveSheet(null);
@@ -235,7 +270,7 @@ export default function StaffMaintenanceScreen() {
           <View style={styles.headerWrap}>
             <ScreenHeader
               title="Mantenimiento"
-              highlight="mensual"
+              highlight={tab === 'tickets' ? 'y reportes' : 'mensual'}
               subtitle={`${primary.condominium?.name ?? 'Condominio'} · ${roleLabel}`}
             />
           </View>
@@ -244,6 +279,88 @@ export default function StaffMaintenanceScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.section}>
+          <TabStrip
+            tabs={[
+              { key: 'tickets', label: 'Tickets' },
+              { key: 'mensual', label: 'Mantenimiento mensual' },
+            ]}
+            active={tab}
+            onChange={(key) => setTab(key as StaffTab)}
+          />
+          {hasClusters ? (
+            <ScopeFilterBar items={scopeFilterItems} active={scopeFilter} onChange={setScopeFilter} />
+          ) : null}
+        </View>
+
+        {actionError ? <Text style={[styles.error, { color: theme.danger }]}>{actionError}</Text> : null}
+
+        {tab === 'tickets' ? (
+          <View style={styles.section}>
+            {visibleTickets.length === 0 ? (
+              <EmptyStateCard
+                kind="maintenance"
+                title="Sin tickets"
+                subtitle="Cuando un residente reporte un desperfecto, aparecerá aquí."
+              />
+            ) : (
+              visibleTickets.map((ticket) => {
+                const boardStatus = ticketBoardStatus(ticket.status);
+                const highlighted = ticketIdParam === ticket.id;
+                return (
+                  <GlassCard
+                    key={ticket.id}
+                    variant="accent"
+                    accent={ticketAccentTone(ticket.status)}
+                    style={[styles.ticketCard, highlighted ? { borderColor: theme.accent, borderWidth: 2 } : null]}
+                  >
+                    <View style={styles.row}>
+                      <Text style={[styles.cardTitle, { color: theme.text, flex: 1 }]}>{ticket.title}</Text>
+                      <Tag label={ticketStatusLabel(ticket.status)} tone={ticketTagTone(ticket.status)} />
+                    </View>
+                    <Text style={[styles.meta, { color: theme.textSubtle }]}>
+                      {ticket.unit?.identifier ?? 'Área común'}
+                      {ticket.unit?.cluster?.name ? ` · ${ticket.unit.cluster.name}` : ''}
+                      {` · ${ticketCategoryLabel(ticket.category)}`}
+                      {` · ${formatTicketDate(ticket.created_at)}`}
+                    </Text>
+                    {ticket.description ? (
+                      <Text style={[styles.body, { color: theme.textMuted }]}>{ticket.description}</Text>
+                    ) : null}
+                    {ticket.admin_notes ? (
+                      <Text style={[styles.note, { color: theme.accent }]}>Nota: {ticket.admin_notes}</Text>
+                    ) : null}
+                    <View style={styles.statusActions}>
+                      {MAINTENANCE_TICKET_BOARD_STATUSES.map((status) => {
+                        const active = boardStatus === status;
+                        return (
+                          <Pressable
+                            key={status}
+                            disabled={updatingTicketId === ticket.id || active}
+                            onPress={() => void handleUpdateTicket(ticket.id, status)}
+                            style={[
+                              styles.statusChip,
+                              {
+                                borderColor: active ? theme.accent : theme.border,
+                                backgroundColor: active ? `${theme.accent}22` : 'transparent',
+                                opacity: updatingTicketId === ticket.id ? 0.6 : 1,
+                              },
+                            ]}
+                          >
+                            <Text style={{ color: active ? theme.accent : theme.textMuted, fontSize: 11, fontWeight: '600' }}>
+                              {ticketStatusLabel(status)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </GlassCard>
+                );
+              })
+            )}
+          </View>
+        ) : (
+          <>
         <View style={styles.buttonRow}>
           <View style={styles.buttonHalf}>
             <GradientActionButton
@@ -258,12 +375,7 @@ export default function StaffMaintenanceScreen() {
           </View>
         </View>
 
-        {actionError ? <Text style={[styles.error, { color: theme.danger }]}>{actionError}</Text> : null}
-
         <View style={styles.section}>
-          {hasClusters ? (
-            <ScopeFilterBar items={scopeFilterItems} active={scopeFilter} onChange={setScopeFilter} />
-          ) : null}
           <FilterBar
             items={(Object.keys(MAINTENANCE_PERIOD_LABELS) as MaintenancePeriodFilter[]).map((key) => ({
               key,
@@ -275,11 +387,12 @@ export default function StaffMaintenanceScreen() {
         </View>
 
         {visibleRoutines.length === 0 ? (
-          <GlassCard variant="muted" style={styles.mt}>
-            <Text style={{ color: theme.textMuted, fontSize: 14 }}>
-              Sin actividades en este alcance. Usa «Nuevo a demanda» para registrar un trabajo fuera del calendario.
-            </Text>
-          </GlassCard>
+          <EmptyStateCard
+            kind="maintenance"
+            title="Sin actividades"
+            subtitle="Usa «Nuevo a demanda» para registrar un trabajo fuera del calendario."
+            style={styles.mt}
+          />
         ) : (
           visibleRoutineGroups.map((group) =>
             group.items.length === 0 ? null : (
@@ -345,6 +458,8 @@ export default function StaffMaintenanceScreen() {
               </View>
             ),
           )
+        )}
+          </>
         )}
       </ScrollView>
 
@@ -548,6 +663,10 @@ const styles = StyleSheet.create({
   error: { marginTop: 12, fontSize: 13 },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyText: { marginTop: 8, fontSize: 14, lineHeight: 20 },
+  ticketCard: { marginBottom: 10 },
+  note: { fontSize: 13, marginTop: 8, fontStyle: 'italic' },
+  statusActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  statusChip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
   dayHeading: { fontSize: 13, fontWeight: '800', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' },
   routineCard: { marginBottom: 10 },
   evidenceBlock: { marginTop: 12 },
