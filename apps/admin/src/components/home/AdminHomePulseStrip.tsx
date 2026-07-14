@@ -77,13 +77,10 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
               <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--text)]">{item.value}</p>
               <p className="mt-0.5 text-xs text-muted">{item.hint}</p>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.illustration}
-              alt=""
-              className="home-illust transition duration-200 group-hover:scale-105"
-            />
-          </div>
+            <span className="home-illust-frame transition duration-200 group-hover:scale-105">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={item.illustration} alt="" className="home-illust" />
+            </span>          </div>
         </Link>
       ))}
     </div>

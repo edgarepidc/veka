@@ -45,9 +45,10 @@ function PanelHeader({
 }) {
   return (
     <div className="home-panel-header">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={illustration} alt="" className="home-illust home-illust-lg" />
-      <div className="home-panel-header-text">
+      <span className="home-illust-frame home-illust-frame-lg">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={illustration} alt="" className="home-illust" />
+      </span>      <div className="home-panel-header-text">
         <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{eyebrow}</p>
         <h2 className="mt-0.5 text-lg font-semibold text-[var(--text)]">{title}</h2>
       </div>
@@ -292,9 +293,19 @@ function Metric({
   value: string;
   tone: 'info' | 'warn' | 'accent' | 'neutral';
 }) {
+  const toneClass =
+    tone === 'warn'
+      ? 'home-tone-warn'
+      : tone === 'info'
+        ? 'home-tone-info'
+        : tone === 'accent'
+          ? 'home-tone-accent'
+          : 'home-tone-neutral';
+
   return (
-    <div className={`rounded-xl px-3 py-2.5 home-tone-${tone === 'neutral' ? 'neutral' : tone}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{label}</p>
+    <div
+      className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 ${toneClass}`}
+    >      <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{label}</p>
       <p className="mt-1 text-base font-bold tabular-nums text-[var(--text)]">{value}</p>
     </div>
   );

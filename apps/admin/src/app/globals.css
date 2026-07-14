@@ -627,19 +627,30 @@ body {
   transform: translateY(-1px);
 }
 
-.home-illust {
+.home-illust-frame {
+  display: inline-flex;
   height: 3.25rem;
   width: 3.25rem;
   flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   border-radius: 0.9rem;
-  object-fit: cover;
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 8%, transparent);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.home-illust-lg {
+.home-illust-frame-lg {
   height: 3.5rem;
   width: 3.5rem;
   border-radius: 1rem;
+}
+
+.home-illust {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
 }
 
 .home-panel-header {
@@ -660,26 +671,18 @@ body {
 
 .home-tone-warn {
   border-left: 3px solid var(--warning);
-  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
 }
 
 .home-tone-info {
   border-left: 3px solid var(--accent-2);
-  background: color-mix(in srgb, var(--accent-2) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent-2) 28%, var(--border));
 }
 
 .home-tone-accent {
   border-left: 3px solid var(--accent-3);
-  background: color-mix(in srgb, var(--accent-3) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent-3) 28%, var(--border));
 }
 
 .home-tone-success {
-  border-left: 3px solid var(--success, var(--accent));
-  background: color-mix(in srgb, var(--success, var(--accent)) 8%, var(--surface));
-  border-color: color-mix(in srgb, var(--success, var(--accent)) 28%, var(--border));
+  border-left: 3px solid var(--success);
 }
 
 .home-icon-chip {
