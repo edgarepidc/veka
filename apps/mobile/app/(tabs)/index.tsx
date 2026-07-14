@@ -24,6 +24,7 @@ import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/providers/AuthProvider';
+
 function timeOfDayGreeting(now = new Date()): string {
   const hour = now.getHours();
   if (hour < 12) return 'Buenos días';
@@ -71,7 +72,18 @@ export default function DashboardScreen() {
   const firstName = displayName.split(' ')[0];
   const initials = displayName.slice(0, 2).toUpperCase();
   const greeting = timeOfDayGreeting();
-  const maxBar = Math.max(...data.chargeBars.map((bar) => bar.value), data.paidThisMonth, 1);
+
+  const accountSubtitle =
+    data.balanceDue > 0
+      ? `Por pagar ${formatCurrency(data.balanceDue)} · Pagado este mes ${formatCurrency(data.paidThisMonth)}`
+      : `Al día · Pagado este mes ${formatCurrency(data.paidThisMonth)}`;
+
+  const spacesSubtitle =
+    data.upcomingReservations.length === 0
+      ? 'Sin reservas próximas. Reserva un espacio cuando lo necesites.'
+      : data.upcomingReservations.length === 1
+        ? `${data.upcomingReservations[0]!.amenity_name} · ${formatDateTime(data.upcomingReservations[0]!.starts_at)}`
+        : `${data.upcomingReservations[0]!.amenity_name} y ${data.upcomingReservations.length - 1} más`;
 
   return (
     <ScreenBackground>
@@ -174,6 +186,7 @@ export default function DashboardScreen() {
                     {data.nextPayment ? (
                       <HomeInsightBanner
                         kind="due"
+                        tone={data.nextPayment.status === 'overdue' ? 'danger' : 'warning'}
                         title={
                           data.nextPayment.isInstallment
                             ? data.nextPayment.label
@@ -204,6 +217,7 @@ export default function DashboardScreen() {
                     ) : (
                       <HomeInsightBanner
                         kind="paid"
+                        tone="success"
                         title="Sin cuotas pendientes"
                         subtitle={
                           data.paidThisMonth > 0
@@ -218,99 +232,30 @@ export default function DashboardScreen() {
                   </HomeEnter>
 
                   <HomeEnter delay={120}>
-                    <GlassCard style={styles.cardGap} variant="muted">
-                      <View style={styles.cardTop}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>Tu cuenta</Text>
-                        <PressableScale onPress={() => router.push('/finance')}>
-                          <Text style={{ color: theme.accent, fontSize: 12, fontWeight: '700' }}>Ver →</Text>
-                        </PressableScale>
-                      </View>
-                      <View style={styles.metricRow}>
-                        <View style={[styles.metricBox, { backgroundColor: theme.surfaceMuted }]}>
-                          <Text style={[styles.metricLabel, { color: theme.textSubtle }]}>Por pagar</Text>
-                          <Text style={[styles.metricValue, { color: theme.text }]}>
-                            {formatCurrency(data.balanceDue)}
-                          </Text>
-                        </View>
-                        <View style={[styles.metricBox, { backgroundColor: theme.surfaceMuted }]}>
-                          <Text style={[styles.metricLabel, { color: theme.textSubtle }]}>Pagado mes</Text>
-                          <Text style={[styles.metricValue, { color: theme.text }]}>
-                            {formatCurrency(data.paidThisMonth)}
-                          </Text>
-                        </View>
-                      </View>
-                      {data.chargeBars.length > 0 ? (
-                        <View style={styles.bars}>
-                          {data.chargeBars.map((bar) => (
-                            <View key={`${bar.label}-${bar.value}`} style={styles.barRow}>
-                              <Text style={[styles.barLabel, { color: theme.textMuted }]} numberOfLines={1}>
-                                {bar.label}
-                              </Text>
-                              <View style={[styles.barTrack, { backgroundColor: theme.surfaceMuted }]}>
-                                <View
-                                  style={[
-                                    styles.barFill,
-                                    {
-                                      backgroundColor: theme.accent2,
-                                      width: `${Math.max(6, (bar.value / maxBar) * 100)}%`,
-                                    },
-                                  ]}
-                                />
-                              </View>
-                              <Text style={[styles.barValue, { color: theme.text }]}>
-                                {formatCurrency(bar.value)}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text style={[styles.cardBody, { color: theme.textMuted }]}>
-                          No hay cargos abiertos en tu unidad.
-                        </Text>
-                      )}
-                    </GlassCard>
+                    <HomeInsightBanner
+                      kind="account"
+                      tone={data.balanceDue > 0 ? 'warning' : 'info'}
+                      title="Tu cuenta"
+                      subtitle={accountSubtitle}
+                      onPress={() => router.push('/finance')}
+                    />
                   </HomeEnter>
 
                   <HomeEnter delay={160}>
-                    <GlassCard style={styles.cardGap} variant="muted">
-                      <View style={styles.cardTop}>
-                        <Text style={[styles.cardTitle, { color: theme.text }]}>Espacios</Text>
-                        <PressableScale onPress={() => router.push('/spaces')}>
-                          <Text style={{ color: theme.accent, fontSize: 12, fontWeight: '700' }}>Ver →</Text>
-                        </PressableScale>
-                      </View>
-                      {data.upcomingReservations.length === 0 ? (
-                        <Text style={[styles.cardBody, { color: theme.textMuted }]}>
-                          Sin reservas próximas. Reserva un amenity cuando lo necesites.
-                        </Text>
-                      ) : (
-                        data.upcomingReservations.map((reservation) => (
-                          <View
-                            key={reservation.id}
-                            style={[styles.listRow, { borderTopColor: theme.border }]}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>
-                                {reservation.amenity_name}
-                              </Text>
-                              <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
-                                {formatDateTime(reservation.starts_at)}
-                              </Text>
-                            </View>
-                            <Tag
-                              label={reservation.status === 'pending' ? 'Pendiente' : 'Activa'}
-                              tone={reservation.status === 'pending' ? 'orange' : 'blue'}
-                            />
-                          </View>
-                        ))
-                      )}
-                    </GlassCard>
+                    <HomeInsightBanner
+                      kind="spaces"
+                      tone={data.upcomingReservations.length > 0 ? 'info' : 'neutral'}
+                      title="Espacios"
+                      subtitle={spacesSubtitle}
+                      onPress={() => router.push('/spaces')}
+                    />
                   </HomeEnter>
 
                   {data.pendingPackage ? (
                     <HomeEnter delay={200}>
                       <HomeInsightBanner
                         kind="package"
+                        tone="danger"
                         title="Paquete en recepción"
                         subtitle={
                           data.pendingPackage.carrier
@@ -330,6 +275,7 @@ export default function DashboardScreen() {
                     <HomeEnter delay={240}>
                       <HomeInsightBanner
                         kind="notice"
+                        tone="purple"
                         title={data.latestPost.is_pinned ? 'Aviso destacado' : 'Nuevo en comunidad'}
                         subtitle={
                           data.latestPost.body
@@ -345,6 +291,7 @@ export default function DashboardScreen() {
                     <HomeEnter delay={280}>
                       <HomeInsightBanner
                         kind="maintenance"
+                        tone="warning"
                         title="Mantenimiento pendiente"
                         subtitle={`Tienes ${data.openTicketCount} ticket${
                           data.openTicketCount === 1 ? '' : 's'
@@ -389,31 +336,6 @@ const styles = StyleSheet.create({
   statsWrap: { paddingVertical: 4, marginBottom: 8 },
   statsRow: { gap: 10, paddingVertical: 4 },
   section: { marginBottom: 8 },
-  cardGap: { marginBottom: 12 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   cardBody: { fontSize: 13, lineHeight: 20, marginTop: 6 },
-  metricRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  metricBox: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  metricLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
-  metricValue: { fontSize: 15, fontWeight: '700', marginTop: 4 },
-  bars: { marginTop: 14, gap: 10 },
-  barRow: { gap: 4 },
-  barLabel: { fontSize: 11 },
-  barTrack: { height: 6, borderRadius: 999, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 999 },
-  barValue: { fontSize: 11, fontWeight: '600' },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 10,
-  },
 });
