@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 
 import { HomeEnter } from '@/components/home/HomeEnter';
+import { HomeInsightBanner } from '@/components/home/HomeInsightBanner';
 import { Avatar } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PressableScale } from '@/components/ui/PressableScale';
@@ -22,8 +23,6 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useMembership } from '@/hooks/useMembership';
 import { useProfile } from '@/hooks/useProfile';
 import { useTheme } from '@/hooks/useTheme';
-import { chargeAccentTone, chargeTagTone } from '@/lib/finance-accent';
-import { packageAccentTone } from '@/lib/card-accent';
 import { useAuth } from '@/providers/AuthProvider';
 function timeOfDayGreeting(now = new Date()): string {
   const hour = now.getHours();
@@ -45,7 +44,6 @@ export default function DashboardScreen() {
     refresh,
     formatShortDate,
     formatDateTime,
-    chargeStatusLabel,
     chargeDisplayTitle,
     chargeDisplaySubtitle,
     formatCurrency,
@@ -173,70 +171,50 @@ export default function DashboardScreen() {
               ) : (
                 <>
                   <HomeEnter delay={80}>
-                    <PressableScale
-                      onPress={() => router.push({ pathname: '/finance', params: { tab: 'mi-cuenta' } })}
-                    >
-                      <GlassCard
-                        style={styles.cardGap}
-                        variant={data.nextPayment ? 'accent' : 'default'}
-                        accent={
-                          data.nextPayment ? chargeAccentTone(data.nextPayment.status) : 'blue'
+                    {data.nextPayment ? (
+                      <HomeInsightBanner
+                        kind="due"
+                        title={
+                          data.nextPayment.isInstallment
+                            ? data.nextPayment.label
+                            : chargeDisplayTitle({
+                                concept: data.nextPayment.concept,
+                                fee_campaign: data.nextPayment.fee_campaign,
+                                recurring_fee: data.nextPayment.recurring_fee,
+                              })
                         }
-                      >
-                        {data.nextPayment ? (
-                          <>
-                            <View style={styles.cardTop}>
-                              <Text style={[styles.cardTitle, { color: theme.text }]}>
-                                {data.nextPayment.isInstallment
-                                  ? data.nextPayment.label
-                                  : chargeDisplayTitle({
-                                      concept: data.nextPayment.concept,
-                                      fee_campaign: data.nextPayment.fee_campaign,
-                                      recurring_fee: data.nextPayment.recurring_fee,
-                                    })}
-                              </Text>
-                              <Tag
-                                label={chargeStatusLabel(data.nextPayment.status)}
-                                tone={chargeTagTone(data.nextPayment.status)}
-                              />
-                            </View>
-                            <Text style={[styles.amount, { color: theme.text }]}>
-                              {formatCurrency(data.nextPayment.amount)}
-                            </Text>
-                            {!data.nextPayment.isInstallment &&
-                            chargeDisplaySubtitle({
-                              concept: data.nextPayment.concept,
-                              fee_campaign: data.nextPayment.fee_campaign,
-                              recurring_fee: data.nextPayment.recurring_fee,
-                            }) ? (
-                              <Text style={{ color: theme.accent2, fontSize: 12, fontWeight: '600', marginBottom: 4 }}>
-                                {chargeDisplaySubtitle({
-                                  concept: data.nextPayment.concept,
-                                  fee_campaign: data.nextPayment.fee_campaign,
-                                  recurring_fee: data.nextPayment.recurring_fee,
-                                })}
-                              </Text>
-                            ) : null}
-                            <Text style={{ color: theme.textMuted, fontSize: 13 }}>
-                              Vence el {formatShortDate(data.nextPayment.due_date)}
-                            </Text>
-                            <Text style={{ color: theme.accent, fontSize: 12, fontWeight: '600', marginTop: 8 }}>
-                              Ir a pagar →
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <Tag label="Al día" tone="blue" />
-                            <Text style={[styles.cardTitle, { color: theme.text, marginTop: 8 }]}>
-                              Sin cuotas pendientes
-                            </Text>
-                            <Text style={[styles.cardBody, { color: theme.textMuted }]}>
-                              Este mes llevas pagado {formatCurrency(data.paidThisMonth)}.
-                            </Text>
-                          </>
-                        )}
-                      </GlassCard>
-                    </PressableScale>
+                        subtitle={`${formatCurrency(data.nextPayment.amount)} · Vence el ${formatShortDate(data.nextPayment.due_date)}${
+                          !data.nextPayment.isInstallment &&
+                          chargeDisplaySubtitle({
+                            concept: data.nextPayment.concept,
+                            fee_campaign: data.nextPayment.fee_campaign,
+                            recurring_fee: data.nextPayment.recurring_fee,
+                          })
+                            ? ` · ${chargeDisplaySubtitle({
+                                concept: data.nextPayment.concept,
+                                fee_campaign: data.nextPayment.fee_campaign,
+                                recurring_fee: data.nextPayment.recurring_fee,
+                              })}`
+                            : ''
+                        }`}
+                        onPress={() =>
+                          router.push({ pathname: '/finance', params: { tab: 'mi-cuenta' } })
+                        }
+                      />
+                    ) : (
+                      <HomeInsightBanner
+                        kind="paid"
+                        title="Sin cuotas pendientes"
+                        subtitle={
+                          data.paidThisMonth > 0
+                            ? `Este mes llevas pagado ${formatCurrency(data.paidThisMonth)}.`
+                            : 'Tu unidad está al día. Sin cargos por pagar.'
+                        }
+                        onPress={() =>
+                          router.push({ pathname: '/finance', params: { tab: 'mi-cuenta' } })
+                        }
+                      />
+                    )}
                   </HomeEnter>
 
                   <HomeEnter delay={120}>
@@ -248,13 +226,13 @@ export default function DashboardScreen() {
                         </PressableScale>
                       </View>
                       <View style={styles.metricRow}>
-                        <View style={styles.metricBox}>
+                        <View style={[styles.metricBox, { backgroundColor: theme.surfaceMuted }]}>
                           <Text style={[styles.metricLabel, { color: theme.textSubtle }]}>Por pagar</Text>
                           <Text style={[styles.metricValue, { color: theme.text }]}>
                             {formatCurrency(data.balanceDue)}
                           </Text>
                         </View>
-                        <View style={styles.metricBox}>
+                        <View style={[styles.metricBox, { backgroundColor: theme.surfaceMuted }]}>
                           <Text style={[styles.metricLabel, { color: theme.textSubtle }]}>Pagado mes</Text>
                           <Text style={[styles.metricValue, { color: theme.text }]}>
                             {formatCurrency(data.paidThisMonth)}
@@ -307,7 +285,10 @@ export default function DashboardScreen() {
                         </Text>
                       ) : (
                         data.upcomingReservations.map((reservation) => (
-                          <View key={reservation.id} style={styles.listRow}>
+                          <View
+                            key={reservation.id}
+                            style={[styles.listRow, { borderTopColor: theme.border }]}
+                          >
                             <View style={{ flex: 1 }}>
                               <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>
                                 {reservation.amenity_name}
@@ -328,65 +309,48 @@ export default function DashboardScreen() {
 
                   {data.pendingPackage ? (
                     <HomeEnter delay={200}>
-                      <PressableScale onPress={() => router.push('/security')}>
-                        <GlassCard
-                          style={styles.cardGap}
-                          variant="accent"
-                          accent={packageAccentTone('received')}
-                        >
-                          <View style={styles.cardTop}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>
-                              Paquete en recepción
-                            </Text>
-                            <Tag label="Nuevo" tone="red" />
-                          </View>
-                          <Text style={[styles.cardBody, { color: theme.textMuted }]}>
-                            {data.pendingPackage.carrier
-                              ? `${data.pendingPackage.carrier}${
-                                  data.pendingPackage.tracking_number
-                                    ? ` · ${data.pendingPackage.tracking_number}`
-                                    : ''
-                                }`
-                              : 'Tienes un paquete pendiente de recoger en caseta.'}
-                          </Text>
-                        </GlassCard>
-                      </PressableScale>
+                      <HomeInsightBanner
+                        kind="package"
+                        title="Paquete en recepción"
+                        subtitle={
+                          data.pendingPackage.carrier
+                            ? `${data.pendingPackage.carrier}${
+                                data.pendingPackage.tracking_number
+                                  ? ` · ${data.pendingPackage.tracking_number}`
+                                  : ''
+                              }`
+                            : 'Tienes un paquete pendiente de recoger en caseta.'
+                        }
+                        onPress={() => router.push('/security')}
+                      />
                     </HomeEnter>
                   ) : null}
 
                   {data.latestPost ? (
                     <HomeEnter delay={240}>
-                      <PressableScale onPress={() => router.push('/community')}>
-                        <GlassCard style={styles.cardGap} variant="default">
-                          <View style={styles.cardTop}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>
-                              {data.latestPost.is_pinned ? 'Aviso destacado' : 'Comunidad'}
-                            </Text>
-                            <Tag label="Nuevo" tone="blue" />
-                          </View>
-                          <Text style={[styles.cardBody, { color: theme.textMuted }]} numberOfLines={3}>
-                            {data.latestPost.body
-                              ? `${data.latestPost.title} — ${data.latestPost.body}`
-                              : data.latestPost.title}
-                          </Text>
-                        </GlassCard>
-                      </PressableScale>
+                      <HomeInsightBanner
+                        kind="notice"
+                        title={data.latestPost.is_pinned ? 'Aviso destacado' : 'Nuevo en comunidad'}
+                        subtitle={
+                          data.latestPost.body
+                            ? `${data.latestPost.title} — ${data.latestPost.body}`
+                            : data.latestPost.title
+                        }
+                        onPress={() => router.push('/community')}
+                      />
                     </HomeEnter>
                   ) : null}
 
                   {data.openTicketCount > 0 ? (
                     <HomeEnter delay={280}>
-                      <PressableScale onPress={() => router.push('/maintenance')}>
-                        <GlassCard style={styles.cardGap} variant="accent" accent="orange">
-                          <View style={styles.cardTop}>
-                            <Text style={[styles.cardTitle, { color: theme.text }]}>Mantenimiento</Text>
-                            <Tag label={`${data.openTicketCount} abiertos`} tone="orange" />
-                          </View>
-                          <Text style={[styles.cardBody, { color: theme.textMuted }]}>
-                            Tienes tickets activos. Revisa el estado o agrega evidencia.
-                          </Text>
-                        </GlassCard>
-                      </PressableScale>
+                      <HomeInsightBanner
+                        kind="maintenance"
+                        title="Mantenimiento pendiente"
+                        subtitle={`Tienes ${data.openTicketCount} ticket${
+                          data.openTicketCount === 1 ? '' : 's'
+                        } abierto${data.openTicketCount === 1 ? '' : 's'}. Revisa estado o agrega evidencia.`}
+                        onPress={() => router.push('/maintenance')}
+                      />
                     </HomeEnter>
                   ) : null}
                 </>
@@ -429,14 +393,12 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
   cardBody: { fontSize: 13, lineHeight: 20, marginTop: 6 },
-  amount: { fontSize: 26, fontWeight: '700', marginTop: 8 },
   metricRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   metricBox: {
     flex: 1,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#F7F7F7',
   },
   metricLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
   metricValue: { fontSize: 15, fontWeight: '700', marginTop: 4 },
@@ -452,7 +414,6 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#EBEBEB',
     marginTop: 10,
   },
 });
