@@ -25,17 +25,17 @@ export function AdminHomeHero({
   const logoUrl = resolveStorageImageUrl(SUPABASE_URL, logoPath, STORAGE_BUCKETS.BRANDING);
 
   return (
-    <section className="home-enter home-hero mb-8 overflow-hidden rounded-[1.75rem] px-5 py-7 sm:px-8 sm:py-9">
+    <section className="home-enter home-hero mb-8 overflow-hidden px-1 py-2 sm:px-0">
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div className="min-w-0 flex-1">
-          <p className="home-enter home-enter-delay-1 text-sm font-medium text-[color-mix(in_srgb,var(--accent)_75%,var(--text-muted))]">
+          <p className="home-enter home-enter-delay-1 text-sm font-medium text-muted">
             {greeting}, {firstName}
           </p>
           <h1 className="home-enter home-enter-delay-2 serif-title mt-2 max-w-xl text-4xl leading-tight text-[var(--text)] sm:text-5xl">
             {condominiumName}
           </h1>
-          <p className="home-enter home-enter-delay-3 mt-3 max-w-md text-sm text-muted">
-            Hoy en tu condominio — lo urgente y los accesos al alcance.
+          <p className="home-enter home-enter-delay-3 mt-3 max-w-lg text-sm text-muted">
+            Resumen de hoy: operaciones, finanzas y espacios.
           </p>
         </div>
         {logoUrl ? (
@@ -43,7 +43,7 @@ export function AdminHomeHero({
           <img
             src={logoUrl}
             alt=""
-            className="home-enter home-enter-delay-2 h-20 w-20 shrink-0 rounded-2xl object-contain sm:h-24 sm:w-24"
+            className="home-enter home-enter-delay-2 h-16 w-16 shrink-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] object-contain p-1.5 sm:h-20 sm:w-20"
           />
         ) : null}
       </div>

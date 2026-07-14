@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
+  chargeBalanceDue,
   chargeDisplaySubtitle,
   chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
   formatCurrency,
   resolveNextPaymentTarget,
+  unitTotalBalanceDue,
   type ActivePaymentPlan,
+  type FeeSourceRef,
 } from '@veka/shared';
-import type { FeeSourceRef } from '@veka/shared';
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
@@ -58,9 +60,24 @@ export interface DashboardPackage {
 export interface DashboardData {
   nextPayment: DashboardNextPayment | null;
   latestPost: DashboardPost | null;
-  upcomingReservation: DashboardReservation | null;
+  upcomingReservations: DashboardReservation[];
   pendingPackage: DashboardPackage | null;
+  balanceDue: number;
+  paidThisMonth: number;
+  openTicketCount: number;
+  chargeBars: { label: string; value: number }[];
 }
+
+const EMPTY: DashboardData = {
+  nextPayment: null,
+  latestPost: null,
+  upcomingReservations: [],
+  pendingPackage: null,
+  balanceDue: 0,
+  paidThisMonth: 0,
+  openTicketCount: 0,
+  chargeBars: [],
+};
 
 function formatShortDate(iso: string): string {
   return new Intl.DateTimeFormat('es-MX', {
@@ -79,69 +96,76 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+function monthStartIso(reference = new Date()): string {
+  return `${reference.getFullYear()}-${String(reference.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 export function useDashboard(primary: ActiveMembership | null) {
-  const [data, setData] = useState<DashboardData>({
-    nextPayment: null,
-    latestPost: null,
-    upcomingReservation: null,
-    pendingPackage: null,
-  });
+  const [data, setData] = useState<DashboardData>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!primary?.condominium_id || !primary.unit_id) {
-      setData({
-        nextPayment: null,
-        latestPost: null,
-        upcomingReservation: null,
-        pendingPackage: null,
-      });
+      setData(EMPTY);
       setLoading(false);
       return;
     }
 
     const now = new Date().toISOString();
+    const monthStart = monthStartIso();
 
-    const [chargesRes, planRes, postsRes, reservationsRes, packagesRes] = await Promise.all([
-      supabase
-        .from('charges')
-        .select(
-          'id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
-        )
-        .eq('unit_id', primary.unit_id)
-        .order('due_date', { ascending: true }),
-      supabase
-        .from('payment_plans')
-        .select(
-          'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
-        )
-        .eq('unit_id', primary.unit_id)
-        .eq('status', 'active')
-        .maybeSingle(),
-      supabase
-        .from('posts')
-        .select('id, title, body, is_pinned, created_at')
-        .eq('condominium_id', primary.condominium_id)
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1),
-      supabase
-        .from('reservations')
-        .select('id, starts_at, ends_at, status, amenity:amenities (name)')
-        .eq('unit_id', primary.unit_id)
-        .in('status', ['confirmed', 'pending'])
-        .gte('ends_at', now)
-        .order('starts_at', { ascending: true })
-        .limit(1),
-      supabase
-        .from('packages')
-        .select('id, carrier, tracking_number, received_at')
-        .eq('unit_id', primary.unit_id)
-        .eq('status', 'received')
-        .order('received_at', { ascending: false })
-        .limit(1),
-    ]);
+    const [chargesRes, planRes, postsRes, reservationsRes, packagesRes, paymentsRes, ticketsRes] =
+      await Promise.all([
+        supabase
+          .from('charges')
+          .select(
+            'id, concept, amount, amount_paid, due_date, status, charge_kind, parent_charge_id, fee_campaign:fee_campaigns(scope, concept, amount, cluster:clusters(name)), recurring_fee:recurring_fees(scope, concept, cluster:clusters(name))',
+          )
+          .eq('unit_id', primary.unit_id)
+          .order('due_date', { ascending: true }),
+        supabase
+          .from('payment_plans')
+          .select(
+            'id, title, status, total_amount, installments:payment_plan_installments(id, installment_number, due_date, amount, amount_paid, status), charge_links:payment_plan_charges(charge_id)',
+          )
+          .eq('unit_id', primary.unit_id)
+          .eq('status', 'active')
+          .maybeSingle(),
+        supabase
+          .from('posts')
+          .select('id, title, body, is_pinned, created_at')
+          .eq('condominium_id', primary.condominium_id)
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('reservations')
+          .select('id, starts_at, ends_at, status, amenity:amenities (name)')
+          .eq('unit_id', primary.unit_id)
+          .in('status', ['confirmed', 'pending'])
+          .gte('ends_at', now)
+          .order('starts_at', { ascending: true })
+          .limit(4),
+        supabase
+          .from('packages')
+          .select('id, carrier, tracking_number, received_at')
+          .eq('unit_id', primary.unit_id)
+          .eq('status', 'received')
+          .order('received_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('payments')
+          .select('amount, status, paid_at')
+          .eq('unit_id', primary.unit_id)
+          .eq('status', 'approved')
+          .gte('paid_at', monthStart),
+        supabase
+          .from('maintenance_tickets')
+          .select('id', { count: 'exact', head: true })
+          .eq('unit_id', primary.unit_id)
+          .in('status', ['open', 'in_progress']),
+      ]);
 
     const rawCharges =
       ((chargesRes.data as {
@@ -197,17 +221,40 @@ export function useDashboard(primary: ActiveMembership | null) {
       ? rawCharges.find((charge) => charge.id === paymentTarget.chargeId)
       : null;
 
-    const reservationRow = reservationsRes.data?.[0] as
-      | {
-          id: string;
-          starts_at: string;
-          ends_at: string;
-          status: 'confirmed' | 'pending';
-          amenity: { name: string } | { name: string }[] | null;
-        }
-      | undefined;
-    const amenity = reservationRow?.amenity;
-    const amenityName = Array.isArray(amenity) ? amenity[0]?.name : amenity?.name;
+    const reservationRows =
+      (reservationsRes.data as
+        | {
+            id: string;
+            starts_at: string;
+            ends_at: string;
+            status: 'confirmed' | 'pending';
+            amenity: { name: string } | { name: string }[] | null;
+          }[]
+        | null) ?? [];
+
+    const upcomingReservations: DashboardReservation[] = reservationRows.map((row) => {
+      const amenity = Array.isArray(row.amenity) ? row.amenity[0] : row.amenity;
+      return {
+        id: row.id,
+        starts_at: row.starts_at,
+        ends_at: row.ends_at,
+        amenity_name: amenity?.name ?? 'Espacio',
+        status: row.status,
+      };
+    });
+
+    const unpaid = rawCharges
+      .filter((charge) => charge.status === 'pending' || charge.status === 'overdue')
+      .slice(0, 4)
+      .map((charge) => ({
+        label: charge.concept.slice(0, 18),
+        value: chargeBalanceDue(charge),
+      }));
+
+    const paidThisMonth = (paymentsRes.data ?? []).reduce(
+      (sum, row) => sum + Number(row.amount ?? 0),
+      0,
+    );
 
     setData({
       nextPayment: paymentTarget
@@ -216,24 +263,19 @@ export function useDashboard(primary: ActiveMembership | null) {
             concept: primaryCharge?.concept ?? paymentTarget.label,
             amount: paymentTarget.maxAmount,
             due_date: paymentTarget.dueDate,
-            status:
-              primaryCharge?.status === 'overdue' ? 'overdue' : 'pending',
+            status: primaryCharge?.status === 'overdue' ? 'overdue' : 'pending',
             fee_campaign: primaryCharge?.fee_campaign ?? null,
             recurring_fee: primaryCharge?.recurring_fee ?? null,
             isInstallment: paymentTarget.kind === 'installment',
           }
         : null,
       latestPost: (postsRes.data?.[0] as DashboardPost | undefined) ?? null,
-      upcomingReservation: reservationRow
-        ? {
-            id: reservationRow.id,
-            starts_at: reservationRow.starts_at,
-            ends_at: reservationRow.ends_at,
-            amenity_name: amenityName ?? 'Espacio',
-            status: reservationRow.status,
-          }
-        : null,
+      upcomingReservations,
       pendingPackage: (packagesRes.data?.[0] as DashboardPackage | undefined) ?? null,
+      balanceDue: unitTotalBalanceDue(rawCharges),
+      paidThisMonth,
+      openTicketCount: ticketsRes.count ?? 0,
+      chargeBars: unpaid,
     });
     setLoading(false);
   }, [primary]);

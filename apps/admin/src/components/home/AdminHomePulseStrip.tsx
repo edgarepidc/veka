@@ -7,7 +7,9 @@ import {
   IoPeopleOutline,
 } from 'react-icons/io5';
 
-import type { HomeStats } from '@/lib/load-home-stats';
+import { formatHomeStatMoney, type HomeStats } from '@/lib/load-home-stats';
+
+type PulseTone = 'neutral' | 'warn' | 'info' | 'accent';
 
 type PulseItem = {
   label: string;
@@ -15,6 +17,14 @@ type PulseItem = {
   href: string;
   icon: IconType;
   hint: string;
+  tone: PulseTone;
+};
+
+const TONE_CLASS: Record<PulseTone, string> = {
+  neutral: 'home-tone-neutral',
+  warn: 'home-tone-warn',
+  info: 'home-tone-info',
+  accent: 'home-tone-accent',
 };
 
 export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
@@ -25,6 +35,7 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
       href: '/finanzas',
       icon: IoCardOutline,
       hint: 'unidades',
+      tone: (stats?.overdueUnitCount ?? 0) > 0 ? 'warn' : 'neutral',
     },
     {
       label: 'Tickets abiertos',
@@ -32,6 +43,7 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
       href: '/mantenimiento',
       icon: IoConstructOutline,
       hint: 'mantenimiento',
+      tone: (stats?.openTicketCount ?? 0) > 0 ? 'info' : 'neutral',
     },
     {
       label: 'Visitas hoy',
@@ -39,6 +51,7 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
       href: '/seguridad',
       icon: IoPeopleOutline,
       hint: 'programadas',
+      tone: 'accent',
     },
     {
       label: 'Paquetes',
@@ -46,6 +59,7 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
       href: '/seguridad',
       icon: IoCubeOutline,
       hint: 'en caseta',
+      tone: (stats?.packagesWaitingCount ?? 0) > 0 ? 'warn' : 'neutral',
     },
   ];
 
@@ -57,7 +71,7 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
           <Link
             key={item.label}
             href={item.href}
-            className={`home-enter home-enter-delay-${index + 1} group home-pulse-pill`}
+            className={`home-enter home-enter-delay-${index + 1} group home-pulse-pill ${TONE_CLASS[item.tone]}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -65,13 +79,50 @@ export function AdminHomePulseStrip({ stats }: { stats: HomeStats | null }) {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--text)]">{item.value}</p>
                 <p className="mt-0.5 text-xs text-muted">{item.hint}</p>
               </div>
-              <span className="home-module-icon shrink-0 text-[var(--accent)] transition group-hover:scale-105">
+              <span className="home-icon-chip shrink-0 transition group-hover:scale-105">
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
             </div>
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+export function AdminHomeFundRow({ stats }: { stats: HomeStats | null }) {
+  const funds = [
+    {
+      label: 'Fondo operativo',
+      value: stats ? formatHomeStatMoney(stats.operatingBalance) : '—',
+      tone: 'home-tone-neutral' as const,
+    },
+    {
+      label: 'Fondo reserva',
+      value: stats ? formatHomeStatMoney(stats.reserveBalance) : '—',
+      tone: 'home-tone-info' as const,
+    },
+    {
+      label: 'Unidades al día',
+      value:
+        stats?.unitsOnTimePercent != null
+          ? `${stats.unitsOnTimePercent}% · ${stats.totalUnits} unidades`
+          : '—',
+      tone: 'home-tone-accent' as const,
+    },
+  ];
+
+  return (
+    <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      {funds.map((fund, index) => (
+        <div
+          key={fund.label}
+          className={`home-enter home-enter-delay-${index + 2} home-fund-pill ${fund.tone} px-4 py-3`}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{fund.label}</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-[var(--text)]">{fund.value}</p>
+        </div>
+      ))}
     </div>
   );
 }

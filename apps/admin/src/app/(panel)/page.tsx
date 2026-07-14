@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 
 import { AdminHomeHero, timeOfDayGreeting } from '@/components/home/AdminHomeHero';
-import { AdminHomeFundRow, AdminHomeModuleGrid } from '@/components/home/AdminHomeModules';
-import { AdminHomePulseStrip } from '@/components/home/AdminHomePulseStrip';
+import { AdminHomeFinancePanel, AdminHomeSpacesPanel } from '@/components/home/AdminHomeInsights';
+import { AdminHomeFundRow, AdminHomePulseStrip } from '@/components/home/AdminHomePulseStrip';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadCondominium } from '@/lib/load-condominium';
 import { loadHomeStats } from '@/lib/load-home-stats';
@@ -38,7 +38,10 @@ export default async function AdminHomePage() {
       />
       <AdminHomePulseStrip stats={stats} />
       <AdminHomeFundRow stats={stats} />
-      <AdminHomeModuleGrid />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <AdminHomeFinancePanel stats={stats} />
+        <AdminHomeSpacesPanel stats={stats} />
+      </div>
     </div>
   );
 }
