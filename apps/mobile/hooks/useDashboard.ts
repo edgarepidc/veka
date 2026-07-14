@@ -8,6 +8,8 @@ import {
   chargeStatusTone,
   formatCurrency,
   resolveNextPaymentTarget,
+  resolveStorageImageUrl,
+  STORAGE_BUCKETS,
   unitTotalBalanceDue,
   type ActivePaymentPlan,
   type FeeSourceRef,
@@ -15,6 +17,8 @@ import {
 
 import { supabase } from '@/lib/supabase';
 import type { ActiveMembership } from '@/hooks/useMembership';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 
 export interface DashboardNextPayment {
   label: string;
@@ -34,12 +38,20 @@ function normalizeFeeSource(raw: unknown): FeeSourceRef | null {
   return { ...row, cluster: cluster ?? null };
 }
 
+export interface DashboardPollOption {
+  label: string;
+  votes: number;
+}
+
 export interface DashboardPost {
   id: string;
   title: string;
   body: string | null;
   is_pinned: boolean;
   created_at: string;
+  post_type: 'announcement' | 'poll' | 'photo';
+  image_url: string | null;
+  pollOptions: DashboardPollOption[];
 }
 
 export interface DashboardReservation {
@@ -47,6 +59,7 @@ export interface DashboardReservation {
   starts_at: string;
   ends_at: string;
   amenity_name: string;
+  amenity_image_url: string | null;
   status: 'confirmed' | 'pending';
 }
 
@@ -55,6 +68,7 @@ export interface DashboardPackage {
   carrier: string | null;
   tracking_number: string | null;
   received_at: string;
+  photo_url: string | null;
 }
 
 export interface DashboardData {
@@ -100,6 +114,13 @@ function monthStartIso(reference = new Date()): string {
   return `${reference.getFullYear()}-${String(reference.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
+async function resolvePrivateImageUrl(bucket: string, pathOrUrl: string | null): Promise<string | null> {
+  if (!pathOrUrl) return null;
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) return pathOrUrl;
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(pathOrUrl, 3600);
+  return data?.signedUrl ?? null;
+}
+
 export function useDashboard(primary: ActiveMembership | null) {
   const [data, setData] = useState<DashboardData>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -134,14 +155,15 @@ export function useDashboard(primary: ActiveMembership | null) {
           .maybeSingle(),
         supabase
           .from('posts')
-          .select('id, title, body, is_pinned, created_at')
+          .select('id, title, body, is_pinned, created_at, post_type, image_url')
           .eq('condominium_id', primary.condominium_id)
+          .eq('is_archived', false)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1),
         supabase
           .from('reservations')
-          .select('id, starts_at, ends_at, status, amenity:amenities (name)')
+          .select('id, starts_at, ends_at, status, amenity:amenities (name, image_url)')
           .eq('unit_id', primary.unit_id)
           .in('status', ['confirmed', 'pending'])
           .gte('ends_at', now)
@@ -149,7 +171,7 @@ export function useDashboard(primary: ActiveMembership | null) {
           .limit(4),
         supabase
           .from('packages')
-          .select('id, carrier, tracking_number, received_at')
+          .select('id, carrier, tracking_number, received_at, photo_url')
           .eq('unit_id', primary.unit_id)
           .eq('status', 'received')
           .order('received_at', { ascending: false })
@@ -228,7 +250,10 @@ export function useDashboard(primary: ActiveMembership | null) {
             starts_at: string;
             ends_at: string;
             status: 'confirmed' | 'pending';
-            amenity: { name: string } | { name: string }[] | null;
+            amenity:
+              | { name: string; image_url: string | null }
+              | { name: string; image_url: string | null }[]
+              | null;
           }[]
         | null) ?? [];
 
@@ -239,9 +264,61 @@ export function useDashboard(primary: ActiveMembership | null) {
         starts_at: row.starts_at,
         ends_at: row.ends_at,
         amenity_name: amenity?.name ?? 'Espacio',
+        amenity_image_url: resolveStorageImageUrl(
+          SUPABASE_URL,
+          amenity?.image_url,
+          STORAGE_BUCKETS.AMENITY_IMAGES,
+        ),
         status: row.status,
       };
     });
+
+    const packageRow = packagesRes.data?.[0] as
+      | {
+          id: string;
+          carrier: string | null;
+          tracking_number: string | null;
+          received_at: string;
+          photo_url: string | null;
+        }
+      | undefined;
+
+    const postRow = postsRes.data?.[0] as
+      | {
+          id: string;
+          title: string;
+          body: string | null;
+          is_pinned: boolean;
+          created_at: string;
+          post_type: 'announcement' | 'poll' | 'photo';
+          image_url: string | null;
+        }
+      | undefined;
+
+    let pollOptions: DashboardPollOption[] = [];
+    if (postRow?.post_type === 'poll') {
+      const { data: options } = await supabase
+        .from('poll_options')
+        .select('id, label')
+        .eq('post_id', postRow.id);
+      const optionIds = (options ?? []).map((opt) => opt.id);
+      const { data: votes } = optionIds.length
+        ? await supabase.from('poll_votes').select('poll_option_id').in('poll_option_id', optionIds)
+        : { data: [] as { poll_option_id: string }[] };
+      const counts = new Map<string, number>();
+      for (const vote of votes ?? []) {
+        counts.set(vote.poll_option_id, (counts.get(vote.poll_option_id) ?? 0) + 1);
+      }
+      pollOptions = (options ?? []).map((opt) => ({
+        label: opt.label,
+        votes: counts.get(opt.id) ?? 0,
+      }));
+    }
+
+    const [packagePhoto, postImage] = await Promise.all([
+      resolvePrivateImageUrl(STORAGE_BUCKETS.PACKAGES, packageRow?.photo_url ?? null),
+      resolvePrivateImageUrl(STORAGE_BUCKETS.POSTS, postRow?.image_url ?? null),
+    ]);
 
     const unpaid = rawCharges
       .filter((charge) => charge.status === 'pending' || charge.status === 'overdue')
@@ -269,9 +346,28 @@ export function useDashboard(primary: ActiveMembership | null) {
             isInstallment: paymentTarget.kind === 'installment',
           }
         : null,
-      latestPost: (postsRes.data?.[0] as DashboardPost | undefined) ?? null,
+      latestPost: postRow
+        ? {
+            id: postRow.id,
+            title: postRow.title,
+            body: postRow.body,
+            is_pinned: postRow.is_pinned,
+            created_at: postRow.created_at,
+            post_type: postRow.post_type,
+            image_url: postImage,
+            pollOptions,
+          }
+        : null,
       upcomingReservations,
-      pendingPackage: (packagesRes.data?.[0] as DashboardPackage | undefined) ?? null,
+      pendingPackage: packageRow
+        ? {
+            id: packageRow.id,
+            carrier: packageRow.carrier,
+            tracking_number: packageRow.tracking_number,
+            received_at: packageRow.received_at,
+            photo_url: packagePhoto,
+          }
+        : null,
       balanceDue: unitTotalBalanceDue(rawCharges),
       paidThisMonth,
       openTicketCount: ticketsRes.count ?? 0,

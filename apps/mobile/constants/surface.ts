@@ -55,6 +55,18 @@ export function surfaceCompactShadow(theme: AppTheme): ViewStyle {
   };
 }
 
+/** Softer than compact — for dense home pills. */
+export function surfaceSubtleShadow(theme: AppTheme): ViewStyle {
+  const isDark = theme.mode === 'dark';
+  return {
+    shadowColor: isDark ? '#000000' : '#1E293B',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: Platform.OS === 'web' ? 0.04 : isDark ? 0.18 : 0.05,
+    shadowRadius: 6,
+    elevation: Platform.OS === 'android' ? 1 : 0,
+  };
+}
+
 export function surfaceShadow(theme: AppTheme): ViewStyle {
   return surfaceFloatingShadow(theme);
 }

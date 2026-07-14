@@ -10,7 +10,7 @@ interface StatPillProps extends ViewProps {
   valueColor?: string;
   /** Fits three pills in one row without horizontal scroll. */
   dense?: boolean;
-  shadow?: 'default' | 'compact' | 'none';
+  shadow?: 'default' | 'compact' | 'subtle' | 'none';
 }
 
 export function StatPill({
@@ -27,7 +27,7 @@ export function StatPill({
 
   return (
     <GlassCard
-      shadow={shadow ?? (dense ? 'none' : 'compact')}
+      shadow={shadow ?? (dense ? 'none' : 'subtle')}
       padding={dense ? 10 : 12}
       style={[styles.pill, dense && styles.pillDense, style]}
       {...props}

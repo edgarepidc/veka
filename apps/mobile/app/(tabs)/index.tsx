@@ -75,15 +75,28 @@ export default function DashboardScreen() {
 
   const accountSubtitle =
     data.balanceDue > 0
-      ? `Por pagar ${formatCurrency(data.balanceDue)} · Pagado este mes ${formatCurrency(data.paidThisMonth)}`
+      ? `Saldo pendiente ${formatCurrency(data.balanceDue)} · Pagado mes ${formatCurrency(data.paidThisMonth)}`
       : `Al día · Pagado este mes ${formatCurrency(data.paidThisMonth)}`;
 
+  const accountHighlight = data.nextPayment
+    ? formatCurrency(data.nextPayment.amount)
+    : data.balanceDue > 0
+      ? formatCurrency(data.balanceDue)
+      : null;
+
+  const accountHighlightLabel = data.nextPayment
+    ? 'Próxima cuota'
+    : data.balanceDue > 0
+      ? 'Por pagar'
+      : null;
+
+  const firstReservation = data.upcomingReservations[0] ?? null;
   const spacesSubtitle =
-    data.upcomingReservations.length === 0
+    !firstReservation
       ? 'Sin reservas próximas. Reserva un espacio cuando lo necesites.'
       : data.upcomingReservations.length === 1
-        ? `${data.upcomingReservations[0]!.amenity_name} · ${formatDateTime(data.upcomingReservations[0]!.starts_at)}`
-        : `${data.upcomingReservations[0]!.amenity_name} y ${data.upcomingReservations.length - 1} más`;
+        ? `${firstReservation.amenity_name} · ${formatDateTime(firstReservation.starts_at)}`
+        : `${firstReservation.amenity_name} · ${formatDateTime(firstReservation.starts_at)} · +${data.upcomingReservations.length - 1}`;
 
   return (
     <ScreenBackground>
@@ -142,24 +155,28 @@ export default function DashboardScreen() {
                       value={data.balanceDue > 0 ? formatCurrency(data.balanceDue) : 'Al día'}
                       sub={data.nextPayment ? formatShortDate(data.nextPayment.due_date) : 'sin adeudo'}
                       valueColor={data.balanceDue > 0 ? theme.danger : theme.accent}
+                      shadow="subtle"
                     />
                     <StatPill
                       label="Pagado mes"
                       value={formatCurrency(data.paidThisMonth)}
                       sub="aprobado"
                       valueColor={theme.accent2}
+                      shadow="subtle"
                     />
                     <StatPill
                       label="Reservas"
                       value={String(data.upcomingReservations.length)}
                       sub={data.upcomingReservations.length ? 'próximas' : 'ninguna'}
                       valueColor={theme.accent3}
+                      shadow="subtle"
                     />
                     <StatPill
                       label="Tickets"
                       value={String(data.openTicketCount)}
                       sub="abiertos"
                       valueColor={data.openTicketCount > 0 ? theme.warning : theme.textMuted}
+                      shadow="subtle"
                     />
                   </ScrollView>
                 </View>
@@ -234,9 +251,11 @@ export default function DashboardScreen() {
                   <HomeEnter delay={120}>
                     <HomeInsightBanner
                       kind="account"
-                      tone={data.balanceDue > 0 ? 'warning' : 'info'}
+                      tone={data.balanceDue > 0 || data.nextPayment ? 'warning' : 'info'}
                       title="Tu cuenta"
                       subtitle={accountSubtitle}
+                      highlight={accountHighlight}
+                      highlightLabel={accountHighlightLabel}
                       onPress={() => router.push('/finance')}
                     />
                   </HomeEnter>
@@ -247,6 +266,7 @@ export default function DashboardScreen() {
                       tone={data.upcomingReservations.length > 0 ? 'info' : 'neutral'}
                       title="Espacios"
                       subtitle={spacesSubtitle}
+                      trailingImageUri={firstReservation?.amenity_image_url}
                       onPress={() => router.push('/spaces')}
                     />
                   </HomeEnter>
@@ -266,6 +286,7 @@ export default function DashboardScreen() {
                               }`
                             : 'Tienes un paquete pendiente de recoger en caseta.'
                         }
+                        trailingImageUri={data.pendingPackage.photo_url}
                         onPress={() => router.push('/security')}
                       />
                     </HomeEnter>
@@ -276,11 +297,23 @@ export default function DashboardScreen() {
                       <HomeInsightBanner
                         kind="notice"
                         tone="purple"
-                        title={data.latestPost.is_pinned ? 'Aviso destacado' : 'Nuevo en comunidad'}
+                        title={
+                          data.latestPost.post_type === 'poll'
+                            ? 'Encuesta en comunidad'
+                            : data.latestPost.is_pinned
+                              ? 'Aviso destacado'
+                              : 'Nuevo en comunidad'
+                        }
                         subtitle={
                           data.latestPost.body
                             ? `${data.latestPost.title} — ${data.latestPost.body}`
                             : data.latestPost.title
+                        }
+                        trailingImageUri={
+                          data.latestPost.post_type === 'poll' ? null : data.latestPost.image_url
+                        }
+                        pollBars={
+                          data.latestPost.post_type === 'poll' ? data.latestPost.pollOptions : null
                         }
                         onPress={() => router.push('/community')}
                       />
