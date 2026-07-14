@@ -199,7 +199,7 @@ export default function SecurityScreen() {
         <ScreenHeader
           title="Seguridad"
           highlight="y acceso"
-          subtitle={`Unidad ${primary.unit?.identifier}`}
+          subtitle={`${primary.condominium?.name} · Unidad ${primary.unit?.identifier}`}
         />
 
         <View style={styles.section}>

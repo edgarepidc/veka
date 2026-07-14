@@ -63,20 +63,22 @@ export function AdminShell({
     >
       <div className="flex min-h-screen">
         <aside className="glass-sidebar hidden w-64 shrink-0 lg:flex lg:flex-col">
-          <div className="border-b border-white/10 px-4 py-6 text-center">
-            <div className="flex flex-col items-center gap-3">
-              {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="" className="h-20 w-20 rounded-2xl object-contain" />
-              ) : (
-                <VekaLogo variant="mark" className="w-20" />
-              )}
-              <div className="max-w-[12rem]">
-                <p className="serif-title text-xl leading-snug text-[var(--text)]">{line1}</p>
+          <div className="border-b border-white/10 px-4 pt-3 pb-2 text-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="max-w-[13rem]">
+                <p className="serif-title text-[1.65rem] leading-tight text-[var(--text)]">
+                  {line1}
+                </p>
                 {line2 ? (
-                  <p className="serif-title text-lg leading-snug text-muted">{line2}</p>
+                  <p className="serif-title mt-0.5 text-base leading-snug text-muted">{line2}</p>
                 ) : null}
               </div>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" className="h-28 w-28 rounded-2xl object-contain" />
+              ) : (
+                <VekaLogo variant="mark" className="w-28" />
+              )}
             </div>
           </div>
           <AdminNav sectionLabel={panelLabel} />

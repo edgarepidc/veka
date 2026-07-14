@@ -623,7 +623,6 @@ body {
 }
 
 .home-pulse-pill:hover {
-  border-color: color-mix(in srgb, var(--text-muted) 35%, var(--border));
   transform: translateY(-1px);
 }
 
@@ -665,24 +664,62 @@ body {
   flex: 1;
 }
 
-.home-tone-neutral {
-  border-left: 3px solid color-mix(in srgb, var(--text-muted) 55%, var(--border));
+.home-metric {
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 
-.home-tone-warn {
-  border-left: 3px solid var(--warning);
+/* Soft status fills only on nested metric chips */
+.home-metric.home-fill-neutral {
+  border-color: #e8e6e0;
+  background-color: #f4f3ef;
 }
 
-.home-tone-info {
-  border-left: 3px solid var(--accent-2);
+.home-metric.home-fill-warn {
+  border-color: color-mix(in srgb, var(--warning) 28%, #e8e6e0);
+  background-color: color-mix(in srgb, var(--warning) 10%, #ffffff);
 }
 
-.home-tone-accent {
-  border-left: 3px solid var(--accent-3);
+.home-metric.home-fill-info {
+  border-color: color-mix(in srgb, var(--accent-2) 28%, #e8e6e0);
+  background-color: color-mix(in srgb, var(--accent-2) 10%, #ffffff);
 }
 
-.home-tone-success {
-  border-left: 3px solid var(--success);
+.home-metric.home-fill-accent {
+  border-color: color-mix(in srgb, var(--accent-3) 28%, #e8e6e0);
+  background-color: color-mix(in srgb, var(--accent-3) 10%, #ffffff);
+}
+
+.home-metric.home-fill-success {
+  border-color: color-mix(in srgb, var(--success) 28%, #e8e6e0);
+  background-color: color-mix(in srgb, var(--success) 10%, #ffffff);
+}
+
+[data-theme='dark'] .home-metric.home-fill-neutral {
+  border-color: var(--border);
+  background-color: var(--surface-muted);
+}
+
+[data-theme='dark'] .home-metric.home-fill-warn {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--warning) 14%, var(--surface));
+}
+
+[data-theme='dark'] .home-metric.home-fill-info {
+  border-color: color-mix(in srgb, var(--accent-2) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--accent-2) 14%, var(--surface));
+}
+
+[data-theme='dark'] .home-metric.home-fill-accent {
+  border-color: color-mix(in srgb, var(--accent-3) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--accent-3) 14%, var(--surface));
+}
+
+[data-theme='dark'] .home-metric.home-fill-success {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--success) 14%, var(--surface));
 }
 
 .home-icon-chip {
@@ -724,14 +761,19 @@ body {
 .home-status-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface-muted);
-  padding: 0.15rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-align: center;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--text-muted);
 }
 

@@ -12,6 +12,7 @@ import {
 import { GlassCard } from '@/components/ui/GlassCard';
 import { StatChip } from '@/components/ui/StatChip';
 import { SectionHeading } from '@/components/ui/SectionHeading';
+import { HOME_ILLUSTRATIONS } from '@/components/home/home-illustrations';
 import { HELP } from '@/lib/help-content';
 import type { ClusterRow, UnitOccupant, UnitRow as UnitData } from '@/lib/load-condominium';
 
@@ -136,15 +137,15 @@ export function UnitsManager({
   return (
     <div className="space-y-3">
       <GlassCard>
-        <SectionHeading help={HELP.unidades}>Nuevo cluster / torre / villa</SectionHeading>
+        <SectionHeading help={HELP.unidades}>Nuevo clúster/torre</SectionHeading>
         <p className="mt-1 text-sm text-muted">
-          Ej. Torre A, Marbella, Sector Norte. Dentro de cada cluster agregas casas o deptos y registras
+          Ej. Torre A, Marbella, Sector Norte. Dentro de cada clúster agregas casas o deptos y registras
           residentes.
         </p>
         <form action={(fd) => run(createCluster, fd)} className="mt-4 flex flex-col gap-3 sm:flex-row">
           <input name="name" placeholder="Ej. Marbella" required className="glass-input flex-1" />
           <button type="submit" disabled={pending} className="glass-btn-primary shrink-0">
-            Agregar cluster
+            Agregar clúster
           </button>
         </form>
       </GlassCard>
@@ -220,7 +221,7 @@ export function UnitsManager({
       {clusters.length === 0 ? (
         <GlassCard deep>
           <p className="text-sm text-muted">
-            Crea un cluster (torre, villa o sector) para empezar a agregar unidades.
+            Crea un clúster o torre para empezar a agregar unidades.
           </p>
         </GlassCard>
       ) : null}
@@ -259,9 +260,13 @@ function ClusterSection({
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-start gap-3 rounded-xl text-left transition hover:bg-white/5"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition hover:bg-white/5"
         >
-          <Chevron open={open} className="mt-1 shrink-0" />
+          <Chevron open={open} className="shrink-0" />
+          <span className="home-illust-frame shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={HOME_ILLUSTRATIONS.units} alt="" className="home-illust" />
+          </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-base font-semibold text-[var(--text)]">{cluster.name}</span>

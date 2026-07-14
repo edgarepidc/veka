@@ -31,6 +31,21 @@ export interface HomePackagePreview {
   received_at: string;
 }
 
+export interface HomeTicketPreview {
+  id: string;
+  title: string;
+  status: 'open' | 'in_progress';
+  location: string;
+  created_at: string;
+}
+
+export interface HomeRoutinePreview {
+  id: string;
+  title: string;
+  location: string | null;
+  done_today: boolean;
+}
+
 export interface HomeStats {
   operatingBalance: number;
   reserveBalance: number;
@@ -39,6 +54,7 @@ export interface HomeStats {
   overdueUnitCount: number;
   overdueBalance: number;
   openTicketCount: number;
+  inProgressTicketCount: number;
   visitsTodayCount: number;
   packagesWaitingCount: number;
   monthIncome: number;
@@ -49,6 +65,9 @@ export interface HomeStats {
   upcomingReservations: HomeReservationPreview[];
   todayVisits: HomeVisitPreview[];
   waitingPackages: HomePackagePreview[];
+  activeTickets: HomeTicketPreview[];
+  todayRoutines: HomeRoutinePreview[];
+  routinesDueTodayCount: number;
 }
 
 function monthBoundsIso(timeZone: string, reference = new Date()) {
@@ -74,6 +93,56 @@ function weekAheadIso(reference = new Date()) {
   return end.toISOString();
 }
 
+/** ISO weekday 1=Mon … 7=Sun in condominium timezone. */
+function condominiumIsoWeekday(timeZone: string, now = new Date()): number {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+  }).format(now);
+  const map: Record<string, number> = {
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+    Sun: 7,
+  };
+  return map[weekday] ?? 1;
+}
+
+function condominiumCalendarDay(timeZone: string, now = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat('en-CA', { timeZone, day: '2-digit' }).format(now),
+  );
+}
+
+function condominiumCalendarDate(timeZone: string, now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+function isRoutineDueToday(
+  routine: {
+    day_of_week: number | null;
+    recurrence: string;
+    monthly_day: number | null;
+  },
+  weekday: number,
+  monthDay: number,
+): boolean {
+  if (routine.recurrence === 'on_demand') return false;
+  if (routine.recurrence === 'monthly') {
+    if (routine.monthly_day != null) return routine.monthly_day === monthDay;
+    return routine.day_of_week === weekday;
+  }
+  return routine.day_of_week === weekday;
+}
+
 export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
   const supabase = await createClient();
 
@@ -88,12 +157,16 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
   const { start: monthStart, exclusiveEnd: monthEnd } = monthBoundsIso(timezone);
   const nowIso = new Date().toISOString();
   const weekEndIso = weekAheadIso();
+  const weekday = condominiumIsoWeekday(timezone);
+  const monthDay = condominiumCalendarDay(timezone);
+  const todayDate = condominiumCalendarDate(timezone);
 
   const [
     fundsRes,
     unitsRes,
     chargesRes,
     ticketsRes,
+    ticketsPreviewRes,
     visitsRes,
     visitsPreviewRes,
     packagesRes,
@@ -104,6 +177,7 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     amenitiesRes,
     weekReservationsRes,
     upcomingRes,
+    routinesRes,
   ] = await Promise.all([
     supabase.from('fund_balances').select('fund_type, balance').eq('condominium_id', condominiumId),
     supabase.from('units').select('id').eq('condominium_id', condominiumId),
@@ -114,9 +188,18 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
       .not('status', 'in', '("paid","cancelled","forgiven")'),
     supabase
       .from('maintenance_tickets')
-      .select('id', { count: 'exact', head: true })
+      .select('id, status')
       .eq('condominium_id', condominiumId)
       .in('status', ['open', 'in_progress']),
+    supabase
+      .from('maintenance_tickets')
+      .select(
+        'id, title, status, created_at, unit:units(identifier), amenity:amenities(name)',
+      )
+      .eq('condominium_id', condominiumId)
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: false })
+      .limit(5),
     supabase
       .from('visits')
       .select('id', { count: 'exact', head: true })
@@ -187,6 +270,14 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
       .gte('ends_at', nowIso)
       .order('starts_at', { ascending: true })
       .limit(5),
+    supabase
+      .from('maintenance_routines')
+      .select(
+        'id, title, day_of_week, recurrence, monthly_day, amenity:amenities(name)',
+      )
+      .eq('condominium_id', condominiumId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true }),
   ]);
 
   const operating =
@@ -258,6 +349,60 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     };
   });
 
+  const ticketRows = ticketsRes.data ?? [];
+  const openTicketCount = ticketRows.filter((row) => row.status === 'open').length;
+  const inProgressTicketCount = ticketRows.filter((row) => row.status === 'in_progress').length;
+
+  const activeTickets: HomeTicketPreview[] = (ticketsPreviewRes.data ?? []).map((row) => {
+    const unit = Array.isArray(row.unit) ? row.unit[0] : row.unit;
+    const amenity = Array.isArray(row.amenity) ? row.amenity[0] : row.amenity;
+    const status = row.status === 'in_progress' ? 'in_progress' : 'open';
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      status,
+      location: unit?.identifier
+        ? `Unidad ${unit.identifier}`
+        : amenity?.name
+          ? String(amenity.name)
+          : 'Área común',
+      created_at: String(row.created_at),
+    };
+  });
+
+  const dueRoutines = (routinesRes.data ?? []).filter((row) =>
+    isRoutineDueToday(
+      {
+        day_of_week: row.day_of_week == null ? null : Number(row.day_of_week),
+        recurrence: String(row.recurrence),
+        monthly_day: row.monthly_day == null ? null : Number(row.monthly_day),
+      },
+      weekday,
+      monthDay,
+    ),
+  );
+
+  const dueRoutineIds = dueRoutines.map((row) => String(row.id));
+  const { data: evidenceToday } = dueRoutineIds.length
+    ? await supabase
+        .from('maintenance_routine_evidence')
+        .select('routine_id')
+        .in('routine_id', dueRoutineIds)
+        .eq('evidence_date', todayDate)
+    : { data: [] as { routine_id: string }[] };
+
+  const doneRoutineIds = new Set((evidenceToday ?? []).map((row) => String(row.routine_id)));
+
+  const todayRoutines: HomeRoutinePreview[] = dueRoutines.slice(0, 5).map((row) => {
+    const amenity = Array.isArray(row.amenity) ? row.amenity[0] : row.amenity;
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      location: amenity?.name ? String(amenity.name) : null,
+      done_today: doneRoutineIds.has(String(row.id)),
+    };
+  });
+
   return {
     operatingBalance: operating,
     reserveBalance: reserve,
@@ -265,7 +410,8 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     totalUnits,
     overdueUnitCount: overdueUnits.size,
     overdueBalance,
-    openTicketCount: ticketsRes.count ?? 0,
+    openTicketCount,
+    inProgressTicketCount,
     visitsTodayCount: visitsRes.count ?? 0,
     packagesWaitingCount: packagesRes.count ?? 0,
     monthIncome,
@@ -276,6 +422,9 @@ export async function loadHomeStats(condominiumId: string): Promise<HomeStats> {
     upcomingReservations,
     todayVisits,
     waitingPackages,
+    activeTickets,
+    todayRoutines,
+    routinesDueTodayCount: dueRoutines.length,
   };
 }
 

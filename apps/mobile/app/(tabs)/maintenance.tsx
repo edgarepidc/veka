@@ -21,7 +21,6 @@ import {
   recurrenceLabel,
   ticketAgeLabel,
   ticketAgeUrgency,
-  ticketBoardStatus,
   ticketCategoryLabel,
   ticketStatusLabel,
   type MaintenancePeriodFilter,
@@ -94,16 +93,6 @@ export default function MaintenanceScreen() {
         ),
       ),
     [scopeFilter, tickets],
-  );
-
-  const mineCount = useMemo(
-    () => scopedTickets.filter((ticket) => myUnitId && ticket.unit_id === myUnitId).length,
-    [myUnitId, scopedTickets],
-  );
-
-  const activeCount = useMemo(
-    () => scopedTickets.filter((ticket) => ticketBoardStatus(ticket.status) !== 'resolved').length,
-    [scopedTickets],
   );
 
   const visibleTickets = useMemo(() => {
@@ -230,7 +219,7 @@ export default function MaintenanceScreen() {
         <ScreenHeader
           title="Mantenimiento"
           highlight="y reportes"
-          subtitle={`Unidad ${primary.unit?.identifier}`}
+          subtitle={`${primary.condominium?.name} · Unidad ${primary.unit?.identifier}`}
         />
 
         <View style={styles.section}>
@@ -253,21 +242,6 @@ export default function MaintenanceScreen() {
 
         {tab === 'tickets' ? (
           <View style={styles.section}>
-            <View style={styles.statsRow}>
-              <GlassCard variant="muted" style={styles.statCard}>
-                <Text style={[styles.statValue, { color: theme.text }]}>{activeCount}</Text>
-                <Text style={[styles.statLabel, { color: theme.textMuted }]}>Abiertos</Text>
-              </GlassCard>
-              <GlassCard variant="muted" style={styles.statCard}>
-                <Text style={[styles.statValue, { color: theme.text }]}>{mineCount}</Text>
-                <Text style={[styles.statLabel, { color: theme.textMuted }]}>Míos</Text>
-              </GlassCard>
-              <GlassCard variant="muted" style={styles.statCard}>
-                <Text style={[styles.statValue, { color: theme.text }]}>{scopedTickets.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.textMuted }]}>En vista</Text>
-              </GlassCard>
-            </View>
-
             <FilterBar
               items={[
                 { key: 'all', label: 'Todo el condo' },
@@ -490,23 +464,19 @@ export default function MaintenanceScreen() {
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: 20 },
-  section: { marginTop: 16 },
+  content: {},
+  section: { paddingHorizontal: 20 },
   createAction: { marginTop: 12, marginBottom: 12 },
   mt: { marginTop: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  statCard: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  statValue: { fontSize: 20, fontWeight: '800' },
-  statLabel: { fontSize: 11, marginTop: 2, fontWeight: '600' },
   cardTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
   meta: { fontSize: 12, marginTop: 4 },
   body: { fontSize: 14, marginTop: 8, lineHeight: 20 },
   note: { fontSize: 13, marginTop: 8, fontStyle: 'italic' },
   link: { fontSize: 14, fontWeight: '600', marginTop: 10 },
   links: { flexDirection: 'row', gap: 16 },
-  error: { marginTop: 12, fontSize: 13 },
+  error: { marginTop: 12, marginHorizontal: 20, fontSize: 13 },
   emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptyText: { marginTop: 8, fontSize: 14, lineHeight: 20 },
   chips: { marginVertical: 4 },

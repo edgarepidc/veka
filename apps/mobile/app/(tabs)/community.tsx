@@ -325,7 +325,11 @@ export default function CommunityScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View ref={contentRef} collapsable={false}>
-        <ScreenHeader title="Comunidad" highlight="vecinal" subtitle={primary?.condominium?.name} />
+        <ScreenHeader
+          title="Comunidad"
+          highlight="vecinal"
+          subtitle={`${primary?.condominium?.name} · Unidad ${primary?.unit?.identifier}`}
+        />
 
         {unreadCount > 0 ? (
           <View style={styles.section}>

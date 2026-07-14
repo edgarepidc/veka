@@ -202,14 +202,6 @@ export default function SpacesScreen() {
             subtitle={`${primary.condominium?.name} · Unidad ${primary.unit?.identifier}`}
           />
 
-          {blockIfOverdue ? (
-            <View style={[styles.banner, surfaceAccentBanner(theme, 'orange')]}>
-              <Text style={[styles.hint, { color: theme.textMuted, marginHorizontal: 0, marginBottom: 0 }]}>
-                Algunos espacios pueden bloquearse si tu unidad tiene adeudos.
-              </Text>
-            </View>
-          ) : null}
-
           {successMessage ? (
             <View style={[styles.banner, surfaceAccentBanner(theme, 'green')]}>
               <Text style={[styles.success, { color: accentColor(theme, 'green'), marginHorizontal: 0, marginBottom: 0 }]}>
@@ -389,6 +381,14 @@ export default function SpacesScreen() {
                 )}
               </>
             )}
+
+            {blockIfOverdue ? (
+              <View style={[styles.bannerFooter, surfaceAccentBanner(theme, 'orange')]}>
+                <Text style={[styles.hint, { color: theme.textMuted, marginHorizontal: 0, marginBottom: 0 }]}>
+                  Algunos espacios pueden bloquearse si tu unidad tiene adeudos.
+                </Text>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </ScreenBackground>
@@ -478,6 +478,7 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 20 },
   hint: { fontSize: 12 },
   banner: { marginHorizontal: 20, marginBottom: 8 },
+  bannerFooter: { marginTop: 16, marginBottom: 4 },
   success: { fontSize: 14, fontWeight: '600' },
   error: { fontSize: 14, fontWeight: '600' },
   reservationsToolbar: {

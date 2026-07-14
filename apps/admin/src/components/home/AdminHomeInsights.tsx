@@ -66,18 +66,13 @@ export function AdminHomeFinancePanel({ stats }: { stats: HomeStats | null }) {
   const maxFlow = Math.max(income, expense, 1);
   const aging = stats?.agingBars ?? [];
   const maxAging = Math.max(...aging.map((bar) => bar.value), 1);
-  const hasOverdue = (stats?.overdueBalance ?? 0) > 0;
 
   return (
-    <section
-      className={`home-enter home-enter-delay-2 home-panel mb-6 ${
-        hasOverdue ? 'home-tone-warn' : 'home-tone-success'
-      }`}
-    >
+    <section className="home-enter home-enter-delay-2 home-panel mb-6">
       <PanelHeader
         eyebrow="Finanzas del mes"
         title="Flujo y cobranza"
-        illustration={hasOverdue ? HOME_ILLUSTRATIONS.due : HOME_ILLUSTRATIONS.paid}
+        illustration={HOME_ILLUSTRATIONS.finance}
         href="/finanzas"
         linkLabel="Ver finanzas →"
       />
@@ -142,14 +137,9 @@ export function AdminHomeFinancePanel({ stats }: { stats: HomeStats | null }) {
 
 export function AdminHomeSpacesPanel({ stats }: { stats: HomeStats | null }) {
   const reservations = stats?.upcomingReservations ?? [];
-  const hasItems = reservations.length > 0;
 
   return (
-    <section
-      className={`home-enter home-enter-delay-3 home-panel mb-6 ${
-        hasItems ? 'home-tone-info' : 'home-tone-neutral'
-      }`}
-    >
+    <section className="home-enter home-enter-delay-3 home-panel mb-6">
       <PanelHeader
         eyebrow="Espacios"
         title="Agenda próxima"
@@ -176,7 +166,7 @@ export function AdminHomeSpacesPanel({ stats }: { stats: HomeStats | null }) {
       ) : (
         <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
           {reservations.map((row) => (
-            <li key={row.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+            <li key={row.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-[var(--text)]">{row.amenity_name}</p>
                 <p className="text-xs text-muted">
@@ -203,14 +193,9 @@ export function AdminHomeSpacesPanel({ stats }: { stats: HomeStats | null }) {
 export function AdminHomeSecurityPanel({ stats }: { stats: HomeStats | null }) {
   const visits = stats?.todayVisits ?? [];
   const packages = stats?.waitingPackages ?? [];
-  const hasActivity = visits.length > 0 || packages.length > 0;
 
   return (
-    <section
-      className={`home-enter home-enter-delay-4 home-panel mb-6 ${
-        hasActivity ? 'home-tone-accent' : 'home-tone-neutral'
-      }`}
-    >
+    <section className="home-enter home-enter-delay-4 home-panel mb-6">
       <PanelHeader
         eyebrow="Seguridad"
         title="Visitas y recepción"
@@ -242,7 +227,7 @@ export function AdminHomeSecurityPanel({ stats }: { stats: HomeStats | null }) {
               {visits.map((visit) => {
                 const status = visitStatus(visit);
                 return (
-                  <li key={visit.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                  <li key={visit.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-[var(--text)]">{visit.visitor_name}</p>
                       <p className="text-xs text-muted">
@@ -264,7 +249,7 @@ export function AdminHomeSecurityPanel({ stats }: { stats: HomeStats | null }) {
           ) : (
             <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
               {packages.map((pkg) => (
-                <li key={pkg.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                <li key={pkg.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-[var(--text)]">
                       {pkg.carrier ?? 'Paquete'}
@@ -274,6 +259,97 @@ export function AdminHomeSecurityPanel({ stats }: { stats: HomeStats | null }) {
                     </p>
                   </div>
                   <span className="home-status-pill home-status-pill-orange">En caseta</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function AdminHomeMaintenancePanel({ stats }: { stats: HomeStats | null }) {
+  const tickets = stats?.activeTickets ?? [];
+  const routines = stats?.todayRoutines ?? [];
+  const openCount = stats?.openTicketCount ?? 0;
+  const inProgressCount = stats?.inProgressTicketCount ?? 0;
+  const routinesDue = stats?.routinesDueTodayCount ?? 0;
+  const routinesDone = routines.filter((row) => row.done_today).length;
+
+  return (
+    <section className="home-enter home-enter-delay-5 home-panel mb-6">
+      <PanelHeader
+        eyebrow="Mantenimiento"
+        title="Pendiente de hoy"
+        illustration={HOME_ILLUSTRATIONS.maintenance}
+        href="/mantenimiento"
+        linkLabel="Ver mantenimiento →"
+      />
+
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <Metric label="Por iniciar" value={String(openCount)} tone={openCount > 0 ? 'warn' : 'neutral'} />
+        <Metric
+          label="En progreso"
+          value={String(inProgressCount)}
+          tone={inProgressCount > 0 ? 'info' : 'neutral'}
+        />
+        <Metric
+          label="Rutinas hoy"
+          value={`${routinesDone}/${routinesDue}`}
+          tone={routinesDue > 0 && routinesDone < routinesDue ? 'accent' : 'neutral'}
+        />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-sm font-semibold text-[var(--text)]">Tickets activos</p>
+          {tickets.length === 0 ? (
+            <p className="text-sm text-muted">Sin tickets abiertos.</p>
+          ) : (
+            <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
+              {tickets.map((ticket) => (
+                  <li key={ticket.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-[var(--text)]">{ticket.title}</p>
+                    <p className="text-xs text-muted">{ticket.location}</p>
+                  </div>
+                  <span
+                    className={
+                      ticket.status === 'in_progress'
+                        ? 'home-status-pill home-status-pill-blue'
+                        : 'home-status-pill home-status-pill-orange'
+                    }
+                  >
+                    {ticket.status === 'in_progress' ? 'En progreso' : 'Por iniciar'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-semibold text-[var(--text)]">Rutinas de hoy</p>
+          {routines.length === 0 ? (
+            <p className="text-sm text-muted">No hay rutinas programadas para hoy.</p>
+          ) : (
+            <ul className="divide-y divide-[color-mix(in_srgb,var(--border)_100%,transparent)]">
+              {routines.map((routine) => (
+                <li key={routine.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-[var(--text)]">{routine.title}</p>
+                    <p className="text-xs text-muted">{routine.location ?? 'Condominio'}</p>
+                  </div>
+                  <span
+                    className={
+                      routine.done_today
+                        ? 'home-status-pill home-status-pill-green'
+                        : 'home-status-pill home-status-pill-orange'
+                    }
+                  >
+                    {routine.done_today ? 'Hecho' : 'Pendiente'}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -295,17 +371,16 @@ function Metric({
 }) {
   const toneClass =
     tone === 'warn'
-      ? 'home-tone-warn'
+      ? 'home-fill-warn'
       : tone === 'info'
-        ? 'home-tone-info'
+        ? 'home-fill-info'
         : tone === 'accent'
-          ? 'home-tone-accent'
-          : 'home-tone-neutral';
+          ? 'home-fill-accent'
+          : 'home-fill-neutral';
 
   return (
-    <div
-      className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 ${toneClass}`}
-    >      <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{label}</p>
+    <div className={`home-metric rounded-xl ${toneClass}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-subtle">{label}</p>
       <p className="mt-1 text-base font-bold tabular-nums text-[var(--text)]">{value}</p>
     </div>
   );

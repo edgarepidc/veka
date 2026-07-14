@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation';
 
-import { AdminHomeHero, timeOfDayGreeting } from '@/components/home/AdminHomeHero';
+import { timeOfDayGreeting } from '@/components/home/AdminHomeHero';
 import {
   AdminHomeFinancePanel,
+  AdminHomeMaintenancePanel,
   AdminHomeSecurityPanel,
   AdminHomeSpacesPanel,
 } from '@/components/home/AdminHomeInsights';
 import { AdminHomeFundRow, AdminHomePulseStrip } from '@/components/home/AdminHomePulseStrip';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { loadAdminSession } from '@/lib/load-admin-session';
 import { loadCondominium } from '@/lib/load-condominium';
 import { loadHomeStats } from '@/lib/load-home-stats';
@@ -34,11 +36,9 @@ export default async function AdminHomePage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <AdminHomeHero
-        greeting={greeting}
-        firstName={firstName}
-        condominiumName={condoName}
-        logoPath={condo?.settings.branding?.logo_url}
+      <PageHeader
+        title={`${greeting}, ${firstName}`}
+        subtitle={`${condoName} · Resumen de hoy: operaciones, finanzas y espacios.`}
       />
       <AdminHomePulseStrip stats={stats} />
       <AdminHomeFundRow stats={stats} />
@@ -46,7 +46,10 @@ export default async function AdminHomePage() {
         <AdminHomeFinancePanel stats={stats} />
         <AdminHomeSpacesPanel stats={stats} />
       </div>
-      <AdminHomeSecurityPanel stats={stats} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <AdminHomeSecurityPanel stats={stats} />
+        <AdminHomeMaintenancePanel stats={stats} />
+      </div>
     </div>
   );
 }

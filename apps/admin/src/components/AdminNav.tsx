@@ -88,9 +88,9 @@ export function AdminNav({ sectionLabel }: { sectionLabel?: string }) {
       : RESIDENT_NAV;
 
   return (
-    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3">
+    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3 pt-0.5">
       {sectionLabel ? (
-        <p className="px-1 pb-2 pt-1 text-xs font-semibold uppercase tracking-widest text-accent">
+        <p className="px-1 pb-1 pt-0 text-xs font-semibold uppercase tracking-widest text-accent">
           {sectionLabel}
         </p>
       ) : null}

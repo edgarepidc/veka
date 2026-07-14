@@ -8,6 +8,7 @@ import { SURFACE_RADIUS, surfaceSubtleShadow } from '@/constants/surface';
 export type HomeInsightKind =
   | 'paid'
   | 'due'
+  | 'finance'
   | 'package'
   | 'notice'
   | 'maintenance'
@@ -24,10 +25,11 @@ export type HomeInsightPollBar = {
 const ILLUSTRATIONS: Record<HomeInsightKind, ImageSourcePropType> = {
   paid: require('@/assets/home/home-insight-paid.png'),
   due: require('@/assets/home/home-insight-calendar.png'),
+  finance: require('@/assets/home/home-insight-finance.png'),
   package: require('@/assets/home/home-insight-package.png'),
   notice: require('@/assets/home/home-insight-notice.png'),
   maintenance: require('@/assets/home/home-insight-maintenance.png'),
-  account: require('@/assets/home/home-insight-paid.png'),
+  account: require('@/assets/home/home-insight-finance.png'),
   spaces: require('@/assets/home/home-insight-calendar.png'),
 };
 
