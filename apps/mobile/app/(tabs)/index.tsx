@@ -14,6 +14,7 @@ import { resolveStorageImageUrl, STORAGE_BUCKETS } from '@veka/shared';
 import { HomeEnter } from '@/components/home/HomeEnter';
 import { HomeInsightBanner } from '@/components/home/HomeInsightBanner';
 import { HomeSpacesCard } from '@/components/home/HomeSpacesCard';
+import { HomeVisitsCard } from '@/components/home/HomeVisitsCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { PressableScale } from '@/components/ui/PressableScale';
@@ -46,6 +47,7 @@ export default function DashboardScreen() {
     refresh,
     formatShortDate,
     formatDateTime,
+    formatTime,
     chargeDisplayTitle,
     chargeDisplaySubtitle,
     formatCurrency,
@@ -97,6 +99,15 @@ export default function DashboardScreen() {
     when: formatDateTime(reservation.starts_at),
     imageUrl: reservation.amenity_image_url,
     status: reservation.status,
+  }));
+
+  const visitItems = data.todayVisits.slice(0, 2).map((visit) => ({
+    id: visit.id,
+    name: visit.visitor_name,
+    when: `${formatTime(visit.valid_from)} – ${formatTime(visit.valid_until)}`,
+    typeLabel: visit.visit_type_label,
+    status: visit.status,
+    statusLabel: visit.status_label,
   }));
 
   return (
@@ -263,6 +274,10 @@ export default function DashboardScreen() {
 
                   <HomeEnter delay={160}>
                     <HomeSpacesCard items={spaceItems} onPress={() => router.push('/spaces')} />
+                  </HomeEnter>
+
+                  <HomeEnter delay={180}>
+                    <HomeVisitsCard items={visitItems} onPress={() => router.push('/security')} />
                   </HomeEnter>
 
                   {data.pendingPackage ? (

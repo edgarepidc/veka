@@ -6,11 +6,13 @@ import {
   chargeDisplayTitle,
   chargeStatusLabel,
   chargeStatusTone,
+  condominiumDayBoundsIso,
   formatCurrency,
   resolveNextPaymentTarget,
   resolveStorageImageUrl,
   STORAGE_BUCKETS,
   unitTotalBalanceDue,
+  visitTypeLabelEs,
   type ActivePaymentPlan,
   type FeeSourceRef,
 } from '@veka/shared';
@@ -71,10 +73,22 @@ export interface DashboardPackage {
   photo_url: string | null;
 }
 
+export interface DashboardVisit {
+  id: string;
+  visitor_name: string;
+  visit_type: 'visit' | 'service' | 'rental';
+  visit_type_label: string;
+  valid_from: string;
+  valid_until: string;
+  status: 'expected' | 'inside' | 'left';
+  status_label: string;
+}
+
 export interface DashboardData {
   nextPayment: DashboardNextPayment | null;
   latestPost: DashboardPost | null;
   upcomingReservations: DashboardReservation[];
+  todayVisits: DashboardVisit[];
   pendingPackage: DashboardPackage | null;
   balanceDue: number;
   paidThisMonth: number;
@@ -86,6 +100,7 @@ const EMPTY: DashboardData = {
   nextPayment: null,
   latestPost: null,
   upcomingReservations: [],
+  todayVisits: [],
   pendingPackage: null,
   balanceDue: 0,
   paidThisMonth: 0,
@@ -108,6 +123,22 @@ function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(iso));
+}
+
+function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat('es-MX', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+}
+
+function visitStatus(row: {
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+}): { status: DashboardVisit['status']; status_label: string } {
+  if (row.checked_out_at) return { status: 'left', status_label: 'Salió' };
+  if (row.checked_in_at) return { status: 'inside', status_label: 'En caseta' };
+  return { status: 'expected', status_label: 'Esperada' };
 }
 
 function monthStartIso(reference = new Date()): string {
@@ -136,7 +167,7 @@ export function useDashboard(primary: ActiveMembership | null) {
     const now = new Date().toISOString();
     const monthStart = monthStartIso();
 
-    const [chargesRes, planRes, postsRes, reservationsRes, packagesRes, paymentsRes, ticketsRes] =
+    const [chargesRes, planRes, postsRes, reservationsRes, packagesRes, paymentsRes, ticketsRes, condoRes] =
       await Promise.all([
         supabase
           .from('charges')
@@ -187,7 +218,26 @@ export function useDashboard(primary: ActiveMembership | null) {
           .select('id', { count: 'exact', head: true })
           .eq('unit_id', primary.unit_id)
           .in('status', ['open', 'in_progress']),
+        supabase
+          .from('condominiums')
+          .select('timezone')
+          .eq('id', primary.condominium_id)
+          .maybeSingle(),
       ]);
+
+    const timezone = condoRes.data?.timezone?.trim() || 'America/Mexico_City';
+    const { startIso, endIso } = condominiumDayBoundsIso(timezone);
+
+    const visitsRes = await supabase
+      .from('visits')
+      .select(
+        'id, visitor_name, visit_type, valid_from, valid_until, checked_in_at, checked_out_at',
+      )
+      .eq('unit_id', primary.unit_id)
+      .lte('valid_from', endIso)
+      .gte('valid_until', startIso)
+      .order('valid_from', { ascending: true })
+      .limit(6);
 
     const rawCharges =
       ((chargesRes.data as {
@@ -270,6 +320,33 @@ export function useDashboard(primary: ActiveMembership | null) {
           STORAGE_BUCKETS.AMENITY_IMAGES,
         ),
         status: row.status,
+      };
+    });
+
+    const visitRows =
+      (visitsRes.data as
+        | {
+            id: string;
+            visitor_name: string;
+            visit_type: 'visit' | 'service' | 'rental';
+            valid_from: string;
+            valid_until: string;
+            checked_in_at: string | null;
+            checked_out_at: string | null;
+          }[]
+        | null) ?? [];
+
+    const todayVisits: DashboardVisit[] = visitRows.map((row) => {
+      const { status, status_label } = visitStatus(row);
+      return {
+        id: row.id,
+        visitor_name: row.visitor_name,
+        visit_type: row.visit_type,
+        visit_type_label: visitTypeLabelEs(row.visit_type),
+        valid_from: row.valid_from,
+        valid_until: row.valid_until,
+        status,
+        status_label,
       };
     });
 
@@ -359,6 +436,7 @@ export function useDashboard(primary: ActiveMembership | null) {
           }
         : null,
       upcomingReservations,
+      todayVisits,
       pendingPackage: packageRow
         ? {
             id: packageRow.id,
@@ -394,6 +472,7 @@ export function useDashboard(primary: ActiveMembership | null) {
     refresh,
     formatShortDate,
     formatDateTime,
+    formatTime,
     chargeStatusLabel,
     chargeStatusTone,
     chargeDisplayTitle,
