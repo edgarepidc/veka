@@ -2,7 +2,7 @@
   "expo": {
     "name": "Veka",
     "slug": "veka",
-    "owner": "edgaredc",
+    "owner": "edgaredcs-organization",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -68,6 +68,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "77256561-e6af-41d7-8734-515b852336a6"
+      }
     }
   }
 }

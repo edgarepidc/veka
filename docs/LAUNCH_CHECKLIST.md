@@ -12,8 +12,10 @@ Guía operativa antes de TestFlight / Play internal. Complementa [`PILOTO_LAS_PA
 
 ```bash
 cd apps/mobile
-# Una vez: eas init  → copia el projectId a EXPO_PUBLIC_EAS_PROJECT_ID
-export EXPO_PUBLIC_EAS_PROJECT_ID="<uuid-del-proyecto>"
+# Una vez: eas login (Terminal de macOS, no Expo Go)
+# Project ID ya está en app.json / eas.json:
+#   77256561-e6af-41d7-8734-515b852336a6 (@edgaredcs-organization/veka)
+export EXPO_PUBLIC_EAS_PROJECT_ID="77256561-e6af-41d7-8734-515b852336a6"
 npx eas build --profile preview --platform ios
 npx eas build --profile preview --platform android
 ```

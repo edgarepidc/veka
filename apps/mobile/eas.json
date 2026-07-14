@@ -14,7 +14,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
-        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "77256561-e6af-41d7-8734-515b852336a6"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -29,7 +30,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
-        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "77256561-e6af-41d7-8734-515b852336a6"
       }
     },
     "production": {
@@ -41,7 +43,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ubmtcwdgryfwldjfqwim.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVibXRjd2Rncnlmd2xkamZxd2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDY0NTMsImV4cCI6MjA5NzI4MjQ1M30.wU1cHP6PztjD9R1ibvae68EwFDtSBG5jdgDKTJA9dkU",
-        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app"
+        "EXPO_PUBLIC_ADMIN_URL": "https://veka-admin.vercel.app",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "77256561-e6af-41d7-8734-515b852336a6"
       }
     }
   },
